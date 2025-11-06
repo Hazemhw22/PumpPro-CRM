@@ -170,66 +170,33 @@ export default function DriversList() {
             )}
 
             <div className="panel">
-                <div className="mb-5 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                    <h5 className="text-lg font-semibold dark:text-white-light">Drivers</h5>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setStatusFilter('all')}
-                        >
-                            All
+                <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
+                    <div className="flex items-center gap-2">
+                        <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
+                            <IconTrashLines />
+                            Delete
                         </button>
-                        <button
-                            type="button"
-                            className={`btn btn-sm ${statusFilter === 'active' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setStatusFilter('active')}
-                        >
-                            Active
-                        </button>
-                        <button
-                            type="button"
-                            className={`btn btn-sm ${statusFilter === 'inactive' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setStatusFilter('inactive')}
-                        >
-                            Inactive
-                        </button>
-                        <button
-                            type="button"
-                            className={`btn btn-sm ${statusFilter === 'on_leave' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setStatusFilter('on_leave')}
-                        >
-                            On Leave
-                        </button>
+                        <Link href="/drivers/add" className="btn btn-primary gap-2">
+                            <IconPlus />
+                            Add New Driver
+                        </Link>
                     </div>
-                    <div className="flex items-center gap-2 ltr:ml-auto rtl:mr-auto">
+                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
                         <div className="hidden items-center gap-1 sm:flex">
-                            <button
-                                type="button"
-                                className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                onClick={() => setViewMode('list')}
-                            >
+                            <button type="button" className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('list')}>
                                 List
                             </button>
-                            <button
-                                type="button"
-                                className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                onClick={() => setViewMode('grid')}
-                            >
+                            <button type="button" className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('grid')}>
                                 Grid
                             </button>
                         </div>
-                        <input
-                            type="text"
-                            className="form-input w-auto"
-                            placeholder="Search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Link href="/drivers/add" className="btn btn-primary gap-2">
-                            <IconPlus />
-                            Add New
-                        </Link>
+                        <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="on_leave">On Leave</option>
+                        </select>
+                        <input type="text" className="form-input w-auto" placeholder="Search drivers..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     </div>
                 </div>
 

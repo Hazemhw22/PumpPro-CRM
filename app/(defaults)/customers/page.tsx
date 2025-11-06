@@ -199,31 +199,8 @@
             </button>
             <Link href="/customers/add" className="btn btn-primary gap-2">
               <IconPlus />
-              Add New
+              Add New Customer
             </Link>
-            <div className="ml-2 hidden items-center gap-1 md:flex">
-              <button
-                type="button"
-                className={`btn btn-sm ${typeFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => setTypeFilter('all')}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${typeFilter === 'private' ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => setTypeFilter('private')}
-              >
-                Private
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${typeFilter === 'business' ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => setTypeFilter('business')}
-              >
-                Business
-              </button>
-            </div>
           </div>
           <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
             <div className="hidden items-center gap-1 sm:flex">
@@ -242,10 +219,15 @@
                 Grid
               </button>
             </div>
+            <select className="form-select w-36 py-1 text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)}>
+              <option value="all">All Types</option>
+              <option value="private">Private</option>
+              <option value="business">Business</option>
+            </select>
             <input
               type="text"
               className="form-input w-auto"
-              placeholder="Search"
+              placeholder="Search customers..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
