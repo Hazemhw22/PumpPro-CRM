@@ -1,0 +1,460 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import IconArrowLeft from '@/components/icon/icon-arrow-left';
+import IconEdit from '@/components/icon/icon-edit';
+import IconUser from '@/components/icon/icon-user';
+import IconMapPin from '@/components/icon/icon-map-pin';
+import IconPhone from '@/components/icon/icon-phone';
+import IconMail from '@/components/icon/icon-mail';
+import IconCalendar from '@/components/icon/icon-calendar';
+import IconClipboardText from '@/components/icon/icon-clipboard-text';
+import IconCreditCard from '@/components/icon/icon-credit-card';
+import IconCamera from '@/components/icon/icon-camera';
+import { supabase } from '@/lib/supabase/client';
+import { getTranslation } from '@/i18n';
+import Link from 'next/link';
+import { Tab } from '@headlessui/react';
+
+interface Customer {
+    id: string;
+    created_at: string;
+    customer_number?: number;
+    type: 'private' | 'business';
+    name?: string;
+    business_name?: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    tax_id?: string;
+    notes?: string;
+    photo_url?: string;
+}
+
+const CustomerPreview = () => {
+    const { t } = getTranslation();
+    const params = useParams();
+    const router = useRouter();
+    const [customer, setCustomer] = useState<Customer | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchCustomer = async () => {
+            try {
+                // @ts-ignore
+                const { data, error } = await supabase.from('customers').select('*').eq('id', params?.id).single();
+
+                if (error) throw error;
+
+                setCustomer(data as any);
+            } catch (error) {
+                console.error('Error fetching customer:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (params?.id) {
+            fetchCustomer();
+        }
+    }, [params?.id]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (!customer) {
+        return (
+            <div className="panel">
+                <div className="text-center py-10">
+                    <h3 className="text-lg font-semibold text-danger">Customer not found</h3>
+                    <Link href="/customers" className="btn btn-primary mt-4">
+                        <IconArrowLeft className="ltr:mr-2 rtl:ml-2" />
+                        Back to Customers
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    const displayName = customer.type === 'private' ? customer.name : customer.business_name;
+    const customerTypeBadge = customer.type === 'private' ? 'badge-outline-success' : 'badge-outline-primary';
+
+    return (
+        <div>
+            {/* Header */}
+            <div className="container mx-auto p-6">
+                <div className="flex items-center gap-5 mb-6">
+                    <div onClick={() => router.back()}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </div>
+                    <ul className="flex space-x-2 rtl:space-x-reverse mb-4">
+                        <li>
+                            <Link href="/" className="text-primary hover:underline">
+                                {t('home')}
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <Link href="/customers" className="text-primary hover:underline">
+                                Customers
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <span>Customer Details</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="mb-6 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold">Customer Details</h1>
+                        <p className="text-gray-500">{displayName}</p>
+                    </div>
+                    {customer && (
+                        <Link href={`/customers/edit/${customer.id}`} className="btn btn-primary">
+                            <IconEdit className="ltr:mr-2 rtl:ml-2" />
+                            Edit Customer
+                        </Link>
+                    )}
+                </div>
+            </div>
+
+            <div className="container mx-auto p-6">
+                <Tab.Group>
+                    <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconUser className="ltr:mr-2 rtl:ml-2" />
+                                    Details
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconCalendar className="ltr:mr-2 rtl:ml-2" />
+                                    Bookings
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                   <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
+                                    Invoices
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                   <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
+                                    Payments
+                                </button>
+                            )}
+                        </Tab>
+                    </Tab.List>
+                    <Tab.Panels className="mt-5">
+                        {/* Details Tab */}
+                        <Tab.Panel>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Customer Information */}
+                    <div className="space-y-6">
+                        {/* Basic Info */}
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Basic Information</h3>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-primary mb-2">{displayName}</h2>
+                                    <span className={`badge ${customerTypeBadge}`}>
+                                        {customer.type === 'private' ? 'Private Customer' : 'Business Customer'}
+                                    </span>
+                                </div>
+                                <div className="space-y-3">
+                                    {customer.type === 'private' ? (
+                                        <div className="flex items-center">
+                                            <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Name:</span>
+                                            <span className="font-medium">{customer.name}</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center">
+                                                <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Business Name:</span>
+                                                <span className="font-medium">{customer.business_name}</span>
+                                            </div>
+                                            {customer.tax_id && (
+                                                <div className="flex items-center">
+                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Tax ID:</span>
+                                                    <span className="font-medium">{customer.tax_id}</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    <div className="flex items-center">
+                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
+                                        <span className="font-medium">
+                                            <a href={`tel:${customer.phone}`} className="text-primary hover:underline">
+                                                {customer.phone}
+                                            </a>
+                                        </span>
+                                    </div>
+
+                                    {customer.email && (
+                                        <div className="flex items-center">
+                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Email:</span>
+                                            <span className="font-medium">
+                                                <a href={`mailto:${customer.email}`} className="text-primary hover:underline">
+                                                    {customer.email}
+                                                </a>
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {customer.address && (
+                                        <div className="flex items-center">
+                                            <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Address:</span>
+                                            <span className="font-medium">{customer.address}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Contact Information */}
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Contact Information</h3>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <div className="flex items-center">
+                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                        <span className="text-sm text-gray-600">Phone:</span>
+                                    </div>
+                                    <a href={`tel:${customer.phone}`} className="font-semibold text-primary hover:underline">
+                                        {customer.phone}
+                                    </a>
+                                </div>
+
+                                {customer.email && (
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                        <div className="flex items-center">
+                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                            <span className="text-sm text-gray-600">Email:</span>
+                                        </div>
+                                        <a href={`mailto:${customer.email}`} className="font-semibold text-primary hover:underline">
+                                            {customer.email}
+                                        </a>
+                                    </div>
+                                )}
+
+                                {customer.address && (
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                        <div className="flex items-center">
+                                            <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                            <span className="text-sm text-gray-600">Address:</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">{customer.address}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Additional Information */}
+                    <div className="space-y-6">
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Additional Information</h3>
+                            </div>
+
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Customer Number:</span>
+                                    <span className="font-medium">#{customer.customer_number || customer.id.slice(0, 8)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Customer ID:</span>
+                                    <span className="font-medium font-mono text-xs">{customer.id}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Customer Type:</span>
+                                    <span className={`badge ${customerTypeBadge}`}>
+                                        {customer.type === 'private' ? 'Private' : 'Business'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Created At:</span>
+                                    <span className="font-medium">
+                                        {new Date(customer.created_at).toLocaleDateString('en-GB', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                        })}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Notes */}
+                        {customer.notes && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Notes</h3>
+                                </div>
+                                <p className="text-gray-600 whitespace-pre-wrap">{customer.notes}</p>
+                            </div>
+                        )}
+
+                        {/* Customer Summary */}
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Customer Summary</h3>
+                            </div>
+
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Name:</span>
+                                    <span className="font-medium">{displayName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Contact:</span>
+                                    <span className="font-medium">{customer.phone}</span>
+                                </div>
+                                {customer.email && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Email:</span>
+                                        <span className="font-medium">{customer.email}</span>
+                                    </div>
+                                )}
+                                {customer.address && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Location:</span>
+                                        <span className="font-medium">{customer.address}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Contact Card */}
+                        <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                            <div className="mb-3">
+                                <h3 className="text-lg font-semibold">Quick Contact</h3>
+                            </div>
+                            <div className="space-y-2">
+                                <a href={`tel:${customer.phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                    <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                    <span className="font-medium">Call Customer</span>
+                                </a>
+                                {customer.email && (
+                                    <a href={`mailto:${customer.email}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                        <IconMail className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                        <span className="font-medium">Send Email</span>
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Customer Photo Upload */}
+                    <div className="panel">
+                        <div className="mb-5">
+                            <h3 className="text-lg font-semibold">Customer Photo</h3>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <div className="mb-5">
+                                <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                    {customer.photo_url ? (
+                                        <img src={customer.photo_url} alt={displayName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <IconUser className="w-16 h-16 text-gray-400" />
+                                    )}
+                                </div>
+                            </div>
+                            <button className="btn btn-primary gap-2">
+                                <IconCamera />
+                                Upload a photo
+                            </button>
+                            <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
+                        </div>
+                    </div>
+                </div>
+                        </Tab.Panel>
+
+                        {/* Bookings Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Customer Bookings</h3>
+                                </div>
+                                <div className="text-center py-10">
+                                    <p className="text-gray-500">No bookings found for this customer</p>
+                                </div>
+                            </div>
+                        </Tab.Panel>
+
+                        {/* Invoices Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Customer Invoices</h3>
+                                </div>
+                                <div className="text-center py-10">
+                                    <p className="text-gray-500">No invoices found for this customer</p>
+                                </div>
+                            </div>
+                        </Tab.Panel>
+
+                        {/* Payments Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Customer Payments</h3>
+                                </div>
+                                <div className="text-center py-10">
+                                    <p className="text-gray-500">No payments found for this customer</p>
+                                </div>
+                            </div>
+                        </Tab.Panel>
+                    </Tab.Panels>
+                </Tab.Group>
+            </div>
+        </div>
+    );
+};
+
+export default CustomerPreview;
