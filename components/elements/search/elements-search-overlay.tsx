@@ -1,8 +1,23 @@
 'use client';
 import IconSearch from '@/components/icon/icon-search';
 import PanelCodeHighlight from '@/components/panel-code-highlight';
-import React, { useState } from 'react';
-import ClickAwayListener from 'react-click-away-listener';
+import React, { useEffect, useRef, useState } from 'react';
+
+// Local fallback for click-away behavior to avoid external dependency
+const ClickAwayListener = ({ onClickAway, children }: { onClickAway: () => void; children: React.ReactNode }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const onDocMouseDown = (e: MouseEvent) => {
+            if (!ref.current) return;
+            if (!ref.current.contains(e.target as Node)) {
+                onClickAway?.();
+            }
+        };
+        document.addEventListener('mousedown', onDocMouseDown);
+        return () => document.removeEventListener('mousedown', onDocMouseDown);
+    }, [onClickAway]);
+    return <div ref={ref}>{children}</div>;
+};
 
 const ElementsSearchOverlay = () => {
     const [focus, setFocus] = useState(false);
