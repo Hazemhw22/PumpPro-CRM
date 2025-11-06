@@ -16,6 +16,7 @@ interface Truck {
     notes?: string;
     photo_url?: string;
     truck_photos?: string[];
+    driver_id?: string;
     updated_at?: string;
 }
 
@@ -37,7 +38,12 @@ export default function EditTruck() {
         last_maintenance: '',
         notes: '',
         photo_url: '',
+        driver_id: '',
     });
+
+    const [drivers, setDrivers] = useState<any[]>([]);
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string>('');
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
@@ -46,6 +52,7 @@ export default function EditTruck() {
     });
 
     useEffect(() => {
+        fetchDrivers();
         const fetchTruck = async () => {
             try {
                 const { data, error } = await (supabase as any).from('trucks').select('*').eq('id', id).single();
@@ -61,6 +68,7 @@ export default function EditTruck() {
                     last_maintenance: t.last_maintenance || '',
                     notes: t.notes || '',
                     photo_url: t.photo_url || '',
+                    driver_id: t.driver_id || '',
                 });
             } catch (e) {
                 setAlert({ visible: true, message: 'Error loading truck', type: 'danger' });
@@ -71,9 +79,26 @@ export default function EditTruck() {
         if (id) fetchTruck();
     }, [id]);
 
+    const fetchDrivers = async () => {
+        try {
+            const { data, error } = await supabase.from('drivers').select('id, name, driver_number').eq('status', 'active').order('name');
+            if (error) throw error;
+            setDrivers(data || []);
+        } catch (err) {
+            console.error('Error fetching drivers:', err);
+        }
+    };
+
     const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const onPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setPhotoFile(file);
+        if (file) setPhotoPreview(URL.createObjectURL(file));
+        else setPhotoPreview('');
     };
 
     const onSubmit = async (e: React.FormEvent) => {
@@ -89,7 +114,19 @@ export default function EditTruck() {
                 last_maintenance: form.last_maintenance || null,
                 notes: form.notes || null,
                 photo_url: form.photo_url || null,
+                driver_id: form.driver_id || null,
             };
+
+            // Upload photo if provided
+            if (photoFile) {
+                const ext = photoFile.name.split('.').pop();
+                const path = `photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                const { error: uploadError } = await (supabase as any).storage.from('trucks').upload(path, photoFile, { upsert: true });
+                if (uploadError) throw uploadError;
+                const { data: pub } = (supabase as any).storage.from('trucks').getPublicUrl(path);
+                payload.photo_url = pub?.publicUrl || null;
+            }
+
             const { error } = await (supabase as any).from('trucks').update(payload).eq('id', id);
             if (error) throw error;
             setAlert({ visible: true, message: 'Truck updated successfully', type: 'success' });
@@ -190,9 +227,30 @@ export default function EditTruck() {
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Last Maintenance</label>
                             <input type="date" name="last_maintenance" value={form.last_maintenance} onChange={onChange} className="form-input" />
                         </div>
+                        <div>
+                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Assigned Driver</label>
+                            <select name="driver_id" value={form.driver_id} onChange={onChange} className="form-select">
+                                <option value="">-- Select Driver --</option>
+                                {drivers.map((driver) => (
+                                    <option key={driver.id} value={driver.id}>
+                                        {driver.name} {driver.driver_number ? `(#${driver.driver_number})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Photo URL</label>
-                            <input name="photo_url" value={form.photo_url} onChange={onChange} className="form-input" placeholder="https://..." />
+                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Photo</label>
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-200 dark:bg-gray-700">
+                                    {photoPreview ? (
+                                        <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <img src={form.photo_url || '/assets/images/img-placeholder-fallback.webp'} alt="current" className="h-full w-full object-cover" />
+                                    )}
+                                </div>
+                                <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
                         </div>
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Notes (Optional)</label>

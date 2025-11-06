@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -20,7 +20,10 @@ export default function AddTruck() {
         last_maintenance: '',
         notes: '',
         photo_url: '',
+        driver_id: '',
     });
+
+    const [drivers, setDrivers] = useState<any[]>([]);
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>('');
@@ -30,6 +33,20 @@ export default function AddTruck() {
         message: '',
         type: 'success',
     });
+
+    useEffect(() => {
+        fetchDrivers();
+    }, []);
+
+    const fetchDrivers = async () => {
+        try {
+            const { data, error } = await supabase.from('drivers').select('id, name, driver_number').eq('status', 'active').order('name');
+            if (error) throw error;
+            setDrivers(data || []);
+        } catch (err) {
+            console.error('Error fetching drivers:', err);
+        }
+    };
 
     const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -60,6 +77,7 @@ export default function AddTruck() {
                 last_maintenance: form.last_maintenance || null,
                 notes: form.notes || null,
                 photo_url: null,
+                driver_id: form.driver_id || null,
             };
 
             // Upload photo if provided
@@ -154,6 +172,17 @@ export default function AddTruck() {
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Last Maintenance</label>
                             <input type="date" name="last_maintenance" value={form.last_maintenance} onChange={onChange} className="form-input" />
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Assigned Driver</label>
+                            <select name="driver_id" value={form.driver_id} onChange={onChange} className="form-select">
+                                <option value="">-- Select Driver --</option>
+                                {drivers.map((driver) => (
+                                    <option key={driver.id} value={driver.id}>
+                                        {driver.name} {driver.driver_number ? `(#${driver.driver_number})` : ''}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Photo</label>

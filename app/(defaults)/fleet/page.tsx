@@ -21,6 +21,8 @@ interface Truck {
     notes?: string;
     photo_url?: string;
     truck_photos?: string[];
+    driver_id?: string;
+    driver?: { name?: string; driver_number?: string };
     updated_at?: string;
 }
 
@@ -50,19 +52,24 @@ export default function FleetList() {
     });
 
     useEffect(() => {
-        const fetchFleet = async () => {
+        const fetchTrucks = async () => {
+            setLoading(true);
             try {
-                const { data, error } = await supabase.from('trucks').select('*').order('created_at', { ascending: false });
+                const { data, error } = await supabase
+                    .from('trucks')
+                    .select('*, driver:drivers(name, driver_number)')
+                    .order('created_at', { ascending: false });
                 if (error) throw error;
-                setItems((data || []) as any);
-            } catch (e) {
-                console.error('Error fetching fleet:', e);
-                setAlert({ visible: true, message: 'Error loading data', type: 'danger' });
+                setItems(data || []);
+                setInitialRecords(data || []);
+            } catch (err) {
+                console.error('Error fetching trucks:', err);
+                setAlert({ visible: true, message: 'Failed to load trucks', type: 'danger' });
             } finally {
                 setLoading(false);
             }
         };
-        fetchFleet();
+        fetchTrucks();
     }, []);
 
     useEffect(() => setPage(1), [pageSize]);
@@ -212,6 +219,7 @@ export default function FleetList() {
                                         <th className="cursor-pointer select-none" onClick={() => setSort('last_maintenance')}>
                                             Last Maintenance {sortStatus.columnAccessor === 'last_maintenance' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                         </th>
+                                        <th>Driver</th>
                                         <th>Notes</th>
                                         <th className="text-center">Actions</th>
                                     </tr>
@@ -219,7 +227,7 @@ export default function FleetList() {
                                 <tbody>
                                     {records.length === 0 && (
                                         <tr>
-                                            <td colSpan={9} className="py-10 text-center text-sm opacity-70">
+                                            <td colSpan={10} className="py-10 text-center text-sm opacity-70">
                                                 No records
                                             </td>
                                         </tr>
@@ -250,6 +258,7 @@ export default function FleetList() {
                                                     ? new Date(row.last_maintenance).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })
                                                     : '-'}
                                             </td>
+                                            <td>{row.driver?.name || '-'}</td>
                                             <td className="max-w-52 truncate">{row.notes || 'N/A'}</td>
                                             <td>
                                                 <div className="mx-auto flex w-max items-center gap-2">
@@ -277,6 +286,7 @@ export default function FleetList() {
                                             </div>
                                             <div className="mt-1 text-sm opacity-80">Plate: {row.license_plate || '-'}</div>
                                             <div className="text-sm opacity-80">Capacity: {row.capacity_gallons ? `${row.capacity_gallons} gallons` : '-'}</div>
+                                            {row.driver?.name && <div className="text-sm opacity-80">Driver: {row.driver.name}</div>}
                                         </div>
                                     </div>
                                     <div className="mt-3 flex items-center justify-end gap-2">
