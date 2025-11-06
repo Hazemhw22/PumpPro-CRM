@@ -787,10 +787,6 @@ const HomePage = () => {
                         <div className="mt-5 flex items-center">
                             <div className="text-3xl font-bold ltr:mr-3 rtl:ml-3">{formatNumber(stats.totalTrucks)}</div>
                         </div>
-                        <div className="mt-2 mb-2">
-                            <div className="text-lg font-semibold text-success">{stats.totalInvoices}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{t('total_invoices') || 'Total Invoices'}</div>
-                        </div>
                         <div className="mt-5 flex items-center font-semibold">
                             <IconCar className="h-5 w-5 text-primary ltr:mr-2 rtl:ml-2" />
                             <p className="text-xs text-primary">{t('total_fleet') || 'Total Fleet'}</p>
