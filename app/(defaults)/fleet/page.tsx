@@ -1,0 +1,331 @@
+'use client';
+import Link from 'next/link';
+import React, { useEffect, useMemo, useState } from 'react';
+import { sortBy } from 'lodash';
+import IconPlus from '@/components/icon/icon-plus';
+import IconEdit from '@/components/icon/icon-edit';
+import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconEye from '@/components/icon/icon-eye';
+import { supabase } from '@/lib/supabase/client';
+import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+
+interface Truck {
+    id: string;
+    created_at: string;
+    truck_number?: string;
+    license_plate?: string;
+    capacity_gallons?: number;
+    status?: 'available' | 'in_use' | 'maintenance' | 'out_of_service';
+    purchase_date?: string;
+    last_maintenance?: string;
+    notes?: string;
+    photo_url?: string;
+    truck_photos?: string[];
+    updated_at?: string;
+}
+
+export default function FleetList() {
+    const [items, setItems] = useState<Truck[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const [page, setPage] = useState(1);
+    const PAGE_SIZES = [10, 20, 30, 50, 100];
+    const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+    const [initialRecords, setInitialRecords] = useState<Truck[]>([]);
+    const [records, setRecords] = useState<Truck[]>([]);
+    const [selectedRecords, setSelectedRecords] = useState<Truck[]>([]);
+
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'in_use' | 'maintenance' | 'out_of_service'>('all');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Truck | 'created_at'; direction: 'asc' | 'desc' }>({
+        columnAccessor: 'created_at',
+        direction: 'desc',
+    });
+
+    const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
+        visible: false,
+        message: '',
+        type: 'success',
+    });
+
+    useEffect(() => {
+        const fetchFleet = async () => {
+            try {
+                const { data, error } = await supabase.from('trucks').select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                setItems((data || []) as any);
+            } catch (e) {
+                console.error('Error fetching fleet:', e);
+                setAlert({ visible: true, message: 'Error loading data', type: 'danger' });
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFleet();
+    }, []);
+
+    useEffect(() => setPage(1), [pageSize]);
+
+    useEffect(() => {
+        setInitialRecords(() => {
+            return items.filter((t) => {
+                const inStatus = statusFilter === 'all' || (t.status || 'available') === statusFilter;
+                if (!inStatus) return false;
+                const q = search.toLowerCase();
+                return (
+                    !q ||
+                    (t.truck_number && t.truck_number.toLowerCase().includes(q)) ||
+                    (t.license_plate && t.license_plate.toLowerCase().includes(q))
+                );
+            });
+        });
+    }, [items, search, statusFilter]);
+
+    useEffect(() => {
+        const data = sortBy(initialRecords, (x) => {
+            const key = sortStatus.columnAccessor as string;
+            if (key === 'created_at') return new Date((x as any)[key] || 0).getTime();
+            const v = (x as any)[key];
+            return typeof v === 'string' ? v.toLowerCase() : v;
+        });
+        const sortedData = sortStatus.direction === 'desc' ? data.reverse() : data;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize;
+        setRecords(sortedData.slice(from, to));
+    }, [page, pageSize, sortStatus, initialRecords]);
+
+    const toggleSelectAllOnPage = () => {
+        const pageIds = new Set(records.map((r) => r.id));
+        const allSelected = records.every((r) => selectedRecords.some((s) => s.id === r.id));
+        if (allSelected) {
+            setSelectedRecords((prev) => prev.filter((s) => !pageIds.has(s.id)));
+        } else {
+            const byId = new Set(selectedRecords.map((s) => s.id));
+            const merged = [...selectedRecords];
+            records.forEach((r) => {
+                if (!byId.has(r.id)) merged.push(r);
+            });
+            setSelectedRecords(merged);
+        }
+    };
+
+    const toggleRow = (row: Truck) => {
+        setSelectedRecords((prev) => {
+            const exists = prev.some((s) => s.id === row.id);
+            if (exists) return prev.filter((s) => s.id !== row.id);
+            return [...prev, row];
+        });
+    };
+
+    const isAllPageSelected = useMemo(() => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)), [records, selectedRecords]);
+
+    const setSort = (columnAccessor: 'truck_number' | 'license_plate' | 'capacity_gallons' | 'status' | 'created_at' | 'last_maintenance') => {
+        setSortStatus((curr) => {
+            if (curr.columnAccessor === columnAccessor) {
+                return { columnAccessor, direction: curr.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { columnAccessor, direction: 'asc' };
+        });
+    };
+
+    const totalRecords = initialRecords.length;
+    const from = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
+    const to = Math.min(page * pageSize, totalRecords);
+
+    const statusBadge = (s?: Truck['status']) => {
+        switch (s) {
+            case 'available':
+                return 'badge-outline-success';
+            case 'in_use':
+                return 'badge-outline-info';
+            case 'maintenance':
+                return 'badge-outline-warning';
+            case 'out_of_service':
+                return 'badge-outline-danger';
+            default:
+                return 'badge-outline-secondary';
+        }
+    };
+
+    return (
+        <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+            {alert.visible && (
+                <div className="mb-4 ml-4 max-w-96">
+                    <Alert type={alert.type} title={alert.type === 'success' ? 'Success' : 'Error'} message={alert.message} onClose={() => setAlert({ visible: false, message: '', type: 'success' })} />
+                </div>
+            )}
+            <div className="invoice-table">
+                <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
+                    <div className="flex items-center gap-2">
+                        <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
+                            <IconTrashLines />
+                            Delete
+                        </button>
+                        <Link href="/fleet/add" className="btn btn-primary gap-2">
+                            <IconPlus />
+                            Add New Truck
+                        </Link>
+                    </div>
+                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
+                        <div className="hidden items-center gap-1 sm:flex">
+                            <button type="button" className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('list')}>
+                                List
+                            </button>
+                            <button type="button" className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('grid')}>
+                                Grid
+                            </button>
+                        </div>
+                        <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+                            <option value="all">All Status</option>
+                            <option value="available">Available</option>
+                            <option value="in_use">In Use</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="out_of_service">Out of Service</option>
+                        </select>
+                        <input type="text" className="form-input w-auto" placeholder="Search trucks by number or license plate..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="relative px-5 pb-5">
+                    {viewMode === 'list' ? (
+                        <div className="overflow-auto rounded-md">
+                            <table className="table-hover whitespace-nowrap rtl-table-headers">
+                                <thead>
+                                    <tr>
+                                        <th className="w-10">
+                                            <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
+                                        </th>
+                                        <th className="cursor-pointer select-none" onClick={() => setSort('truck_number')}>
+                                            Truck Number {sortStatus.columnAccessor === 'truck_number' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th>Photo</th>
+                                        <th className="cursor-pointer select-none" onClick={() => setSort('license_plate')}>
+                                            License Plate {sortStatus.columnAccessor === 'license_plate' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th className="cursor-pointer select-none" onClick={() => setSort('status')}>
+                                            Status {sortStatus.columnAccessor === 'status' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th className="cursor-pointer select-none" onClick={() => setSort('capacity_gallons')}>
+                                            Capacity {sortStatus.columnAccessor === 'capacity_gallons' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th className="cursor-pointer select-none" onClick={() => setSort('last_maintenance')}>
+                                            Last Maintenance {sortStatus.columnAccessor === 'last_maintenance' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th>Notes</th>
+                                        <th className="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {records.length === 0 && (
+                                        <tr>
+                                            <td colSpan={9} className="py-10 text-center text-sm opacity-70">
+                                                No records
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {records.map((row) => (
+                                        <tr key={row.id}>
+                                            <td>
+                                                <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
+                                            </td>
+                                            <td>
+                                                <div className="flex items-center gap-2">
+                                                    <strong className="text-info">#{row.truck_number || row.id.slice(0, 8)}</strong>
+                                                    <Link href={`/fleet/preview/${row.id}`} className="flex hover:text-info" title="View">
+                                                        <IconEye className="h-4 w-4" />
+                                                    </Link>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <img src={row.photo_url || '/assets/images/img-placeholder-fallback.webp'} alt="thumb" className="h-10 w-10 rounded-md object-cover" />
+                                            </td>
+                                            <td>{row.license_plate || '-'}</td>
+                                            <td>
+                                                <span className={`badge ${statusBadge(row.status)}`}>{(row.status || 'available').replace('_', ' ')}</span>
+                                            </td>
+                                            <td>{row.capacity_gallons ? `${row.capacity_gallons} gallons` : '-'}</td>
+                                            <td>
+                                                {row.last_maintenance
+                                                    ? new Date(row.last_maintenance).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })
+                                                    : '-'}
+                                            </td>
+                                            <td className="max-w-52 truncate">{row.notes || 'N/A'}</td>
+                                            <td>
+                                                <div className="mx-auto flex w-max items-center gap-2">
+                                                    <Link href={`/fleet/edit/${row.id}`} className="flex hover:text-info">
+                                                        <IconEdit className="h-4.5 w-4.5" />
+                                                    </Link>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {records.length === 0 && <div className="col-span-full py-10 text-center text-sm opacity-70">No records</div>}
+                            {records.map((row) => (
+                                <div key={row.id} className="rounded-md border border-white-light bg-white p-4 shadow dark:border-[#17263c] dark:bg-[#121e32]">
+                                    <div className="flex items-start gap-3">
+                                        <img src={row.photo_url || '/assets/images/img-placeholder-fallback.webp'} alt="thumb" className="h-12 w-12 rounded-md object-cover" />
+                                        <div className="flex-1">
+                                            <div className="flex items-center justify-between">
+                                                <div className="font-semibold">#{row.truck_number || row.license_plate || row.id.slice(0, 8)}</div>
+                                                <span className={`badge ${statusBadge(row.status)}`}>{(row.status || 'available').replace('_', ' ')}</span>
+                                            </div>
+                                            <div className="mt-1 text-sm opacity-80">Plate: {row.license_plate || '-'}</div>
+                                            <div className="text-sm opacity-80">Capacity: {row.capacity_gallons ? `${row.capacity_gallons} gallons` : '-'}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 flex items-center justify-end gap-2">
+                                        <Link href={`/fleet/preview/${row.id}`} className="flex hover:text-info" title="View">
+                                            <IconEye className="h-4 w-4" />
+                                        </Link>
+                                        <Link href={`/fleet/edit/${row.id}`} className="flex hover:text-info">
+                                            <IconEdit className="h-4.5 w-4.5" />
+                                        </Link>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="mt-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-sm opacity-80">
+                            <span>
+                                Showing {from} to {to} of {totalRecords} entries
+                            </span>
+                            <select
+                                className="form-select w-16 py-1 text-center text-sm"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                            >
+                                {PAGE_SIZES.map((size) => (
+                                    <option key={size} value={size}>
+                                        {size}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button type="button" className="rounded-full border border-white-light p-2 text-sm opacity-80 hover:opacity-100 dark:border-[#17263c]" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} aria-label="Previous">
+                                ‹
+                            </button>
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-info text-white">{page}</span>
+                            <button type="button" className="rounded-full border border-white-light p-2 text-sm opacity-80 hover:opacity-100 dark:border-[#17263c]" onClick={() => setPage((p) => (to < totalRecords ? p + 1 : p))} disabled={to >= totalRecords} aria-label="Next">
+                                ›
+                            </button>
+                        </div>
+                    </div>
+
+                    {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-black-dark-light/60" />}
+                </div>
+            </div>
+        </div>
+    );
+}
