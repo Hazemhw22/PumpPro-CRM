@@ -24,6 +24,8 @@ interface Truck {
     notes?: string;
     photo_url?: string;
     truck_photos?: string[];
+    driver_id?: string;
+    driver?: { name?: string; driver_number?: string };
     updated_at?: string;
 }
 
@@ -37,7 +39,11 @@ const FleetPreview = () => {
     useEffect(() => {
         const fetchTruck = async () => {
             try {
-                const { data, error } = await (supabase as any).from('trucks').select('*').eq('id', params?.id).single();
+                const { data, error } = await (supabase as any)
+                    .from('trucks')
+                    .select('*, driver:drivers(name, driver_number)')
+                    .eq('id', params?.id)
+                    .single();
                 if (error) throw error;
                 setTruck(data as Truck);
             } catch (error) {
@@ -183,6 +189,10 @@ const FleetPreview = () => {
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-gray-600">Last Maintenance:</span>
                                                 <span className="font-medium">{truck.last_maintenance ? new Date(truck.last_maintenance).toLocaleDateString('en-GB') : '-'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Assigned Driver:</span>
+                                                <span className="font-medium">{truck.driver?.name || '-'}</span>
                                             </div>
                                         </div>
                                     </div>
