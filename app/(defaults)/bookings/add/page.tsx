@@ -17,6 +17,7 @@ interface Truck {
     id: string;
     truck_number: string;
     license_plate: string;
+    driver_id?: string | null;
 }
 
 interface Driver {
@@ -71,7 +72,7 @@ const AddBooking = () => {
                 // @ts-ignore
                 const { data: customersData } = await supabase.from('customers').select('id, name, phone, email');
                 // @ts-ignore
-                const { data: trucksData } = await supabase.from('trucks').select('id, truck_number, license_plate');
+                const { data: trucksData } = await supabase.from('trucks').select('id, truck_number, license_plate, driver_id');
                 // @ts-ignore
                 const { data: driversData } = await supabase.from('drivers').select('id, name');
                 // @ts-ignore
@@ -101,6 +102,14 @@ const AddBooking = () => {
             if (selectedService) {
                 const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
                 setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
+            }
+        }
+
+        // Auto-fill driver when selecting truck
+        if (name === 'truck_id' && value) {
+            const selectedTruck = trucks.find((t: Truck) => t.id === value);
+            if (selectedTruck && selectedTruck.driver_id) {
+                setForm(prev => ({ ...prev, driver_id: selectedTruck.driver_id || '' }));
             }
         }
 

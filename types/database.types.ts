@@ -91,6 +91,7 @@ export interface Database {
           license_plate: string;
           capacity_gallons: number;
           status: TruckStatus;
+          driver_id: string | null;
           purchase_date: string | null;
           last_maintenance: string | null;
           notes: string | null;
@@ -105,6 +106,7 @@ export interface Database {
           license_plate: string;
           capacity_gallons: number;
           status?: TruckStatus;
+          driver_id?: string | null;
           purchase_date?: string | null;
           last_maintenance?: string | null;
           notes?: string | null;
@@ -119,6 +121,7 @@ export interface Database {
           license_plate?: string;
           capacity_gallons?: number;
           status?: TruckStatus;
+          driver_id?: string | null;
           purchase_date?: string | null;
           last_maintenance?: string | null;
           notes?: string | null;

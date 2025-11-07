@@ -51,6 +51,8 @@ const EditBooking = () => {
     const [booking, setBooking] = useState<Booking | null>(null);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [services, setServices] = useState<Service[]>([]);
+    const [trucks, setTrucks] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<any[]>([]);
 
     const [form, setForm] = useState({
         customer_type: 'private' as 'private' | 'business',
@@ -80,14 +82,20 @@ const EditBooking = () => {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // Load customers and services
+                // Load customers, services, trucks, and drivers
                 // @ts-ignore
                 const { data: customersData } = await supabase.from('customers').select('id, name, phone, email');
                 // @ts-ignore
                 const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business').eq('active', true);
+                // @ts-ignore
+                const { data: trucksData } = await supabase.from('trucks').select('id, truck_number, driver_id');
+                // @ts-ignore
+                const { data: driversData } = await supabase.from('drivers').select('id, name');
 
                 if (customersData) setCustomers(customersData as any);
                 if (servicesData) setServices(servicesData as any);
+                if (trucksData) setTrucks(trucksData as any);
+                if (driversData) setDrivers(driversData as any);
 
                 // Load booking
                 // @ts-ignore
@@ -143,6 +151,14 @@ const EditBooking = () => {
             if (selectedService) {
                 const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
                 setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
+            }
+        }
+
+        // Auto-fill driver when selecting truck
+        if (name === 'truck_id' && value) {
+            const selectedTruck = trucks.find((t: any) => t.id === value);
+            if (selectedTruck && selectedTruck.driver_id) {
+                setForm(prev => ({ ...prev, driver_id: selectedTruck.driver_id }));
             }
         }
 
