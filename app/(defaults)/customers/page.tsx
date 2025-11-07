@@ -361,44 +361,54 @@
               <span>
                 Showing {from} to {to} of {totalRecords} entries
               </span>
-              <select
-                className="form-select w-16 py-1 text-center text-sm"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-              >
-                {PAGE_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
+              <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                                {PAGE_SIZES.map((size) => (
+                                    <option key={size} value={size}>
+                                        {size}
+                                    </option>
+                                ))}
+                            </select>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-full border border-white-light p-2 text-sm opacity-80 hover:opacity-100 dark:border-[#17263c]"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                aria-label="Previous"
-              >
-                ‹
-              </button>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-info text-white">
-                {page}
-              </span>
-              <button
-                type="button"
-                className="rounded-full border border-white-light p-2 text-sm opacity-80 hover:opacity-100 dark:border-[#17263c]"
-                onClick={() => setPage((p) => (to < totalRecords ? p + 1 : p))}
-                disabled={to >= totalRecords}
-                aria-label="Next"
-              >
-                ›
-              </button>
-            </div>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                            disabled={page === 1}
+                                            onClick={() => setPage(page - 1)}
+                                        >
+                                            Previous
+                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                                .filter((p) => {
+                                                    if (Math.ceil(totalRecords / pageSize) <= 5) return true;
+                                                    if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
+                                                    if (p >= page - 1 && p <= page + 1) return true;
+                                                    return false;
+                                                })
+                                                .map((p, i, arr) => (
+                                                    <React.Fragment key={p}>
+                                                        {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
+                                                        <button
+                                                            type="button"
+                                                            className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                            onClick={() => setPage(p)}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    </React.Fragment>
+                                                ))}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                            disabled={page === Math.ceil(totalRecords / pageSize)}
+                                            onClick={() => setPage(page + 1)}
+                                        >
+                                            Next
+                                        </button>
+                                      
+                                    </div>
           </div>
 
           {loading && (

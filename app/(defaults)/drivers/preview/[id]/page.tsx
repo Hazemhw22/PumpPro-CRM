@@ -274,7 +274,7 @@ export default function PreviewDriver() {
                                         </div>
                                         <div className="flex justify-center">
                                             <img
-                                                src={driver.photo_url || '/assets/images/user-profile.jpeg'}
+                                                src={driver.photo_url || '/assets/images/auth/user.png'}
                                                 alt="driver"
                                                 className="h-64 w-64 rounded-lg object-cover shadow-lg"
                                             />

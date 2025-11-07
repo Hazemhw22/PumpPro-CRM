@@ -250,7 +250,9 @@ export default function DriversList() {
                                                 </div>
                                             </td>
                                             <td>
-                                                <img src={row.photo_url || '/assets/images/user-profile.jpeg'} alt="photo" className="h-10 w-10 rounded-full object-cover" />
+                                                <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                                                    <img src={row.photo_url || '/assets/images/auth/user.png'} alt="thumb" className="h-full w-full object-cover" />
+                                                </div>
                                             </td>
                                             <td className="font-semibold">{row.name || '-'}</td>
                                             <td>{row.phone || '-'}</td>
@@ -279,7 +281,7 @@ export default function DriversList() {
                             {records.map((row) => (
                                 <div key={row.id} className="rounded-md border border-white-light bg-white p-4 shadow dark:border-[#17263c] dark:bg-[#121e32]">
                                     <div className="flex items-start gap-3">
-                                        <img src={row.photo_url || '/assets/images/user-profile.jpeg'} alt="photo" className="h-12 w-12 rounded-full object-cover" />
+                                        <img src={row.photo_url || '/assets/images/auth/user.png'} alt="photo" className="h-12 w-12 rounded-full object-cover" />
                                         <div className="flex-1">
                                             <div className="flex items-center justify-between">
                                                 <div className="font-semibold">#{row.driver_number || row.id.slice(0, 8)}</div>
@@ -311,14 +313,7 @@ export default function DriversList() {
                             <span>
                                 Showing {from} to {to} of {totalRecords} entries
                             </span>
-                            <select
-                                className="form-select w-16 py-1 text-center text-sm"
-                                value={pageSize}
-                                onChange={(e) => {
-                                    setPageSize(Number(e.target.value));
-                                    setPage(1);
-                                }}
-                            >
+                             <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
                                 {PAGE_SIZES.map((size) => (
                                     <option key={size} value={size}>
                                         {size}
@@ -326,53 +321,46 @@ export default function DriversList() {
                                 ))}
                             </select>
                         </div>
-                        <div className="flex items-center gap-1">
-                            <button
-                                type="button"
-                                className="rounded-md bg-[#f4f4f4] p-1 enabled:hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white-dark/20 enabled:dark:hover:bg-white-dark/30 ltr:mr-3 rtl:ml-3"
-                                disabled={page === 1}
-                                onClick={() => setPage(1)}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 rtl:rotate-180">
-                                    <path d="M13 19L7 12L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path opacity="0.5" d="M16.9998 19L10.9998 12L16.9998 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded-md bg-[#f4f4f4] p-1 enabled:hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white-dark/20 enabled:dark:hover:bg-white-dark/30"
-                                disabled={page === 1}
-                                onClick={() => setPage(page - 1)}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 rtl:rotate-180">
-                                    <path d="M15 5L9 12L15 19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                            <button type="button" className="rounded-md bg-primary px-3 py-1 text-white dark:bg-primary">
-                                {page}
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded-md bg-[#f4f4f4] p-1 enabled:hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white-dark/20 enabled:dark:hover:bg-white-dark/30"
-                                disabled={page === totalPages}
-                                onClick={() => setPage(page + 1)}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 rtl:rotate-180">
-                                    <path d="M9 5L15 12L9 19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded-md bg-[#f4f4f4] p-1 enabled:hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white-dark/20 enabled:dark:hover:bg-white-dark/30 ltr:ml-3 rtl:mr-3"
-                                disabled={page === totalPages}
-                                onClick={() => setPage(totalPages)}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 rtl:rotate-180">
-                                    <path d="M11 19L17 12L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path opacity="0.5" d="M6.99976 19L12.9998 12L6.99976 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                        </div>
+                        <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                                        disabled={page === 1}
+                                                        onClick={() => setPage(page - 1)}
+                                                    >
+                                                        Previous
+                                                    </button>
+                                                    <div className="flex items-center gap-1">
+                                                        {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                                            .filter((p) => {
+                                                                if (Math.ceil(totalRecords / pageSize) <= 5) return true;
+                                                                if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
+                                                                if (p >= page - 1 && p <= page + 1) return true;
+                                                                return false;
+                                                            })
+                                                            .map((p, i, arr) => (
+                                                                <React.Fragment key={p}>
+                                                                    {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                                        onClick={() => setPage(p)}
+                                                                    >
+                                                                        {p}
+                                                                    </button>
+                                                                </React.Fragment>
+                                                            ))}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                                        disabled={page === Math.ceil(totalRecords / pageSize)}
+                                                        onClick={() => setPage(page + 1)}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                  
+                                                </div>
                     </div>
                 </div>
             </div>

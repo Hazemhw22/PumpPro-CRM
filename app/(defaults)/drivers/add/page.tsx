@@ -162,7 +162,7 @@ export default function AddDriver() {
                                     {photoPreview ? (
                                         <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
                                     ) : (
-                                        <img src={form.photo_url || '/assets/images/user-profile.jpeg'} alt="placeholder" className="h-full w-full object-cover" />
+                                        <img src={form.photo_url || '/assets/images/auth/user.png'} alt="placeholder" className="h-full w-full object-cover" />
                                     )}
                                 </div>
                                 <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />

@@ -6,16 +6,38 @@ import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
 
+interface Customer {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+}
+
+interface Service {
+    id: string;
+    name: string;
+    price_private?: number;
+    price_business?: number;
+}
+
 interface Booking {
     id: string;
     booking_number: string;
+    customer_type: 'private' | 'business';
+    customer_id?: string;
     customer_name: string;
     customer_phone: string;
+    customer_email?: string;
     service_address: string;
     scheduled_date: string;
     scheduled_time: string;
     status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
     service_type: string;
+    price?: number;
+    profit?: number;
+    truck_id?: string;
+    driver_id?: string;
+    notes?: string;
 }
 
 const EditBooking = () => {
@@ -27,16 +49,26 @@ const EditBooking = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [booking, setBooking] = useState<Booking | null>(null);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [services, setServices] = useState<Service[]>([]);
 
     const [form, setForm] = useState({
         booking_number: '',
+        customer_type: 'private' as 'private' | 'business',
+        customer_id: '',
         customer_name: '',
         customer_phone: '',
+        customer_email: '',
         service_address: '',
         scheduled_date: '',
         scheduled_time: '',
         status: 'pending' as 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled',
         service_type: '',
+        price: '',
+        profit: '',
+        truck_id: '',
+        driver_id: '',
+        notes: '',
     });
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -46,9 +78,19 @@ const EditBooking = () => {
     });
 
     useEffect(() => {
-        const fetchBooking = async () => {
+        const loadData = async () => {
             try {
-                // @ts-ignore - Supabase type inference issue
+                // Load customers and services
+                // @ts-ignore
+                const { data: customersData } = await supabase.from('customers').select('id, name, phone, email');
+                // @ts-ignore
+                const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business').eq('active', true);
+
+                if (customersData) setCustomers(customersData as any);
+                if (servicesData) setServices(servicesData as any);
+
+                // Load booking
+                // @ts-ignore
                 const { data, error } = await supabase.from('bookings').select('*').eq('id', bookingId).single();
 
                 if (error) throw error;
@@ -58,17 +100,25 @@ const EditBooking = () => {
                     setBooking(bookingData);
                     setForm({
                         booking_number: bookingData.booking_number || '',
+                        customer_type: bookingData.customer_type || 'private',
+                        customer_id: bookingData.customer_id || '',
                         customer_name: bookingData.customer_name || '',
                         customer_phone: bookingData.customer_phone || '',
+                        customer_email: bookingData.customer_email || '',
                         service_address: bookingData.service_address || '',
                         scheduled_date: bookingData.scheduled_date || '',
                         scheduled_time: bookingData.scheduled_time || '',
                         status: bookingData.status || 'pending',
                         service_type: bookingData.service_type || '',
+                        price: bookingData.price ? String(bookingData.price) : '',
+                        profit: bookingData.profit ? String(bookingData.profit) : '',
+                        truck_id: bookingData.truck_id || '',
+                        driver_id: bookingData.driver_id || '',
+                        notes: bookingData.notes || '',
                     });
                 }
             } catch (error) {
-                console.error('Error fetching booking:', error);
+                console.error('Error loading data:', error);
                 setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
             } finally {
                 setLoading(false);
@@ -76,13 +126,38 @@ const EditBooking = () => {
         };
 
         if (bookingId) {
-            fetchBooking();
+            loadData();
         }
     }, [bookingId]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+
+        // Auto-fill price based on service type and customer type
+        if (name === 'service_type' || name === 'customer_type') {
+            const serviceId = name === 'service_type' ? value : form.service_type;
+            const customerType = name === 'customer_type' ? value : form.customer_type;
+            
+            const selectedService = services.find((s: Service) => s.id === serviceId);
+            if (selectedService) {
+                const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
+                setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
+            }
+        }
+
+        // Auto-fill customer data when selecting from dropdown
+        if (name === 'customer_id' && value) {
+            const selectedCustomer = customers.find((c: Customer) => c.id === value);
+            if (selectedCustomer) {
+                setForm(prev => ({
+                    ...prev,
+                    customer_name: selectedCustomer.name,
+                    customer_phone: selectedCustomer.phone,
+                    customer_email: selectedCustomer.email || '',
+                }));
+            }
+        }
     };
 
     const validateForm = () => {

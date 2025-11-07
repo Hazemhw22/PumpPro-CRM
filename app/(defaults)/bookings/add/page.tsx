@@ -24,10 +24,11 @@ interface Driver {
     name: string;
 }
 
-interface ServiceType {
+interface Service {
+    id: string;
     name: string;
-    private_price: number;
-    business_price: number;
+    price_private?: number;
+    price_business?: number;
 }
 
 const AddBooking = () => {
@@ -37,16 +38,9 @@ const AddBooking = () => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [trucks, setTrucks] = useState<Truck[]>([]);
     const [drivers, setDrivers] = useState<Driver[]>([]);
-    const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-
-    const serviceTypes: ServiceType[] = [
-        { name: 'ניקוי שוחות', private_price: 800, business_price: 600 },
-        { name: 'פתיחת סתימות', private_price: 600, business_price: 500 },
-    ];
+    const [services, setServices] = useState<Service[]>([]);
 
     const [form, setForm] = useState({
-        booking_number: '',
         customer_type: 'private' as 'private' | 'business',
         customer_id: '',
         customer_name: '',
@@ -80,10 +74,13 @@ const AddBooking = () => {
                 const { data: trucksData } = await supabase.from('trucks').select('id, truck_number, license_plate');
                 // @ts-ignore
                 const { data: driversData } = await supabase.from('drivers').select('id, name');
+                // @ts-ignore
+                const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business').eq('active', true);
 
                 if (customersData) setCustomers(customersData as any);
                 if (trucksData) setTrucks(trucksData as any);
                 if (driversData) setDrivers(driversData as any);
+                if (servicesData) setServices(servicesData as any);
             } catch (error) {
                 console.error('Error loading data:', error);
             }
@@ -97,47 +94,31 @@ const AddBooking = () => {
 
         // Auto-fill price based on service type and customer type
         if (name === 'service_type' || name === 'customer_type') {
-            const serviceType = name === 'service_type' ? value : form.service_type;
+            const serviceId = name === 'service_type' ? value : form.service_type;
             const customerType = name === 'customer_type' ? value : form.customer_type;
             
-            const selectedService = serviceTypes.find(s => s.name === serviceType);
+            const selectedService = services.find((s: Service) => s.id === serviceId);
             if (selectedService) {
-                const price = customerType === 'private' ? selectedService.private_price : selectedService.business_price;
-                setForm(prev => ({ ...prev, price: price.toString() }));
+                const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
+                setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
+            }
+        }
+
+        // Auto-fill customer data when selecting from dropdown
+        if (name === 'customer_id' && value) {
+            const selectedCustomer = customers.find((c: Customer) => c.id === value);
+            if (selectedCustomer) {
+                setForm(prev => ({
+                    ...prev,
+                    customer_name: selectedCustomer.name,
+                    customer_phone: selectedCustomer.phone,
+                    customer_email: selectedCustomer.email || '',
+                }));
             }
         }
     };
 
-    const handleCustomerSearch = (searchTerm: string) => {
-        setForm(prev => ({ ...prev, customer_name: searchTerm }));
-        if (searchTerm.length > 0) {
-            const filtered = customers.filter(c => 
-                c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                c.phone.includes(searchTerm)
-            );
-            setFilteredCustomers(filtered);
-            setShowCustomerDropdown(true);
-        } else {
-            setShowCustomerDropdown(false);
-        }
-    };
-
-    const selectCustomer = (customer: Customer) => {
-        setForm(prev => ({
-            ...prev,
-            customer_id: customer.id,
-            customer_name: customer.name,
-            customer_phone: customer.phone,
-            customer_email: customer.email || '',
-        }));
-        setShowCustomerDropdown(false);
-    };
-
     const validateForm = () => {
-        if (!form.booking_number.trim()) {
-            setAlert({ visible: true, message: t('booking_number_required') || 'Booking number is required', type: 'danger' });
-            return false;
-        }
         if (!form.customer_name.trim()) {
             setAlert({ visible: true, message: t('customer_name_required') || 'Customer name is required', type: 'danger' });
             return false;
@@ -173,7 +154,6 @@ const AddBooking = () => {
         setSaving(true);
         try {
             const bookingData = {
-                booking_number: form.booking_number.trim(),
                 customer_type: form.customer_type,
                 customer_id: form.customer_id || null,
                 customer_name: form.customer_name.trim(),
@@ -292,33 +272,24 @@ const AddBooking = () => {
                     </div>
 
                     {/* Select Existing Customer */}
-                    <div className="relative">
-                        <label htmlFor="customer_search" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                    <div>
+                        <label htmlFor="customer_id" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                             Select Existing Customer (Optional)
                         </label>
-                        <input
-                            type="text"
-                            id="customer_search"
-                            value={form.customer_name}
-                            onChange={(e) => handleCustomerSearch(e.target.value)}
-                            className="form-input"
-                            placeholder="Search customer..."
-                            autoComplete="off"
-                        />
-                        {showCustomerDropdown && filteredCustomers.length > 0 && (
-                            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
-                                {filteredCustomers.map((customer) => (
-                                    <div
-                                        key={customer.id}
-                                        onClick={() => selectCustomer(customer)}
-                                        className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
-                                    >
-                                        <div className="font-semibold">{customer.name}</div>
-                                        <div className="text-sm text-gray-500">{customer.phone}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        <select
+                            id="customer_id"
+                            name="customer_id"
+                            value={form.customer_id}
+                            onChange={handleInputChange}
+                            className="form-select"
+                        >
+                            <option value="">-- Select Customer --</option>
+                            {customers.map((customer) => (
+                                <option key={customer.id} value={customer.id}>
+                                    {customer.name} - {customer.phone}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -412,9 +383,9 @@ const AddBooking = () => {
                             </label>
                             <select id="service_type" name="service_type" value={form.service_type} onChange={handleInputChange} className="form-select" required>
                                 <option value="">Select service</option>
-                                {serviceTypes.map((service) => (
-                                    <option key={service.name} value={service.name}>
-                                        {service.name} - Private: ${service.private_price} | Business: ${service.business_price}
+                                {services.map((service: Service) => (
+                                    <option key={service.id} value={service.id}>
+                                        {service.name} - ${form.customer_type === 'private' ? service.price_private || 0 : service.price_business || 0}
                                     </option>
                                 ))}
                             </select>
