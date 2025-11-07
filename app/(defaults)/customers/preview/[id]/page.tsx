@@ -11,6 +11,7 @@ import IconCalendar from '@/components/icon/icon-calendar';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconCamera from '@/components/icon/icon-camera';
+import IconPrinter from '@/components/icon/icon-printer';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -31,31 +32,138 @@ interface Customer {
     photo_url?: string;
 }
 
+interface Booking {
+    id: string;
+    booking_number: string;
+    service_type: string;
+    service_address: string;
+    scheduled_date: string;
+    price: number;
+    status: string;
+    payment_status: string;
+}
+
+interface Invoice {
+    id: string;
+    invoice_number: string;
+    booking_id: string;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    status: string;
+    due_date: string;
+    created_at: string;
+}
+
+interface Payment {
+    id: string;
+    invoice_id: string;
+    booking_id: string;
+    amount: number;
+    payment_method: string;
+    transaction_id?: string;
+    notes?: string;
+    payment_date: string;
+}
+
+interface Service {
+    id: string;
+    name: string;
+    description?: string;
+    price_private: number;
+    price_business: number;
+    active: boolean;
+}
+
 const CustomerPreview = () => {
     const { t } = getTranslation();
     const params = useParams();
     const router = useRouter();
     const [customer, setCustomer] = useState<Customer | null>(null);
+    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [payments, setPayments] = useState<Payment[]>([]);
+    const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+    const [paymentForm, setPaymentForm] = useState({
+        booking_id: '',
+        amount: '',
+        payment_method: 'cash' as 'cash' | 'credit_card' | 'bank_transfer' | 'check',
+        transaction_id: '',
+        notes: '',
+    });
 
     useEffect(() => {
-        const fetchCustomer = async () => {
+        const fetchData = async () => {
             try {
+                // Fetch customer
                 // @ts-ignore
-                const { data, error } = await supabase.from('customers').select('*').eq('id', params?.id).single();
+                const { data: customerData, error: customerError } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('id', params?.id)
+                    .single();
 
-                if (error) throw error;
+                if (customerError) throw customerError;
+                setCustomer(customerData as any);
 
-                setCustomer(data as any);
+                // Fetch customer bookings
+                // @ts-ignore
+                const { data: bookingsData, error: bookingsError } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .eq('customer_id', params?.id)
+                    .order('created_at', { ascending: false });
+
+                if (!bookingsError && bookingsData) {
+                    setBookings(bookingsData as any);
+                }
+
+                // Fetch customer invoices
+                // @ts-ignore
+                const { data: invoicesData, error: invoicesError } = await supabase
+                    .from('invoices')
+                    .select('*')
+                    .eq('customer_id', params?.id)
+                    .order('created_at', { ascending: false });
+
+                if (!invoicesError && invoicesData) {
+                    setInvoices(invoicesData as any);
+                }
+
+                // Fetch customer payments
+                // @ts-ignore
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('customer_id', params?.id)
+                    .order('payment_date', { ascending: false });
+
+                if (!paymentsError && paymentsData) {
+                    setPayments(paymentsData as any);
+                }
+
+                // Fetch services
+                // @ts-ignore
+                const { data: servicesData, error: servicesError } = await supabase
+                    .from('services')
+                    .select('*')
+                    .eq('active', true);
+
+                if (!servicesError && servicesData) {
+                    setServices(servicesData as any);
+                }
             } catch (error) {
-                console.error('Error fetching customer:', error);
+                console.error('Error fetching data:', error);
             } finally {
                 setLoading(false);
             }
         };
 
         if (params?.id) {
-            fetchCustomer();
+            fetchData();
         }
     }, [params?.id]);
 
@@ -83,6 +191,12 @@ const CustomerPreview = () => {
 
     const displayName = customer.type === 'private' ? customer.name : customer.business_name;
     const customerTypeBadge = customer.type === 'private' ? 'badge-outline-success' : 'badge-outline-primary';
+
+    // Helper function to get service name
+    const getServiceName = (serviceType: string) => {
+        const service = services.find(s => s.id === serviceType);
+        return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
 
     return (
         <div>
@@ -421,9 +535,50 @@ const CustomerPreview = () => {
                                 <div className="mb-5">
                                     <h3 className="text-lg font-semibold">Customer Bookings</h3>
                                 </div>
-                                <div className="text-center py-10">
-                                    <p className="text-gray-500">No bookings found for this customer</p>
-                                </div>
+                                {bookings.length === 0 ? (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-500">No bookings found for this customer</p>
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Booking #</th>
+                                                    <th>Service</th>
+                                                    <th>Date</th>
+                                                    <th>Price</th>
+                                                    <th>Payment Status</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {bookings.map((booking) => (
+                                                    <tr key={booking.id}>
+                                                        <td>
+                                                            <Link href={`/bookings/preview/${booking.id}`} className="text-primary hover:underline">
+                                                                #{booking.booking_number}
+                                                            </Link>
+                                                        </td>
+                                                        <td>{getServiceName(booking.service_type)}</td>
+                                                        <td>{new Date(booking.scheduled_date).toLocaleDateString('en-GB')}</td>
+                                                        <td>${booking.price || 0}</td>
+                                                        <td>
+                                                            <span className={`badge ${booking.payment_status === 'paid' ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                                {booking.payment_status === 'paid' ? 'PAID' : 'UNPAID'}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`badge badge-outline-info`}>
+                                                                {booking.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </Tab.Panel>
 
@@ -433,26 +588,333 @@ const CustomerPreview = () => {
                                 <div className="mb-5">
                                     <h3 className="text-lg font-semibold">Customer Invoices</h3>
                                 </div>
-                                <div className="text-center py-10">
-                                    <p className="text-gray-500">No invoices found for this customer</p>
-                                </div>
+                                {invoices.length === 0 ? (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-500">No invoices found for this customer</p>
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Invoice #</th>
+                                                    <th>Booking #</th>
+                                                    <th>Service</th>
+                                                    <th>Total Amount</th>
+                                                    <th>Paid Amount</th>
+                                                    <th>Remaining</th>
+                                                    <th>Status</th>
+                                                    <th>Due Date</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {invoices.map((invoice) => {
+                                                    const booking = bookings.find(b => b.id === invoice.booking_id);
+                                                    return (
+                                                        <tr key={invoice.id}>
+                                                            <td>
+                                                                <strong className="text-primary">#{invoice.invoice_number}</strong>
+                                                            </td>
+                                                            <td>
+                                                                {booking ? (
+                                                                    <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
+                                                                        #{booking.booking_number}
+                                                                    </Link>
+                                                                ) : '-'}
+                                                            </td>
+                                                            <td>{booking ? getServiceName(booking.service_type) : '-'}</td>
+                                                            <td>${invoice.total_amount?.toFixed(2) || 0}</td>
+                                                            <td className="text-success">${invoice.paid_amount?.toFixed(2) || 0}</td>
+                                                            <td className="text-danger">${invoice.remaining_amount?.toFixed(2) || 0}</td>
+                                                            <td>
+                                                                <span className={`badge ${
+                                                                    invoice.status === 'paid' ? 'badge-outline-success' :
+                                                                    invoice.status === 'partial' ? 'badge-outline-warning' :
+                                                                    invoice.status === 'overdue' ? 'badge-outline-danger' :
+                                                                    'badge-outline-info'
+                                                                }`}>
+                                                                    {invoice.status?.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                            <td>{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-GB') : '-'}</td>
+                                                            <td className="text-center">
+                                                                <button
+                                                                    onClick={() => window.print()}
+                                                                    className="inline-flex hover:text-primary"
+                                                                    title="Print Invoice"
+                                                                >
+                                                                    <IconPrinter className="h-5 w-5" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </Tab.Panel>
 
                         {/* Payments Tab */}
                         <Tab.Panel>
                             <div className="panel">
-                                <div className="mb-5">
+                                <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Customer Payments</h3>
+                                    <button
+                                        onClick={() => setShowPaymentModal(true)}
+                                        className="btn btn-primary"
+                                    >
+                                        Record New Payment
+                                    </button>
                                 </div>
-                                <div className="text-center py-10">
-                                    <p className="text-gray-500">No payments found for this customer</p>
-                                </div>
+                                {payments.length === 0 ? (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-500">No payments found for this customer</p>
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Payment Date</th>
+                                                    <th>Booking #</th>
+                                                    <th>Invoice #</th>
+                                                    <th>Amount</th>
+                                                    <th>Payment Method</th>
+                                                    <th>Transaction ID</th>
+                                                    <th>Notes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {payments.map((payment) => {
+                                                    const booking = bookings.find(b => b.id === payment.booking_id);
+                                                    const invoice = invoices.find(inv => inv.id === payment.invoice_id);
+                                                    return (
+                                                        <tr key={payment.id}>
+                                                            <td>{new Date(payment.payment_date).toLocaleDateString('en-GB')}</td>
+                                                            <td>
+                                                                {booking ? (
+                                                                    <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
+                                                                        #{booking.booking_number}
+                                                                    </Link>
+                                                                ) : '-'}
+                                                            </td>
+                                                            <td>
+                                                                {invoice ? (
+                                                                    <strong className="text-primary">#{invoice.invoice_number}</strong>
+                                                                ) : '-'}
+                                                            </td>
+                                                            <td className="text-success font-bold">${payment.amount?.toFixed(2) || 0}</td>
+                                                            <td>
+                                                                <span className="badge badge-outline-info">
+                                                                    {payment.payment_method?.replace('_', ' ').toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                            <td>{payment.transaction_id || '-'}</td>
+                                                            <td className="max-w-xs truncate">{payment.notes || '-'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         </Tab.Panel>
                     </Tab.Panels>
                 </Tab.Group>
             </div>
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="panel w-full max-w-lg mx-4">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold">Record New Payment</h5>
+                            <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            
+                            if (!paymentForm.booking_id) {
+                                alert('Please select a booking');
+                                return;
+                            }
+
+                            try {
+                                // Create invoice if not exists
+                                // @ts-ignore
+                                const { data: existingInvoice, error: invoiceCheckError } = await supabase
+                                    .from('invoices')
+                                    .select('*')
+                                    .eq('booking_id', paymentForm.booking_id)
+                                    .maybeSingle();
+
+                                if (invoiceCheckError) {
+                                    console.error('Error checking invoice:', invoiceCheckError);
+                                    throw invoiceCheckError;
+                                }
+
+                                // @ts-ignore
+                                let invoiceId = existingInvoice?.id;
+
+                                if (!existingInvoice) {
+                                    console.log('Creating new invoice...');
+                                    // Generate invoice number
+                                    const invoiceNumber = `INV-${Date.now()}`;
+                                    
+                                    const { data: newInvoice, error: invoiceError } = await supabase
+                                        .from('invoices')
+                                        // @ts-ignore
+                                        .insert({
+                                            invoice_number: invoiceNumber,
+                                            booking_id: paymentForm.booking_id,
+                                            customer_id: customer?.id,
+                                            total_amount: parseFloat(paymentForm.amount),
+                                            paid_amount: 0,
+                                            remaining_amount: parseFloat(paymentForm.amount),
+                                            status: 'pending',
+                                            due_date: new Date().toISOString().split('T')[0]
+                                        })
+                                        .select()
+                                        .single();
+
+                                    if (invoiceError) {
+                                        console.error('Invoice creation error:', invoiceError);
+                                        throw invoiceError;
+                                    }
+                                    // @ts-ignore
+                                    invoiceId = newInvoice?.id;
+                                    console.log('Invoice created:', invoiceId);
+                                }
+
+                                // Create payment
+                                console.log('Creating payment...');
+                                const { error: paymentError } = await supabase
+                                    .from('payments')
+                                    // @ts-ignore
+                                    .insert({
+                                        invoice_id: invoiceId,
+                                        booking_id: paymentForm.booking_id,
+                                        customer_id: customer?.id,
+                                        amount: parseFloat(paymentForm.amount),
+                                        payment_method: paymentForm.payment_method,
+                                        transaction_id: paymentForm.transaction_id || null,
+                                        notes: paymentForm.notes || null,
+                                        payment_date: new Date().toISOString()
+                                    });
+
+                                if (paymentError) {
+                                    console.error('Payment creation error:', paymentError);
+                                    throw paymentError;
+                                }
+
+                                console.log('Payment recorded successfully');
+                                alert('Payment recorded successfully!');
+                                setShowPaymentModal(false);
+                                window.location.reload();
+                            } catch (error: any) {
+                                console.error('Error recording payment:', error);
+                                alert(`Error recording payment: ${error.message || 'Unknown error'}`);
+                            }
+                        }}>
+                            <div className="space-y-4">
+                                {/* Select Booking */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Select Invoice/Booking *</label>
+                                    <select
+                                        value={paymentForm.booking_id}
+                                        onChange={(e) => {
+                                            const booking = bookings.find(b => b.id === e.target.value);
+                                            setPaymentForm({ 
+                                                ...paymentForm, 
+                                                booking_id: e.target.value,
+                                                amount: String(booking?.price || 0)
+                                            });
+                                        }}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="">-- Select Booking --</option>
+                                        {bookings.filter(b => b.payment_status !== 'paid').map((booking) => (
+                                            <option key={booking.id} value={booking.id}>
+                                                #{booking.booking_number} - ${booking.price}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Amount */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Amount ($) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={paymentForm.amount}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                                        className="form-input"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Payment Method */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Payment Method *</label>
+                                    <select
+                                        value={paymentForm.payment_method}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="cash">Cash</option>
+                                        <option value="credit_card">Credit Card</option>
+                                        <option value="bank_transfer">Bank Transfer</option>
+                                        <option value="check">Check</option>
+                                    </select>
+                                </div>
+
+                                {/* Transaction ID */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={paymentForm.transaction_id}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
+                                        className="form-input"
+                                    />
+                                </div>
+
+                                {/* Notes */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
+                                    <textarea
+                                        value={paymentForm.notes}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                                        className="form-textarea"
+                                        rows={3}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-outline-danger">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary">
+                                    Record Payment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

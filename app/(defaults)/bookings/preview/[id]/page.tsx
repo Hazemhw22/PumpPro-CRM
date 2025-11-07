@@ -16,13 +16,23 @@ interface Booking {
     id: string;
     created_at: string;
     booking_number: string;
+    customer_type: 'private' | 'business';
     customer_name: string;
     customer_phone: string;
+    customer_email?: string;
     service_address: string;
     scheduled_date: string;
     scheduled_time: string;
     status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
     service_type: string;
+    price?: number;
+    profit?: number;
+    payment_status?: string;
+    truck_id?: string;
+    driver_id?: string;
+    truck?: { truck_number?: string };
+    driver?: { name?: string };
+    notes?: string;
 }
 
 const BookingPreview = () => {
@@ -35,12 +45,32 @@ const BookingPreview = () => {
     useEffect(() => {
         const fetchBooking = async () => {
             try {
-                // @ts-ignore - Supabase type inference issue
-                const { data, error } = await supabase.from('bookings').select('*').eq('id', params?.id).single();
+                // Fetch booking
+                const { data: bookingData, error } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .eq('id', params?.id)
+                    .single();
 
                 if (error) throw error;
 
-                setBooking(data as any);
+                // Fetch related data
+                const booking = bookingData as any;
+                const [truckRes, driverRes, serviceRes] = await Promise.all([
+                    booking.truck_id ? supabase.from('trucks').select('truck_number, license_plate').eq('id', booking.truck_id).single() : { data: null },
+                    booking.driver_id ? supabase.from('drivers').select('name, driver_number').eq('id', booking.driver_id).single() : { data: null },
+                    booking.service_type ? supabase.from('services').select('name').eq('id', booking.service_type).single() : { data: null },
+                ]);
+
+                // Combine data
+                const enrichedBooking = {
+                    ...booking,
+                    truck: truckRes.data,
+                    driver: driverRes.data,
+                    service_name: (serviceRes.data as any)?.name,
+                };
+
+                setBooking(enrichedBooking as any);
             } catch (error) {
                 console.error('Error fetching booking:', error);
             } finally {
@@ -214,7 +244,9 @@ const BookingPreview = () => {
                                         <IconUser className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
                                         <span className="text-sm text-gray-600">{t('service_type') || 'Service Type'}:</span>
                                     </div>
-                                    <span className="font-semibold text-gray-700 dark:text-gray-300">{booking.service_type}</span>
+                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                        {(booking as any).service_name || booking.service_type || '-'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -222,16 +254,63 @@ const BookingPreview = () => {
 
                     {/* Additional Information */}
                     <div className="space-y-6">
+                        {/* Financial Information */}
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Financial Information</h3>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Price:</span>
+                                    <span className="text-lg font-bold text-primary">${booking.price || 0}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Profit:</span>
+                                    <span className="text-lg font-bold text-success">${booking.profit || 0}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Payment Status:</span>
+                                    <span className="badge badge-outline-info">{booking.payment_status || 'Pending'}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Customer Type:</span>
+                                    <span className="badge badge-outline-primary">{booking.customer_type === 'private' ? 'Private' : 'Business'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Assignment Information */}
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h3 className="text-lg font-semibold">Assignment</h3>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Truck:</span>
+                                    <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <span className="text-sm text-gray-600">Driver:</span>
+                                    <span className="font-medium">{booking.driver?.name || 'Not Assigned'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Additional Details */}
                         <div className="panel">
                             <div className="mb-5">
                                 <h3 className="text-lg font-semibold">{t('additional_information') || 'Additional Information'}</h3>
                             </div>
 
                             <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">{t('booking_id') || 'Booking ID'}:</span>
-                                    <span className="font-medium font-mono">{booking.id}</span>
-                                </div>
+                                {booking.customer_email && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Email:</span>
+                                        <span className="font-medium">{booking.customer_email}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <span className="text-gray-600">{t('status') || 'Status'}:</span>
                                     <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
@@ -246,6 +325,12 @@ const BookingPreview = () => {
                                         })}
                                     </span>
                                 </div>
+                                {booking.notes && (
+                                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                        <span className="text-sm text-gray-600 block mb-2">Notes:</span>
+                                        <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

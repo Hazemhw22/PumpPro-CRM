@@ -53,7 +53,6 @@ const EditBooking = () => {
     const [services, setServices] = useState<Service[]>([]);
 
     const [form, setForm] = useState({
-        booking_number: '',
         customer_type: 'private' as 'private' | 'business',
         customer_id: '',
         customer_name: '',
@@ -66,6 +65,7 @@ const EditBooking = () => {
         service_type: '',
         price: '',
         profit: '',
+        payment_status: 'unpaid' as 'paid' | 'unpaid',
         truck_id: '',
         driver_id: '',
         notes: '',
@@ -99,7 +99,6 @@ const EditBooking = () => {
                     const bookingData = data as any;
                     setBooking(bookingData);
                     setForm({
-                        booking_number: bookingData.booking_number || '',
                         customer_type: bookingData.customer_type || 'private',
                         customer_id: bookingData.customer_id || '',
                         customer_name: bookingData.customer_name || '',
@@ -112,6 +111,7 @@ const EditBooking = () => {
                         service_type: bookingData.service_type || '',
                         price: bookingData.price ? String(bookingData.price) : '',
                         profit: bookingData.profit ? String(bookingData.profit) : '',
+                        payment_status: bookingData.payment_status || 'unpaid',
                         truck_id: bookingData.truck_id || '',
                         driver_id: bookingData.driver_id || '',
                         notes: bookingData.notes || '',
@@ -161,16 +161,8 @@ const EditBooking = () => {
     };
 
     const validateForm = () => {
-        if (!form.booking_number.trim()) {
-            setAlert({ visible: true, message: t('booking_number_required') || 'Booking number is required', type: 'danger' });
-            return false;
-        }
-        if (!form.customer_name.trim()) {
-            setAlert({ visible: true, message: t('customer_name_required') || 'Customer name is required', type: 'danger' });
-            return false;
-        }
-        if (!form.customer_phone.trim()) {
-            setAlert({ visible: true, message: t('phone_required') || 'Phone is required', type: 'danger' });
+        if (!form.customer_id) {
+            setAlert({ visible: true, message: t('customer_required') || 'Customer is required', type: 'danger' });
             return false;
         }
         if (!form.service_address.trim()) {
@@ -185,7 +177,7 @@ const EditBooking = () => {
             setAlert({ visible: true, message: t('scheduled_time_required') || 'Scheduled time is required', type: 'danger' });
             return false;
         }
-        if (!form.service_type.trim()) {
+        if (!form.service_type) {
             setAlert({ visible: true, message: t('service_type_required') || 'Service type is required', type: 'danger' });
             return false;
         }
@@ -200,7 +192,8 @@ const EditBooking = () => {
         setSaving(true);
         try {
             const bookingData = {
-                booking_number: form.booking_number.trim(),
+                customer_type: form.customer_type,
+                customer_id: form.customer_id || null,
                 customer_name: form.customer_name.trim(),
                 customer_phone: form.customer_phone.trim(),
                 service_address: form.service_address.trim(),
@@ -300,38 +293,27 @@ const EditBooking = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Booking Number */}
-                        <div>
-                            <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('booking_number') || 'Booking Number'} <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="booking_number"
-                                name="booking_number"
-                                value={form.booking_number}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder={t('enter_booking_number') || 'Enter booking number'}
-                                required
-                            />
-                        </div>
 
                         {/* Customer Name */}
                         <div>
-                            <label htmlFor="customer_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                            <label htmlFor="customer_id" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 {t('customer_name') || 'Customer Name'} <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
-                                id="customer_name"
-                                name="customer_name"
-                                value={form.customer_name}
+                            <select
+                                id="customer_id"
+                                name="customer_id"
+                                value={form.customer_id}
                                 onChange={handleInputChange}
-                                className="form-input"
-                                placeholder={t('enter_customer_name') || 'Enter customer name'}
+                                className="form-select"
                                 required
-                            />
+                            >
+                                <option value="">-- Select Customer --</option>
+                                {customers.map((customer) => (
+                                    <option key={customer.id} value={customer.id}>
+                                        {customer.name} 
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         {/* Customer Phone */}
@@ -356,16 +338,21 @@ const EditBooking = () => {
                             <label htmlFor="service_type" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 {t('service_type') || 'Service Type'} <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
+                            <select
                                 id="service_type"
                                 name="service_type"
                                 value={form.service_type}
                                 onChange={handleInputChange}
-                                className="form-input"
-                                placeholder={t('enter_service_type') || 'Enter service type'}
+                                className="form-select"
                                 required
-                            />
+                            >
+                                <option value="">-- Select Service --</option>
+                                {services.map((service: Service) => (
+                                    <option key={service.id} value={service.id}>
+                                        {service.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         {/* Scheduled Date */}

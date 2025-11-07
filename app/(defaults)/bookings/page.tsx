@@ -56,12 +56,39 @@ const BookingsList = () => {
     useEffect(() => {
         const fetchBookings = async () => {
             try {
-                const { data, error } = await supabase
+                // Fetch bookings
+                const { data: bookingsData, error: bookingsError } = await supabase
                     .from('bookings')
                     .select('*')
                     .order('created_at', { ascending: false });
-                if (error) throw error;
-                setItems((data || []) as Booking[]);
+                
+                if (bookingsError) throw bookingsError;
+
+                // Fetch related data separately
+                const truckIds = [...new Set(bookingsData?.map((b: any) => b.truck_id).filter(Boolean))];
+                const driverIds = [...new Set(bookingsData?.map((b: any) => b.driver_id).filter(Boolean))];
+                const serviceIds = [...new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean))];
+
+                const [trucksRes, driversRes, servicesRes] = await Promise.all([
+                    truckIds.length > 0 ? supabase.from('trucks').select('id, truck_number').in('id', truckIds) : { data: [] },
+                    driverIds.length > 0 ? supabase.from('drivers').select('id, name').in('id', driverIds) : { data: [] },
+                    serviceIds.length > 0 ? supabase.from('services').select('id, name').in('id', serviceIds) : { data: [] },
+                ]);
+
+                // Map related data
+                const trucksMap = new Map((trucksRes.data || []).map((t: any) => [t.id, t]));
+                const driversMap = new Map((driversRes.data || []).map((d: any) => [d.id, d]));
+                const servicesMap = new Map((servicesRes.data || []).map((s: any) => [s.id, s]));
+
+                // Combine data
+                const enrichedBookings = bookingsData?.map((booking: any) => ({
+                    ...booking,
+                    truck: booking.truck_id ? trucksMap.get(booking.truck_id) : null,
+                    driver: booking.driver_id ? driversMap.get(booking.driver_id) : null,
+                    service_name: booking.service_type ? servicesMap.get(booking.service_type)?.name : null,
+                }));
+
+                setItems((enrichedBookings || []) as Booking[]);
             } catch (error) {
                 console.error('Error fetching bookings:', error);
                 setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
@@ -137,6 +164,21 @@ const BookingsList = () => {
         () => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)),
         [records, selectedRecords],
     );
+
+    const statusBadge = (status?: string) => {
+        switch (status) {
+            case 'confirmed':
+                return 'badge-outline-success';
+            case 'in_progress':
+                return 'badge-outline-info';
+            case 'completed':
+                return 'badge-outline-primary';
+            case 'cancelled':
+                return 'badge-outline-danger';
+            default:
+                return 'badge-outline-warning';
+        }
+    };
 
     const deleteRow = (id: string | null = null) => {
         if (id) {
@@ -235,27 +277,29 @@ const BookingsList = () => {
                                         />
                                     </th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('booking_number')}>
-                                        {t('id')} {sortStatus.columnAccessor === 'booking_number' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        Booking # {sortStatus.columnAccessor === 'booking_number' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('customer_name')}>
-                                        {t('customer_name')} {sortStatus.columnAccessor === 'customer_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        Customer {sortStatus.columnAccessor === 'customer_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
+                                    <th>Service</th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('service_address')}>
-                                        {t('service_address')} {sortStatus.columnAccessor === 'service_address' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                        Address {sortStatus.columnAccessor === 'service_address' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('customer_phone')}>
-                                        {t('phone')} {sortStatus.columnAccessor === 'customer_phone' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
-                                        {t('created_at')} {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-                                    <th className="text-center">{t('actions')}</th>
+                                    <th>Date & Time</th>
+                                    <th>Price</th>
+                                    <th>Profit</th>
+                                    <th>Payment</th>
+                                    <th>Truck</th>
+                                    <th>Driver</th>
+                                    <th>Status</th>
+                                    <th className="text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {records.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="py-10 text-center text-sm opacity-70">
+                                        <td colSpan={13} className="py-10 text-center text-sm opacity-70">
                                             {t('no_records') || 'No records'}
                                         </td>
                                     </tr>
@@ -279,14 +323,26 @@ const BookingsList = () => {
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
-                                        <td>{row.service_address || '-'}</td>
-                                        <td>{row.customer_phone}</td>
                                         <td>
-                                            {new Date(row.created_at).toLocaleDateString('en-GB', {
-                                                year: 'numeric',
-                                                month: '2-digit',
-                                                day: '2-digit',
-                                            })}
+                                            {(row as any).service_name || (row as any).service_type || '-'}
+                                        </td>
+                                        <td className="max-w-xs truncate">{row.service_address || '-'}</td>
+                                        <td>
+                                            {row.scheduled_date && row.scheduled_time
+                                                ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}`
+                                                : '-'}
+                                        </td>
+                                        <td>${(row as any).price || 0}</td>
+                                        <td>${(row as any).profit || 0}</td>
+                                        <td>
+                                            <span className="badge badge-outline-info">{(row as any).payment_status || 'Pending'}</span>
+                                        </td>
+                                        <td>{(row as any).truck?.truck_number || '-'}</td>
+                                        <td>{(row as any).driver?.name || '-'}</td>
+                                        <td>
+                                            <span className={`badge ${statusBadge(row.status)}`}>
+                                                {row.status?.replace('_', ' ') || 'pending'}
+                                            </span>
                                         </td>
                                         <td>
                                             <div className="mx-auto flex w-max items-center gap-2">
