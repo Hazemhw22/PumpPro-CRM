@@ -84,6 +84,8 @@ const AddCustomer = () => {
             if (customerType === 'private') {
                 customerData.name = form.name.trim();
             } else {
+                // For business customers, use business_name as name
+                customerData.name = form.business_name.trim();
                 customerData.business_name = form.business_name.trim();
                 customerData.tax_id = form.tax_id.trim() || null;
             }
