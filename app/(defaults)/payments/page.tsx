@@ -68,6 +68,7 @@ const PaymentsPage = () => {
         totalReceived: 0,
         cash: 0,
         creditCard: 0,
+        bankTransfer: 0,
         remainingAmount: 0,
     });
 
@@ -107,8 +108,11 @@ const PaymentsPage = () => {
                     const creditCard = paymentsData
                         .filter((p: any) => p.payment_method === 'credit_card')
                         .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                    const bankTransfer = paymentsData
+                        .filter((p: any) => p.payment_method === 'bank_transfer')
+                        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                     
-                    setStats({ totalPayments, totalReceived, cash, creditCard, remainingAmount: 0 });
+                    setStats({ totalPayments, totalReceived, cash, creditCard, bankTransfer, remainingAmount: 0 });
                 }
 
                 // Fetch invoices (for backward compatibility)
@@ -199,7 +203,7 @@ const PaymentsPage = () => {
     return (
         <div className="space-y-6">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-6">
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Total Payments</div>
                     <div className="text-3xl font-bold">{stats.totalPayments}</div>
@@ -215,6 +219,10 @@ const PaymentsPage = () => {
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Credit Card</div>
                     <div className="text-3xl font-bold">₪{stats.creditCard.toFixed(2)}</div>
+                </div>
+                <div className="panel">
+                    <div className="mb-2 text-sm font-semibold text-gray-500">Bank Transfer</div>
+                    <div className="text-3xl font-bold">₪{stats.bankTransfer.toFixed(2)}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Remaining Amount</div>

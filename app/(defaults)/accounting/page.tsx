@@ -6,6 +6,7 @@ import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconTrendingUp from '@/components/icon/icon-trending-up';
+import IconBox from '@/components/icon/icon-box';
 
 interface Invoice {
     id: string;
@@ -74,6 +75,11 @@ const AccountingPage = () => {
         totalReceived: 0,
         cash: 0,
         creditCard: 0,
+        bankTransfer: 0,
+    });
+
+    const [bookingStats, setBookingStats] = useState({
+        totalBookings: 0,
     });
 
     useEffect(() => {
@@ -134,8 +140,11 @@ const AccountingPage = () => {
                     const creditCard = paymentsData
                         .filter((p: any) => p.payment_method === 'credit_card')
                         .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                    const bankTransfer = paymentsData
+                        .filter((p: any) => p.payment_method === 'bank_transfer')
+                        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                     
-                    setPaymentStats({ totalPayments, totalReceived, cash, creditCard });
+                    setPaymentStats({ totalPayments, totalReceived, cash, creditCard, bankTransfer });
                 }
 
                 // Fetch bookings
@@ -146,6 +155,10 @@ const AccountingPage = () => {
 
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);
+                    
+                    // Calculate booking statistics
+                    const totalBookings = bookingsData.length;
+                    setBookingStats({ totalBookings });
                 }
 
                 // Fetch services
@@ -223,7 +236,7 @@ const AccountingPage = () => {
             </div>
 
             {/* Statistics Grid */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-6">
                 <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
                     <div className="flex items-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
@@ -246,6 +259,17 @@ const AccountingPage = () => {
                         </div>
                     </div>
                 </div>
+                <div className="panel bg-gradient-to-br from-indigo-500/10 to-indigo-600/10">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/20">
+                            <IconBox className="h-6 w-6 text-indigo-500" />
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold">{bookingStats.totalBookings}</div>
+                            <div className="text-xs text-gray-500">Total Bookings</div>
+                        </div>
+                    </div>
+                </div>
                 <div className="panel bg-gradient-to-br from-purple-500/10 to-purple-600/10">
                     <div className="flex items-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20">
@@ -265,6 +289,17 @@ const AccountingPage = () => {
                         <div>
                             <div className="text-2xl font-bold">₪{paymentStats.creditCard.toFixed(0)}</div>
                             <div className="text-xs text-gray-500">Card Payments</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="panel bg-gradient-to-br from-cyan-500/10 to-cyan-600/10">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/20">
+                            <IconCreditCard className="h-6 w-6 text-cyan-500" />
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold">₪{paymentStats.bankTransfer.toFixed(0)}</div>
+                            <div className="text-xs text-gray-500">Bank Transfer</div>
                         </div>
                     </div>
                 </div>
