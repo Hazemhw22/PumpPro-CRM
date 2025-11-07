@@ -50,6 +50,7 @@ const InvoicesPage = () => {
         totalInvoices: 0,
         paidRevenue: 0,
         pendingRevenue: 0,
+        remainingAmount: 0,
     });
 
     useEffect(() => {
@@ -81,8 +82,10 @@ const InvoicesPage = () => {
                     const pendingRevenue = invoicesData
                         .filter((inv: any) => inv.status !== 'paid')
                         .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
+                    const remainingAmount = invoicesData
+                        .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
                     
-                    setStats({ totalInvoices, paidRevenue, pendingRevenue });
+                    setStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
                 }
 
                 // Fetch bookings
@@ -144,18 +147,22 @@ const InvoicesPage = () => {
     return (
         <div className="space-y-6">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Total Invoices</div>
                     <div className="text-3xl font-bold">{stats.totalInvoices}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Paid Revenue</div>
-                    <div className="text-3xl font-bold text-success">${stats.paidRevenue.toFixed(2)}</div>
+                    <div className="text-3xl font-bold text-success">₪{stats.paidRevenue.toFixed(2)}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Pending Revenue</div>
-                    <div className="text-3xl font-bold text-warning">${stats.pendingRevenue.toFixed(2)}</div>
+                    <div className="text-3xl font-bold text-warning">₪{stats.pendingRevenue.toFixed(2)}</div>
+                </div>
+                <div className="panel">
+                    <div className="mb-2 text-sm font-semibold text-gray-500">Remaining Amount</div>
+                    <div className="text-3xl font-bold text-danger">₪{stats.remainingAmount.toFixed(2)}</div>
                 </div>
             </div>
 
@@ -203,6 +210,7 @@ const InvoicesPage = () => {
                                             <th>Issue Date</th>
                                             <th>Due Date</th>
                                             <th>Amount</th>
+                                            <th>Remaining</th>
                                             <th>Status</th>
                                             <th className="text-center">Actions</th>
                                         </tr>
@@ -231,7 +239,8 @@ const InvoicesPage = () => {
                                                             'N/A'
                                                         }
                                                     </td>
-                                                    <td className="font-semibold">${invoice.total_amount?.toFixed(2) || 0}</td>
+                                                    <td className="font-semibold">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
+                                                    <td className="font-bold text-danger">₪{invoice.remaining_amount?.toFixed(2) || '0.00'}</td>
                                                     <td>
                                                         <span className={`badge ${
                                                             invoice.status === 'paid' ? 'badge-outline-success' :

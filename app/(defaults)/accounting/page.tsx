@@ -66,6 +66,7 @@ const AccountingPage = () => {
         totalInvoices: 0,
         paidRevenue: 0,
         pendingRevenue: 0,
+        remainingAmount: 0,
     });
 
     const [paymentStats, setPaymentStats] = useState({
@@ -101,8 +102,10 @@ const AccountingPage = () => {
                     const pendingRevenue = invoicesData
                         .filter((inv: any) => inv.status !== 'paid')
                         .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
+                    const remainingAmount = invoicesData
+                        .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
                     
-                    setInvoiceStats({ totalInvoices, paidRevenue, pendingRevenue });
+                    setInvoiceStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
                 }
 
                 // Fetch payments with invoice and customer data
@@ -192,13 +195,13 @@ const AccountingPage = () => {
             </div>
 
             {/* Main Revenue Cards */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 <div className="panel">
                     <div className="flex items-center justify-between mb-3">
                         <div className="text-sm font-semibold text-gray-500">💵 Total Revenue</div>
                         <IconTrendingUp className="h-8 w-8 text-success" />
                     </div>
-                    <div className="text-4xl font-bold text-success">${totalRevenue.toFixed(2)}</div>
+                    <div className="text-4xl font-bold text-success">₪{totalRevenue.toFixed(2)}</div>
                     <div className="text-xs text-gray-500 mt-2">From paid invoices</div>
                 </div>
                 <div className="panel">
@@ -206,8 +209,16 @@ const AccountingPage = () => {
                         <div className="text-sm font-semibold text-gray-500">⚠️ Pending Revenue</div>
                         <IconClipboardText className="h-8 w-8 text-warning" />
                     </div>
-                    <div className="text-4xl font-bold text-warning">${pendingRevenue.toFixed(2)}</div>
+                    <div className="text-4xl font-bold text-warning">₪{pendingRevenue.toFixed(2)}</div>
                     <div className="text-xs text-gray-500 mt-2">From unpaid invoices</div>
+                </div>
+                <div className="panel">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm font-semibold text-gray-500">💰 Remaining Amount</div>
+                        <IconDollarSign className="h-8 w-8 text-danger" />
+                    </div>
+                    <div className="text-4xl font-bold text-danger">₪{invoiceStats.remainingAmount.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500 mt-2">Total remaining to collect</div>
                 </div>
             </div>
 
@@ -241,7 +252,7 @@ const AccountingPage = () => {
                             <IconDollarSign className="h-6 w-6 text-purple-500" />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold">${paymentStats.cash.toFixed(0)}</div>
+                            <div className="text-2xl font-bold">₪{paymentStats.cash.toFixed(0)}</div>
                             <div className="text-xs text-gray-500">Cash Payments</div>
                         </div>
                     </div>
@@ -252,7 +263,7 @@ const AccountingPage = () => {
                             <IconCreditCard className="h-6 w-6 text-orange-500" />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold">${paymentStats.creditCard.toFixed(0)}</div>
+                            <div className="text-2xl font-bold">₪{paymentStats.creditCard.toFixed(0)}</div>
                             <div className="text-xs text-gray-500">Card Payments</div>
                         </div>
                     </div>
@@ -304,7 +315,7 @@ const AccountingPage = () => {
                                         <div className="text-xs text-gray-500">{invoice.customers?.name || 'N/A'}</div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="font-bold text-sm">${invoice.total_amount?.toFixed(2) || 0}</div>
+                                        <div className="font-bold text-sm">₪{invoice.total_amount?.toFixed(2) || 0}</div>
                                         <span className={`badge badge-sm ${
                                             invoice.status === 'paid' ? 'badge-outline-success' :
                                             invoice.status === 'overdue' ? 'badge-outline-danger' :
@@ -348,7 +359,7 @@ const AccountingPage = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-bold text-sm text-success">${payment.amount?.toFixed(2)}</div>
+                                            <div className="font-bold text-sm text-success">₪{payment.amount?.toFixed(2)}</div>
                                             <span className="badge badge-sm badge-outline-info">
                                                 {payment.payment_method?.replace('_', ' ')}
                                             </span>

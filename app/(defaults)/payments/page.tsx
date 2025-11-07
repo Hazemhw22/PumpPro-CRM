@@ -19,6 +19,7 @@ interface Payment {
         id: string;
         invoice_number: string;
         booking_id: string | null;
+        remaining_amount?: number;
         customers?: {
             name: string;
         } | null;
@@ -32,6 +33,7 @@ interface Invoice {
     id: string;
     invoice_number: string;
     booking_id: string | null;
+    remaining_amount?: number;
     customers?: {
         name: string;
     } | null;
@@ -66,6 +68,7 @@ const PaymentsPage = () => {
         totalReceived: 0,
         cash: 0,
         creditCard: 0,
+        remainingAmount: 0,
     });
 
     useEffect(() => {
@@ -81,6 +84,7 @@ const PaymentsPage = () => {
                             id,
                             invoice_number,
                             booking_id,
+                            remaining_amount,
                             customers (
                                 name
                             ),
@@ -104,7 +108,7 @@ const PaymentsPage = () => {
                         .filter((p: any) => p.payment_method === 'credit_card')
                         .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                     
-                    setStats({ totalPayments, totalReceived, cash, creditCard });
+                    setStats({ totalPayments, totalReceived, cash, creditCard, remainingAmount: 0 });
                 }
 
                 // Fetch invoices (for backward compatibility)
@@ -115,6 +119,7 @@ const PaymentsPage = () => {
                         id,
                         invoice_number,
                         booking_id,
+                        remaining_amount,
                         customers (
                             name
                         ),
@@ -125,6 +130,12 @@ const PaymentsPage = () => {
 
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
+                    
+                    // Calculate remaining amount from all invoices
+                    const remainingAmount = invoicesData
+                        .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
+                    
+                    setStats(prev => ({ ...prev, remainingAmount }));
                 }
 
                 // Fetch bookings
@@ -188,22 +199,26 @@ const PaymentsPage = () => {
     return (
         <div className="space-y-6">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-5">
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Total Payments</div>
                     <div className="text-3xl font-bold">{stats.totalPayments}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Total Received</div>
-                    <div className="text-3xl font-bold text-success">${stats.totalReceived.toFixed(2)}</div>
+                    <div className="text-3xl font-bold text-success">₪{stats.totalReceived.toFixed(2)}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Cash</div>
-                    <div className="text-3xl font-bold">${stats.cash.toFixed(2)}</div>
+                    <div className="text-3xl font-bold">₪{stats.cash.toFixed(2)}</div>
                 </div>
                 <div className="panel">
                     <div className="mb-2 text-sm font-semibold text-gray-500">Credit Card</div>
-                    <div className="text-3xl font-bold">${stats.creditCard.toFixed(2)}</div>
+                    <div className="text-3xl font-bold">₪{stats.creditCard.toFixed(2)}</div>
+                </div>
+                <div className="panel">
+                    <div className="mb-2 text-sm font-semibold text-gray-500">Remaining Amount</div>
+                    <div className="text-3xl font-bold text-danger">₪{stats.remainingAmount.toFixed(2)}</div>
                 </div>
             </div>
 
@@ -251,6 +266,7 @@ const PaymentsPage = () => {
                                             <th>Invoice #</th>
                                             <th>Service</th>
                                             <th>Amount</th>
+                                            <th>Remaining</th>
                                             <th>Method</th>
                                             <th>Transaction ID</th>
                                         </tr>
@@ -260,6 +276,17 @@ const PaymentsPage = () => {
                                             const invoice = payment.invoices || invoices.find(inv => inv.id === payment.invoice_id);
                                             const booking = invoice?.bookings || (invoice ? bookings.find(b => b.id === invoice.booking_id) : null);
                                             const customerName = invoice?.customers?.name;
+                                            
+                                            // Calculate remaining amount after this specific payment
+                                            // Get all payments for this invoice that came AFTER this payment
+                                            const laterPayments = payments.filter(p => 
+                                                p.invoice_id === payment.invoice_id && 
+                                                new Date(p.payment_date) > new Date(payment.payment_date)
+                                            );
+                                            const laterPaymentsTotal = laterPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                                            const currentRemaining = invoice?.remaining_amount || 0;
+                                            const remainingAfterThisPayment = currentRemaining + laterPaymentsTotal;
+                                            
                                             return (
                                                 <tr key={payment.id}>
                                                     <td>
@@ -279,7 +306,8 @@ const PaymentsPage = () => {
                                                     <td>
                                                         {booking ? getServiceName(booking.service_type) : 'N/A'}
                                                     </td>
-                                                    <td className="font-bold text-success">${payment.amount?.toFixed(2) || 0}</td>
+                                                    <td className="font-bold text-success">₪{payment.amount?.toFixed(2) || 0}</td>
+                                                    <td className="font-bold text-danger">₪{remainingAfterThisPayment.toFixed(2)}</td>
                                                     <td>
                                                         <span className="badge badge-outline-info">
                                                             {payment.payment_method?.replace('_', ' ').toUpperCase()}
