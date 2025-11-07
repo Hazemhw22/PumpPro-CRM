@@ -181,11 +181,36 @@ const AddBooking = () => {
             };
 
             // @ts-ignore - Supabase type inference issue
-            const { data, error } = await supabase.from('bookings').insert([bookingData]).select();
+            const { data: bookingResult, error: bookingError } = await supabase.from('bookings').insert([bookingData]).select();
 
-            if (error) throw error;
+            if (bookingError) throw bookingError;
+            
+            if (!bookingResult || bookingResult.length === 0) {
+                throw new Error('Failed to create booking');
+            }
 
-            setAlert({ visible: true, message: t('booking_added_successfully') || 'Booking added successfully', type: 'success' });
+            const newBooking = bookingResult[0] as any;
+
+            // Create invoice automatically for the booking
+            const invoiceData = {
+                booking_id: newBooking.id,
+                customer_id: form.customer_id || null,
+                total_amount: parseFloat(form.price) || 0,
+                paid_amount: 0,
+                remaining_amount: parseFloat(form.price) || 0,
+                status: 'pending',
+                due_date: new Date(new Date(form.scheduled_date).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days after booking
+            };
+
+            // @ts-ignore
+            const { error: invoiceError } = await supabase.from('invoices').insert([invoiceData]);
+
+            if (invoiceError) {
+                console.error('Error creating invoice:', invoiceError);
+                // Don't throw error, booking was created successfully
+            }
+
+            setAlert({ visible: true, message: t('booking_added_successfully') || 'Booking and invoice created successfully', type: 'success' });
 
             setTimeout(() => {
                 router.push('/bookings');
