@@ -640,7 +640,9 @@ const CustomerPreview = () => {
                                                             <td>{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-GB') : '-'}</td>
                                                             <td className="text-center">
                                                                 <button
-                                                                    onClick={() => window.print()}
+                                                                    onClick={() => {
+                                                                        window.open(`/invoices/preview/${invoice.id}?print=true`, '_blank');
+                                                                    }}
                                                                     className="inline-flex hover:text-primary"
                                                                     title="Print Invoice"
                                                                 >

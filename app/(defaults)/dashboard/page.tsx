@@ -184,6 +184,7 @@ const HomePage = () => {
                     { data: allRevenueForChart },
                     // Additional data
                     { data: bookingTypesData },
+                    { data: allServicesData },
                     { data: truckStatusData },
                     { data: recentActivity },
                 ] = await Promise.all([
@@ -223,12 +224,12 @@ const HomePage = () => {
 
                     // Revenue queries - using invoices table for revenue data
                     timeFilter === 'all'
-                        ? supabase.from('invoices').select('total, created_at').not('total', 'is', null)
-                        : supabase.from('invoices').select('total, created_at').not('total', 'is', null).gte('created_at', currentStart.toISOString()),
+                        ? supabase.from('invoices').select('total_amount, created_at').not('total_amount', 'is', null)
+                        : supabase.from('invoices').select('total_amount, created_at').not('total_amount', 'is', null).gte('created_at', currentStart.toISOString()),
 
                     timeFilter === 'all'
                         ? Promise.resolve({ data: [] })
-                        : supabase.from('invoices').select('total').gte('created_at', previousStart.toISOString()).lt('created_at', previousEnd.toISOString()).not('total', 'is', null),
+                        : supabase.from('invoices').select('total_amount').gte('created_at', previousStart.toISOString()).lt('created_at', previousEnd.toISOString()).not('total_amount', 'is', null),
 
                     // Total invoices count
                     timeFilter === 'all'
@@ -238,12 +239,15 @@ const HomePage = () => {
                     // Chart data queries (last 6 months)
                     supabase.from('bookings').select('created_at').gte('created_at', sixMonthsAgo.toISOString()),
                     supabase.from('trucks').select('created_at').gte('created_at', sixMonthsAgo.toISOString()),
-                    supabase.from('invoices').select('total, created_at').gte('created_at', sixMonthsAgo.toISOString()).not('total', 'is', null),
+                    supabase.from('invoices').select('total_amount, created_at').gte('created_at', sixMonthsAgo.toISOString()).not('total_amount', 'is', null),
 
-                    // Bookings by service type
+                    // Bookings by service type with service names
                     timeFilter === 'all' 
                         ? supabase.from('bookings').select('service_type') 
                         : supabase.from('bookings').select('service_type').gte('created_at', currentStart.toISOString()),
+                    
+                    // Fetch all services for mapping
+                    supabase.from('services').select('id, name'),
 
                     // Trucks by status
                     timeFilter === 'all' 
@@ -271,9 +275,9 @@ const HomePage = () => {
                 const previousDrivers = previousDriversResult.count || 0;
 
                 // Calculate revenue from invoices
-                const totalRevenue = revenueData?.reduce((sum: number, invoice: { total?: number }) => sum + (invoice.total || 0), 0) || 0;
+                const totalRevenue = revenueData?.reduce((sum: number, invoice: { total_amount?: number }) => sum + (invoice.total_amount || 0), 0) || 0;
                 const monthlyRevenue = totalRevenue;
-                const previousMonthRevenue = previousRevenueData?.reduce((sum: number, invoice: { total?: number }) => sum + (invoice.total || 0), 0) || 0;
+                const previousMonthRevenue = previousRevenueData?.reduce((sum: number, invoice: { total_amount?: number }) => sum + (invoice.total_amount || 0), 0) || 0;
 
                 // Calculate growth rates
                 const trucksGrowth = timeFilter === 'all' ? 0 : calculateGrowth(totalTrucks, previousTrucks);
@@ -307,10 +311,10 @@ const HomePage = () => {
                     }).length;
 
                     // Calculate revenue for this month from invoices
-                    const monthRevenue = (allRevenueForChart || []).reduce((sum: number, invoice: { created_at: string; total?: number }) => {
+                    const monthRevenue = (allRevenueForChart || []).reduce((sum: number, invoice: { created_at: string; total_amount?: number }) => {
                         const invoiceDate = new Date(invoice.created_at);
                         if (invoiceDate >= month && invoiceDate < nextMonth) {
-                            return sum + (invoice.total || 0);
+                            return sum + (invoice.total_amount || 0);
                         }
                         return sum;
                     }, 0);
@@ -320,11 +324,18 @@ const HomePage = () => {
                     chartRevenue.push(monthRevenue);
                 }
 
+                // Create a map of service IDs to names
+                const servicesMap: { [key: string]: string } = {};
+                (allServicesData || []).forEach((service: any) => {
+                    servicesMap[service.id] = service.name;
+                });
+
                 // Process bookings by service type
                 const bookingsByType: { [key: string]: number } = {};
                 (bookingTypesData || []).forEach((booking: any) => {
-                    const type = booking.service_type || 'Unknown';
-                    bookingsByType[type] = (bookingsByType[type] || 0) + 1;
+                    // Use service name from map if available, otherwise use service_type
+                    const serviceName = servicesMap[booking.service_type] || booking.service_type || 'Unknown';
+                    bookingsByType[serviceName] = (bookingsByType[serviceName] || 0) + 1;
                 });
 
                 // Process trucks by status
@@ -603,7 +614,7 @@ const HomePage = () => {
                 type: 'donut' as const,
                 fontFamily: 'Almarai, sans-serif',
             },
-            labels: Object.keys(stats.bookingsByType).map((type) => t(`service_type_${type}`) || type),
+            labels: Object.keys(stats.bookingsByType),
             colors: ['#4361EE', '#805DCA', '#00AB55', '#E7515A', '#E2A03F', '#2196F3'],
             responsive: [
                 {
@@ -948,7 +959,7 @@ const HomePage = () => {
                                 </div>
                             </Link>
 
-                            <Link href="/analytics" className="group">
+                            <Link href="/accounting" className="group">
                                 <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-danger hover:bg-danger/5 dark:border-[#191e3a] dark:hover:border-danger">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-danger/10 text-danger">
                                         <IconEye className="h-6 w-6" />

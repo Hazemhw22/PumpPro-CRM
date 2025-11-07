@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
+import IconPrinter from '@/components/icon/icon-printer';
 
 interface Invoice {
     id: string;
@@ -241,13 +242,24 @@ const InvoicesPage = () => {
                                                         </span>
                                                     </td>
                                                     <td className="text-center">
-                                                        <Link
-                                                            href={`/invoices/preview/${invoice.id}`}
-                                                            className="inline-flex hover:text-primary"
-                                                            title="View Invoice"
-                                                        >
-                                                            <IconEye className="h-5 w-5" />
-                                                        </Link>
+                                                        <div className="flex items-center justify-center gap-3">
+                                                            <Link
+                                                                href={`/invoices/preview/${invoice.id}`}
+                                                                className="inline-flex hover:text-primary"
+                                                                title="View Invoice"
+                                                            >
+                                                                <IconEye className="h-5 w-5" />
+                                                            </Link>
+                                                            <button
+                                                                onClick={() => {
+                                                                    window.open(`/invoices/preview/${invoice.id}?print=true`, '_blank');
+                                                                }}
+                                                                className="inline-flex hover:text-info"
+                                                                title="Print Invoice"
+                                                            >
+                                                                <IconPrinter className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );

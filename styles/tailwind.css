@@ -677,3 +677,60 @@ img.dark-img {
 .dark img.dark-img {
     @apply !block;
 }
+
+/* Print Styles */
+@media print {
+    /* Hide navigation, sidebar, and other UI elements */
+    header,
+    .sidebar,
+    nav,
+    .navbar,
+    .print\\:hidden,
+    button:not(.print-button) {
+        display: none !important;
+    }
+
+    /* Hide all buttons except print button */
+    .btn,
+    .badge {
+        display: none !important;
+    }
+
+    /* Reset page margins and padding */
+    body {
+        margin: 0;
+        padding: 0;
+        background: white !important;
+    }
+
+    /* Make content full width */
+    .main-content,
+    .panel {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 20px !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    /* Ensure good print quality */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Page breaks */
+    .panel {
+        page-break-inside: avoid;
+    }
+
+    table {
+        page-break-inside: auto;
+    }
+
+    tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+}
