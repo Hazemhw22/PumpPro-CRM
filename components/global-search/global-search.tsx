@@ -139,18 +139,27 @@ const GlobalSearch = () => {
             // Search invoices
             const { data: invoices } = await supabase
                 .from('invoices')
-                .select('id, invoice_number, customer_name, total, status, issue_date')
-                .or(`invoice_number.ilike.%${query}%, customer_name.ilike.%${query}%`)
+                .select(`
+                    id, 
+                    invoice_number, 
+                    total_amount, 
+                    status, 
+                    created_at,
+                    customers (
+                        name
+                    )
+                `)
+                .ilike('invoice_number', `%${query}%`)
                 .limit(10);
 
             if (invoices) {
-                invoices.forEach((invoice: Invoice) => {
+                invoices.forEach((invoice: any) => {
                     results.push({
                         id: invoice.id.toString(),
                         type: 'invoice',
                         title: `Invoice ${invoice.invoice_number}`,
-                        subtitle: invoice.customer_name || '',
-                        metadata: `$${invoice.total.toLocaleString()} • ${invoice.status} • ${new Date(invoice.issue_date).toLocaleDateString()}`,
+                        subtitle: invoice.customers?.name || 'N/A',
+                        metadata: `$${invoice.total_amount?.toLocaleString() || 0} • ${invoice.status} • ${new Date(invoice.created_at).toLocaleDateString()}`,
                         link: `/invoices/${invoice.id}`,
                     });
                 });
