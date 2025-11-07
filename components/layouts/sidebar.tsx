@@ -90,19 +90,19 @@ const Sidebar = () => {
                         </button>
                     </div>
                     <PerfectScrollbar className="relative h-[calc(100vh-80px)]">
-                        <ul className="relative space-y-0.5 p-4 py-0 font-semibold">
+                        <ul className="relative space-y-1 p-4 py-0 font-semibold">
                             {/* Management Section */}
-                            <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 text-base font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
+                            <h2 className="-mx-4 mb-2 mt-4 flex items-center bg-white-light/30 px-7 py-3 text-xs font-extrabold uppercase tracking-wider dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Management</span>
+                                <span>{t('management') || 'Management'}</span>
                             </h2>
 
                             {/* Dashboard */}
                             <li className="nav-item">
                                 <Link href="/" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuDashboard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Dashboard</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('dashboard') || 'Dashboard'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -110,9 +110,9 @@ const Sidebar = () => {
                             {/* Bookings */}
                             <li className="nav-item">
                                 <Link href="/bookings" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconCalendar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Bookings</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('bookings') || 'Bookings'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -120,9 +120,9 @@ const Sidebar = () => {
                             {/* Fleet */}
                             <li className="nav-item">
                                 <Link href="/fleet" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuCar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Fleet</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('fleet') || 'Fleet'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -130,9 +130,9 @@ const Sidebar = () => {
                             {/* Drivers */}
                             <li className="nav-item">
                                 <Link href="/drivers" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconUser className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Drivers</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('drivers') || 'Drivers'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -140,9 +140,9 @@ const Sidebar = () => {
                             {/* Customers */}
                             <li className="nav-item">
                                 <Link href="/customers" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuUsers className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Customers</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('customers') || 'Customers'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -150,9 +150,9 @@ const Sidebar = () => {
                             {/* Services */}
                             <li className="nav-item">
                                 <Link href="/services" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuService className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Services</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('services') || 'Services'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -160,25 +160,25 @@ const Sidebar = () => {
                             {/* Users */}
                             <li className="nav-item">
                                 <Link href="/users" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuUsers className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Users</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('users') || 'Users'}</span>
                                     </div>
                                 </Link>
                             </li>
 
                             {/* Accounting Section */}
-                            <h2 className="-mx-4 mb-1 mt-4 flex items-center bg-white-light/30 px-7 py-3 text-base font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
+                            <h2 className="-mx-4 mb-2 mt-6 flex items-center bg-white-light/30 px-7 py-3 text-xs font-extrabold uppercase tracking-wider dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Accounting</span>
+                                <span>{t('accounting') || 'Accounting'}</span>
                             </h2>
 
                             {/* Accounting Dashboard */}
                             <li className="nav-item">
                                 <Link href="/accounting" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconMenuInvoice className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Accounting</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('accounting') || 'Accounting'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -186,9 +186,9 @@ const Sidebar = () => {
                             {/* Invoices */}
                             <li className="nav-item">
                                 <Link href="/invoices" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconClipboardText className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Invoices</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('invoices') || 'Invoices'}</span>
                                     </div>
                                 </Link>
                             </li>
@@ -196,9 +196,9 @@ const Sidebar = () => {
                             {/* Payments */}
                             <li className="nav-item">
                                 <Link href="/payments" className="group">
-                                    <div className="flex items-center">
+                                    <div className="flex items-center py-2">
                                         <IconCreditCard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-base font-bold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Payments</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('payments') || 'Payments'}</span>
                                     </div>
                                 </Link>
                             </li>

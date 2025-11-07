@@ -65,9 +65,9 @@ const BookingsList = () => {
                 if (bookingsError) throw bookingsError;
 
                 // Fetch related data separately
-                const truckIds = [...new Set(bookingsData?.map((b: any) => b.truck_id).filter(Boolean))];
-                const driverIds = [...new Set(bookingsData?.map((b: any) => b.driver_id).filter(Boolean))];
-                const serviceIds = [...new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean))];
+                const truckIds = Array.from(new Set(bookingsData?.map((b: any) => b.truck_id).filter(Boolean)));
+                const driverIds = Array.from(new Set(bookingsData?.map((b: any) => b.driver_id).filter(Boolean)));
+                const serviceIds = Array.from(new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean)));
 
                 const [trucksRes, driversRes, servicesRes] = await Promise.all([
                     truckIds.length > 0 ? supabase.from('trucks').select('id, truck_number').in('id', truckIds) : { data: [] },
