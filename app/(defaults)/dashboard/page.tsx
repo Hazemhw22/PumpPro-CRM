@@ -1148,7 +1148,7 @@ const HomePage = () => {
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-sm">{payment.customer_name || 'N/A'}</p>
-                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString()}</p>
+                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString('en-GB')}</p>
                                             </div>
                                         </div>
                                         <div className="text-right">
