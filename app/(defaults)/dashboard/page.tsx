@@ -50,6 +50,12 @@ interface DashboardStats {
     recentActivity: any[];
     bookingsByType: { [key: string]: number };
     trucksByStatus: { [key: string]: number };
+    pendingBookings: number;
+    confirmedBookings: number;
+    totalDebts: number;
+    paidInvoices: number;
+    recentPayments: any[];
+    recentInvoices: any[];
 }
 
 type TimeFilter = 'week' | 'month' | 'year' | 'all';
@@ -83,6 +89,12 @@ const HomePage = () => {
         recentActivity: [],
         bookingsByType: {},
         trucksByStatus: {},
+        pendingBookings: 0,
+        confirmedBookings: 0,
+        totalDebts: 0,
+        paidInvoices: 0,
+        recentPayments: [],
+        recentInvoices: [],
     });
 
     // Set is mounted for client-side rendering of charts
@@ -187,6 +199,13 @@ const HomePage = () => {
                     { data: allServicesData },
                     { data: truckStatusData },
                     { data: recentActivity },
+                    // New data
+                    pendingBookingsResult,
+                    confirmedBookingsResult,
+                    { data: overdueInvoicesData },
+                    paidInvoicesResult,
+                    { data: recentPaymentsData },
+                    { data: recentInvoicesData },
                 ] = await Promise.all([
                     // Current period queries
                     timeFilter === 'all'
@@ -260,6 +279,47 @@ const HomePage = () => {
                         .order('created_at', { ascending: false })
                         .limit(10)
                         .eq('status', 'confirmed'),
+                    
+                    // New queries for additional dashboard data
+                    // Pending bookings count
+                    timeFilter === 'all'
+                        ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+                        : supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending').gte('created_at', currentStart.toISOString()),
+                    
+                    // Confirmed bookings count
+                    timeFilter === 'all'
+                        ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'confirmed')
+                        : supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'confirmed').gte('created_at', currentStart.toISOString()),
+                    
+                    // Total debts (overdue invoices)
+                    timeFilter === 'all'
+                        ? supabase.from('invoices').select('total_amount, amount_paid').eq('status', 'overdue')
+                        : supabase.from('invoices').select('total_amount, amount_paid').eq('status', 'overdue').gte('created_at', currentStart.toISOString()),
+                    
+                    // Paid invoices count
+                    timeFilter === 'all'
+                        ? supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'paid')
+                        : supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'paid').gte('created_at', currentStart.toISOString()),
+                    
+                    // Recent payments
+                    supabase.from('payments')
+                        .select(`
+                            *,
+                            invoices (
+                                invoice_number,
+                                customers (
+                                    name
+                                )
+                            )
+                        `)
+                        .order('payment_date', { ascending: false })
+                        .limit(5),
+                    
+                    // Recent invoices
+                    supabase.from('invoices')
+                        .select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)')
+                        .order('created_at', { ascending: false })
+                        .limit(5),
                 ]);
 
                 // Process results
@@ -345,6 +405,34 @@ const HomePage = () => {
                     trucksByStatus[status] = (trucksByStatus[status] || 0) + 1;
                 });
 
+                // Process new data
+                const pendingBookings = pendingBookingsResult.count || 0;
+                const confirmedBookings = confirmedBookingsResult.count || 0;
+                const paidInvoices = paidInvoicesResult.count || 0;
+                
+                // Calculate total debts from overdue invoices
+                const totalDebts = (overdueInvoicesData || []).reduce((sum: number, invoice: any) => {
+                    const remaining = (invoice.total_amount || 0) - (invoice.amount_paid || 0);
+                    return sum + remaining;
+                }, 0);
+
+                // Process recent payments
+                const recentPayments = (recentPaymentsData || []).map((payment: any) => ({
+                    customer_name: payment.invoices?.customers?.name || 'Unknown',
+                    amount: payment.amount || 0,
+                    payment_date: payment.payment_date,
+                    payment_method: payment.payment_method || 'cash',
+                    invoice_number: payment.invoices?.invoice_number || 'N/A',
+                }));
+
+                // Process recent invoices
+                const recentInvoices = (recentInvoicesData || []).map((invoice: any) => ({
+                    invoice_number: invoice.invoice_number,
+                    customer_name: invoice.customers?.name || 'Unknown',
+                    total_amount: invoice.total_amount || 0,
+                    status: invoice.status,
+                }));
+
                 // Update state with all the processed data
                 setStats({
                     totalTrucks,
@@ -368,6 +456,12 @@ const HomePage = () => {
                     recentActivity: recentActivity || [],
                     bookingsByType,
                     trucksByStatus,
+                    pendingBookings,
+                    confirmedBookings,
+                    totalDebts,
+                    paidInvoices,
+                    recentPayments,
+                    recentInvoices,
                 });
             } catch (error) {
                 console.error('Error fetching dashboard stats:', error);
@@ -970,6 +1064,148 @@ const HomePage = () => {
                                     </div>
                                 </div>
                             </Link>
+                        </div>
+                    </div>
+                </div>
+
+                {/* New Dashboard Sections */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4 mb-6">
+                    {/* Pending Bookings */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('pending_bookings') || 'Pending Bookings'}</h5>
+                            <Link href="/bookings?status=pending" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="text-3xl font-bold text-warning">
+                            {stats.pendingBookings || 0}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-2">{t('awaiting_confirmation') || 'Awaiting confirmation'}</p>
+                    </div>
+
+                    {/* Recent Confirmed Bookings */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('confirmed_bookings') || 'Confirmed Bookings'}</h5>
+                            <Link href="/bookings?status=confirmed" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="text-3xl font-bold text-success">
+                            {stats.confirmedBookings || 0}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-2">{t('ready_for_delivery') || 'Ready for delivery'}</p>
+                    </div>
+
+                    {/* Total Debts */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('total_debts') || 'Total Debts'}</h5>
+                            <Link href="/invoices?status=overdue" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="text-3xl font-bold text-danger">
+                            {formatCurrency(stats.totalDebts || 0)}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-2">{t('outstanding_payments') || 'Outstanding payments'}</p>
+                    </div>
+
+                    {/* Paid Invoices */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('paid_invoices') || 'Paid Invoices'}</h5>
+                            <Link href="/invoices?status=paid" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="text-3xl font-bold text-success">
+                            {stats.paidInvoices || 0}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-2">{t('completed_payments') || 'Completed payments'}</p>
+                    </div>
+                </div>
+
+                {/* Recent Activities Section */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+                    {/* Recent Payments */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_payments') || 'Recent Payments'}</h5>
+                            <Link href="/invoices" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="space-y-4">
+                            {stats.recentPayments && stats.recentPayments.length > 0 ? (
+                                stats.recentPayments.slice(0, 5).map((payment: any, index: number) => (
+                                    <div key={index} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 last:border-b-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
+                                                <IconCash className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm">{payment.customer_name || 'N/A'}</p>
+                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString( 'en-GB')}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-success">{formatCurrency(payment.amount)}</p>
+                                            <p className="text-xs text-gray-500">{payment.payment_method}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-500 py-8">
+                                    {t('no_recent_payments') || 'No recent payments'}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Recent Invoices */}
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_invoices') || 'Recent Invoices'}</h5>
+                            <Link href="/invoices" className="text-primary hover:underline text-sm">
+                                {t('view_all') || 'View All'}
+                            </Link>
+                        </div>
+                        <div className="space-y-4">
+                            {stats.recentInvoices && stats.recentInvoices.length > 0 ? (
+                                stats.recentInvoices.slice(0, 5).map((invoice: any, index: number) => (
+                                    <div key={index} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 last:border-b-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                                                invoice.status === 'paid' ? 'bg-success/10 text-success' :
+                                                invoice.status === 'overdue' ? 'bg-danger/10 text-danger' :
+                                                'bg-warning/10 text-warning'
+                                            }`}>
+                                                <IconMenuInvoice className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm">{invoice.invoice_number || 'N/A'}</p>
+                                                <p className="text-xs text-gray-500">{invoice.customer_name || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold">{formatCurrency(invoice.total_amount)}</p>
+                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                invoice.status === 'paid' ? 'bg-success/10 text-success' :
+                                                invoice.status === 'overdue' ? 'bg-danger/10 text-danger' :
+                                                'bg-warning/10 text-warning'
+                                            }`}>
+                                                {invoice.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-500 py-8">
+                                    {t('no_recent_invoices') || 'No recent invoices'}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

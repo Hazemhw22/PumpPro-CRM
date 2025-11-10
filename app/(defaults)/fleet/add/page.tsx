@@ -3,7 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import AlertContainer from '@/components/elements/alerts/alert-container';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import StatusSelect from '@/components/status-select/status-select';
+import DriverSelect from '@/components/driver-select/driver-select';
 import { getTranslation } from '@/i18n';
 
 export default function AddTruck() {
@@ -24,6 +27,7 @@ export default function AddTruck() {
     });
 
     const [drivers, setDrivers] = useState<any[]>([]);
+    const [selectedDriver, setSelectedDriver] = useState<any>(null);
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>('');
@@ -158,12 +162,12 @@ export default function AddTruck() {
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
-                            <select name="status" value={form.status} onChange={onChange} className="form-select">
-                                <option value="available">Available</option>
-                                <option value="in_use">In Use</option>
-                                <option value="maintenance">Maintenance</option>
-                                <option value="out_of_service">Out of Service</option>
-                            </select>
+                            <StatusSelect
+                                value={form.status}
+                                onChange={(value) => setForm(prev => ({ ...prev, status: value as any }))}
+                                type="truck"
+                                className="form-select"
+                            />
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Purchase Date</label>
@@ -175,14 +179,19 @@ export default function AddTruck() {
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Assigned Driver</label>
-                            <select name="driver_id" value={form.driver_id} onChange={onChange} className="form-select">
-                                <option value="">-- Select Driver --</option>
-                                {drivers.map((driver) => (
-                                    <option key={driver.id} value={driver.id}>
-                                        {driver.name} {driver.driver_number ? `(#${driver.driver_number})` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                            <DriverSelect
+                                selectedDriver={selectedDriver}
+                                onDriverSelect={(driver) => {
+                                    setSelectedDriver(driver);
+                                    if (driver) {
+                                        setForm(prev => ({ ...prev, driver_id: driver.id }));
+                                    } else {
+                                        setForm(prev => ({ ...prev, driver_id: '' }));
+                                    }
+                                }}
+                                onCreateNew={() => router.push('/drivers/add')}
+                                className="form-select"
+                            />
                         </div>
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Photo</label>

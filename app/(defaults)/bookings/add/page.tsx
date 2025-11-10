@@ -3,14 +3,22 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
-import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import AlertContainer from '@/components/elements/alerts/alert-container';
+import CustomerSelect from '@/components/customer-select/customer-select';
+import ServiceSelect from '@/components/service-select/service-select';
+import TruckSelect from '@/components/truck-select/truck-select';
+import DriverSelect from '@/components/driver-select/driver-select';
 import { getTranslation } from '@/i18n';
 
 interface Customer {
     id: string;
     name: string;
+    type: 'private' | 'business';
+    email: string | null;
     phone: string;
-    email?: string;
+    address: string | null;
+    business_name: string | null;
+    tax_id: string | null;
 }
 
 interface Truck {
@@ -28,8 +36,10 @@ interface Driver {
 interface Service {
     id: string;
     name: string;
-    price_private?: number;
-    price_business?: number;
+    description: string | null;
+    price_private: number;
+    price_business: number;
+    active: boolean;
 }
 
 const AddBooking = () => {
@@ -59,11 +69,20 @@ const AddBooking = () => {
         status: 'pending' as 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled',
     });
 
-    const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
-        visible: false,
-        message: '',
-        type: 'success',
-    });
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [selectedService, setSelectedService] = useState<Service | null>(null);
+    const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
+    const [selectedDriver, setSelectedDriver] = useState<{ id: string; name: string; phone: string; license_number: string | null; status: 'active' | 'inactive' | 'on_leave' } | null>(null);
+    const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
+    
+    const addAlert = (type: 'success' | 'danger' | 'warning' | 'info', message: string, title?: string) => {
+        const id = Date.now().toString();
+        setAlerts(prev => [...prev, { id, type, message, title }]);
+    };
+    
+    const removeAlert = (id: string) => {
+        setAlerts(prev => prev.filter(alert => alert.id !== id));
+    };
 
     // Load data on mount
     useEffect(() => {
@@ -76,7 +95,7 @@ const AddBooking = () => {
                 // @ts-ignore
                 const { data: driversData } = await supabase.from('drivers').select('id, name');
                 // @ts-ignore
-                const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business').eq('active', true);
+                const { data: servicesData } = await supabase.from('services').select('id, name, description, price_private, price_business, active').eq('active', true);
 
                 if (customersData) setCustomers(customersData as any);
                 if (trucksData) setTrucks(trucksData as any);
@@ -129,27 +148,27 @@ const AddBooking = () => {
 
     const validateForm = () => {
         if (!form.customer_name.trim()) {
-            setAlert({ visible: true, message: t('customer_name_required') || 'Customer name is required', type: 'danger' });
+            addAlert('danger', t('customer_name_required') || 'Customer name is required', 'Error');
             return false;
         }
         if (!form.customer_phone.trim()) {
-            setAlert({ visible: true, message: t('phone_required') || 'Phone is required', type: 'danger' });
+            addAlert('danger', t('phone_required') || 'Phone is required', 'Error');
             return false;
         }
         if (!form.service_address.trim()) {
-            setAlert({ visible: true, message: t('service_address_required') || 'Service address is required', type: 'danger' });
+            addAlert('danger', t('service_address_required') || 'Service address is required', 'Error');
             return false;
         }
         if (!form.scheduled_date) {
-            setAlert({ visible: true, message: t('scheduled_date_required') || 'Scheduled date is required', type: 'danger' });
+            addAlert('danger', t('scheduled_date_required') || 'Scheduled date is required', 'Error');
             return false;
         }
         if (!form.scheduled_time) {
-            setAlert({ visible: true, message: t('scheduled_time_required') || 'Scheduled time is required', type: 'danger' });
+            addAlert('danger', t('scheduled_time_required') || 'Scheduled time is required', 'Error');
             return false;
         }
         if (!form.service_type.trim()) {
-            setAlert({ visible: true, message: t('service_type_required') || 'Service type is required', type: 'danger' });
+            addAlert('danger', t('service_type_required') || 'Service type is required', 'Error');
             return false;
         }
         return true;
@@ -210,25 +229,24 @@ const AddBooking = () => {
                 // Don't throw error, booking was created successfully
             }
 
-            setAlert({ visible: true, message: t('booking_added_successfully') || 'Booking and invoice created successfully', type: 'success' });
+            addAlert('success', t('booking_added_successfully') || 'Booking and invoice created successfully', 'Success');
 
             setTimeout(() => {
                 router.push('/bookings');
             }, 1500);
         } catch (error) {
             console.error(error);
-            setAlert({
-                visible: true,
-                message: error instanceof Error ? error.message : t('error_adding_booking') || 'Error adding booking',
-                type: 'danger',
-            });
+            addAlert('danger', error instanceof Error ? error.message : t('error_adding_booking') || 'Error adding booking', 'Error');
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <div className="container mx-auto p-6">
+        <>
+            <AlertContainer alerts={alerts} onClose={removeAlert} />
+            
+            <div className="container mx-auto p-6">
             <div className="flex items-center gap-5 mb-6">
                 <div onClick={() => router.back()}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -257,16 +275,6 @@ const AddBooking = () => {
                 <p className="text-gray-500">{t('create_booking_description') || 'Create a new booking for your service'}</p>
             </div>
 
-            {alert.visible && (
-                <div className="mb-6">
-                    <Alert
-                        type={alert.type}
-                        title={alert.type === 'success' ? t('success') : t('error')}
-                        message={alert.message}
-                        onClose={() => setAlert({ visible: false, message: '', type: 'success' })}
-                    />
-                </div>
-            )}
 
             <div className="panel">
                 <div className="mb-5">
@@ -307,23 +315,36 @@ const AddBooking = () => {
 
                     {/* Select Existing Customer */}
                     <div>
-                        <label htmlFor="customer_id" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                             Select Existing Customer (Optional)
                         </label>
-                        <select
-                            id="customer_id"
-                            name="customer_id"
-                            value={form.customer_id}
-                            onChange={handleInputChange}
+                        <CustomerSelect
+                            selectedCustomer={selectedCustomer}
+                            onCustomerSelect={(customer) => {
+                                setSelectedCustomer(customer);
+                                if (customer) {
+                                    setForm(prev => ({
+                                        ...prev,
+                                        customer_id: customer.id,
+                                        customer_name: customer.name,
+                                        customer_phone: customer.phone,
+                                        customer_email: (customer as any).email || '',
+                                    }));
+                                } else {
+                                    setForm(prev => ({
+                                        ...prev,
+                                        customer_id: '',
+                                        customer_name: '',
+                                        customer_phone: '',
+                                        customer_email: '',
+                                    }));
+                                }
+                            }}
+                            onCreateNew={() => {
+                                router.push('/customers/add');
+                            }}
                             className="form-select"
-                        >
-                            <option value="">-- Select Customer --</option>
-                            {customers.map((customer) => (
-                                <option key={customer.id} value={customer.id}>
-                                    {customer.name} - {customer.phone}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -412,17 +433,27 @@ const AddBooking = () => {
 
                         {/* Service Type */}
                         <div>
-                            <label htmlFor="service_type" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 Service Type <span className="text-red-500">*</span>
                             </label>
-                            <select id="service_type" name="service_type" value={form.service_type} onChange={handleInputChange} className="form-select" required>
-                                <option value="">Select service</option>
-                                {services.map((service: Service) => (
-                                    <option key={service.id} value={service.id}>
-                                        {service.name} - ${form.customer_type === 'private' ? service.price_private || 0 : service.price_business || 0}
-                                    </option>
-                                ))}
-                            </select>
+                            <ServiceSelect
+                                selectedService={selectedService}
+                                onServiceSelect={(service) => {
+                                    setSelectedService(service);
+                                    if (service) {
+                                        setForm(prev => ({
+                                            ...prev,
+                                            service_type: service.id,
+                                            price: (form.customer_type === 'private' ? service.price_private : service.price_business).toString()
+                                        }));
+                                    } else {
+                                        setForm(prev => ({ ...prev, service_type: '', price: '' }));
+                                    }
+                                }}
+                                onCreateNew={() => router.push('/services/add')}
+                                customerType={form.customer_type}
+                                className="form-select"
+                            />
                         </div>
 
                         {/* Price */}
@@ -460,32 +491,53 @@ const AddBooking = () => {
 
                         {/* Assign Truck */}
                         <div>
-                            <label htmlFor="truck_id" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 Assign Truck (Optional)
                             </label>
-                            <select id="truck_id" name="truck_id" value={form.truck_id} onChange={handleInputChange} className="form-select">
-                                <option value="">Select truck</option>
-                                {trucks.map((truck) => (
-                                    <option key={truck.id} value={truck.id}>
-                                        {truck.truck_number} - {truck.license_plate}
-                                    </option>
-                                ))}
-                            </select>
+                            <TruckSelect
+                                selectedTruck={selectedTruck as any}
+                                onTruckSelect={(truck) => {
+                                    setSelectedTruck(truck as any);
+                                    if (truck) {
+                                        setForm(prev => ({
+                                            ...prev,
+                                            truck_id: truck.id,
+                                            driver_id: truck.driver_id || prev.driver_id
+                                        }));
+                                        // Auto-select driver if truck has one assigned
+                                        if (truck.driver_id) {
+                                            const driver = drivers.find(d => d.id === truck.driver_id);
+                                            if (driver) {
+                                                setSelectedDriver(driver as any);
+                                            }
+                                        }
+                                    } else {
+                                        setForm(prev => ({ ...prev, truck_id: '' }));
+                                    }
+                                }}
+                                onCreateNew={() => router.push('/fleet/add')}
+                                className="form-select"
+                            />
                         </div>
 
                         {/* Assign Driver */}
                         <div>
-                            <label htmlFor="driver_id" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 Assign Driver (Optional)
                             </label>
-                            <select id="driver_id" name="driver_id" value={form.driver_id} onChange={handleInputChange} className="form-select">
-                                <option value="">Select driver</option>
-                                {drivers.map((driver) => (
-                                    <option key={driver.id} value={driver.id}>
-                                        {driver.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <DriverSelect
+                                selectedDriver={selectedDriver}
+                                onDriverSelect={(driver) => {
+                                    setSelectedDriver(driver);
+                                    if (driver) {
+                                        setForm(prev => ({ ...prev, driver_id: driver.id }));
+                                    } else {
+                                        setForm(prev => ({ ...prev, driver_id: '' }));
+                                    }
+                                }}
+                                onCreateNew={() => router.push('/drivers/add')}
+                                className="form-select"
+                            />
                         </div>
                     </div>
 
@@ -517,6 +569,7 @@ const AddBooking = () => {
                 </form>
             </div>
         </div>
+        </>
     );
 };
 

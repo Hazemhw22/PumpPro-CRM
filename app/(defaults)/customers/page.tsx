@@ -21,6 +21,7 @@
      phone: string;
      email?: string;
      address?: string;
+     balance?: number;
  }
 
  const CustomersList = () => {
@@ -38,7 +39,7 @@
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'private' | 'business'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Customer | 'customer_number' | 'created_at'; direction: 'asc' | 'desc' }>({
+  const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Customer | 'customer_number' | 'created_at' | 'balance'; direction: 'asc' | 'desc' }>({
     columnAccessor: 'customer_number',
     direction: 'desc',
   });
@@ -164,7 +165,7 @@
 
   const getCustomerName = (c: Customer) => (c.type === 'private' ? c.name : c.business_name) || '-';
 
-  const setSort = (columnAccessor: 'customer_number' | 'name' | 'business_name' | 'address' | 'phone' | 'created_at') => {
+  const setSort = (columnAccessor: 'customer_number' | 'name' | 'business_name' | 'address' | 'phone' | 'balance' | 'created_at') => {
     setSortStatus((curr) => {
       if (curr.columnAccessor === columnAccessor) {
         return { columnAccessor, direction: curr.direction === 'asc' ? 'desc' : 'asc' };
@@ -260,6 +261,9 @@
                     <th className="cursor-pointer select-none" onClick={() => setSort('phone')}>
                       Phone Number {sortStatus.columnAccessor === 'phone' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                     </th>
+                    <th className="cursor-pointer select-none" onClick={() => setSort('balance')}>
+                      Balance {sortStatus.columnAccessor === 'balance' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                    </th>
                     <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
                       Created Date {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                     </th>
@@ -269,7 +273,7 @@
                 <tbody>
                   {records.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-sm opacity-70">
+                      <td colSpan={8} className="py-10 text-center text-sm opacity-70">
                         No records
                       </td>
                     </tr>
@@ -295,6 +299,11 @@
                       <td className="font-semibold">{getCustomerName(row)}</td>
                       <td>{row.address || '-'}</td>
                       <td>{row.phone}</td>
+                      <td>
+                        <span className={`font-bold ${(row.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>
+                          ₪{(row.balance || 0).toFixed(2)}
+                        </span>
+                      </td>
                       <td>
                         {new Date(row.created_at).toLocaleDateString('en-GB', {
                           year: 'numeric',

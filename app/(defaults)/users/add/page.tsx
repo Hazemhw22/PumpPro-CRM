@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import RoleSelect from '@/components/role-select/role-select';
 import { getTranslation } from '@/i18n';
 
 const AddUser = () => {
@@ -203,20 +204,15 @@ const AddUser = () => {
 
                         {/* Role */}
                         <div>
-                            <label htmlFor="role" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 Role <span className="text-red-500">*</span>
                             </label>
-                            <select
-                                id="role"
-                                name="role"
+                            <RoleSelect
                                 value={form.role}
-                                onChange={handleInputChange}
+                                onChange={(value) => setForm(prev => ({ ...prev, role: value }))}
                                 className="form-select"
                                 required
-                            >
-                                <option value="user">User</option>
-                                <option value="admin">Admin</option>
-                            </select>
+                            />
                         </div>
                     </div>
 

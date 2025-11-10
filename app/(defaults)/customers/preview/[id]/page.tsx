@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
 import IconEdit from '@/components/icon/icon-edit';
 import IconUser from '@/components/icon/icon-user';
+import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconPhone from '@/components/icon/icon-phone';
 import IconMail from '@/components/icon/icon-mail';
@@ -30,6 +31,7 @@ interface Customer {
     tax_id?: string;
     notes?: string;
     photo_url?: string;
+    balance?: number;
 }
 
 interface Booking {
@@ -240,6 +242,56 @@ const CustomerPreview = () => {
             </div>
 
             <div className="container mx-auto p-6">
+                {/* Financial Summary Cards */}
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-4 mb-6">
+                    <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
+                                <IconCalendar className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">{bookings.length}</div>
+                                <div className="text-xs text-gray-500">Total Bookings</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/20">
+                                <IconCreditCard className="h-6 w-6 text-success" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
+                                <div className="text-xs text-gray-500">Total Payments</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="panel bg-gradient-to-br from-purple-500/10 to-purple-600/10">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20">
+                                <IconDollarSign className="h-6 w-6 text-purple-500" />
+                            </div>
+                            <div>
+                                <div className={`text-2xl font-bold ${(customer?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>
+                                    ₪{(customer?.balance || 0).toFixed(2)}
+                                </div>
+                                <div className="text-xs text-gray-500">Current Balance</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20">
+                                <IconClipboardText className="h-6 w-6 text-orange-500" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">₪{invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0).toFixed(2)}</div>
+                                <div className="text-xs text-gray-500">Total Invoices</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <Tab.Group>
                     <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
                         <Tab as="div" className="flex-1">
@@ -541,7 +593,7 @@ const CustomerPreview = () => {
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table-hover">
+                                        <table className="table-bordered">
                                             <thead>
                                                 <tr>
                                                     <th>Booking #</th>
@@ -562,7 +614,7 @@ const CustomerPreview = () => {
                                                         </td>
                                                         <td>{getServiceName(booking.service_type)}</td>
                                                         <td>{new Date(booking.scheduled_date).toLocaleDateString('en-GB')}</td>
-                                                        <td>${booking.price || 0}</td>
+                                                        <td>₪{booking.price || 0}</td>
                                                         <td>
                                                             <span className={`badge ${booking.payment_status === 'paid' ? 'badge-outline-success' : 'badge-outline-warning'}`}>
                                                                 {booking.payment_status === 'paid' ? 'PAID' : 'UNPAID'}
@@ -594,7 +646,7 @@ const CustomerPreview = () => {
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table-hover">
+                                        <table className="table-bordered">
                                             <thead>
                                                 <tr>
                                                     <th>Invoice #</th>
@@ -624,9 +676,9 @@ const CustomerPreview = () => {
                                                                 ) : '-'}
                                                             </td>
                                                             <td>{booking ? getServiceName(booking.service_type) : '-'}</td>
-                                                            <td>${invoice.total_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-success">${invoice.paid_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-danger">${invoice.remaining_amount?.toFixed(2) || 0}</td>
+                                                            <td>₪{invoice.total_amount?.toFixed(2) || 0}</td>
+                                                            <td className="text-success">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
+                                                            <td className="text-danger">₪{invoice.remaining_amount?.toFixed(2) || 0}</td>
                                                             <td>
                                                                 <span className={`badge ${
                                                                     invoice.status === 'paid' ? 'badge-outline-success' :
@@ -677,7 +729,7 @@ const CustomerPreview = () => {
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table-hover">
+                                        <table className="table-bordered">
                                             <thead>
                                                 <tr>
                                                     <th>Payment Date</th>
@@ -708,7 +760,7 @@ const CustomerPreview = () => {
                                                                     <strong className="text-primary">#{invoice.invoice_number}</strong>
                                                                 ) : '-'}
                                                             </td>
-                                                            <td className="text-success font-bold">${payment.amount?.toFixed(2) || 0}</td>
+                                                            <td className="text-success font-bold">₪{payment.amount?.toFixed(2) || 0}</td>
                                                             <td>
                                                                 <span className="badge badge-outline-info">
                                                                     {payment.payment_method?.replace('_', ' ').toUpperCase()}

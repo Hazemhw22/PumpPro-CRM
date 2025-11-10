@@ -8,6 +8,7 @@ import { getTranslation } from '@/i18n';
 import IconPlus from '@/components/icon/icon-plus';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconEdit from '@/components/icon/icon-edit';
+import IconEye from '@/components/icon/icon-eye';
 
 interface Service {
     id: string;
@@ -222,7 +223,10 @@ export default function ServicesList() {
                                             </td>
                                             <td>
                                                 <div className="mx-auto flex w-max items-center gap-2">
-                                                    <Link href={`/services/edit/${row.id}`} className="flex hover:text-info">
+                                                    <Link href={`/services/preview/${row.id}`} className="flex hover:text-primary" title="View">
+                                                        <IconEye className="h-4.5 w-4.5" />
+                                                    </Link>
+                                                    <Link href={`/services/edit/${row.id}`} className="flex hover:text-info" title="Edit">
                                                         <IconEdit className="h-4.5 w-4.5" />
                                                     </Link>
                                                 </div>

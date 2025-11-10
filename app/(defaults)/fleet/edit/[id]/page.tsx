@@ -4,6 +4,12 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import StatusSelect from '@/components/status-select/status-select';
+import DriverSelect from '@/components/driver-select/driver-select';
+import { Tab } from '@headlessui/react';
+import IconBox from '@/components/icon/icon-box';
+import IconUser from '@/components/icon/icon-user';
+import IconCamera from '@/components/icon/icon-camera';
 
 interface Truck {
     id: string;
@@ -42,6 +48,7 @@ export default function EditTruck() {
     });
 
     const [drivers, setDrivers] = useState<any[]>([]);
+    const [selectedDriver, setSelectedDriver] = useState<any>(null);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>('');
 
@@ -52,9 +59,14 @@ export default function EditTruck() {
     });
 
     useEffect(() => {
-        fetchDrivers();
-        const fetchTruck = async () => {
+        const loadData = async () => {
             try {
+                // Fetch drivers first
+                const { data: driversData, error: driversError } = await supabase.from('drivers').select('id, name, driver_number, status').order('name');
+                if (driversError) throw driversError;
+                setDrivers(driversData || []);
+
+                // Fetch truck
                 const { data, error } = await (supabase as any).from('trucks').select('*').eq('id', id).single();
                 if (error) throw error;
                 const t = data as Truck;
@@ -70,18 +82,24 @@ export default function EditTruck() {
                     photo_url: t.photo_url || '',
                     driver_id: t.driver_id || '',
                 });
+
+                // Set selected driver if exists
+                if (t.driver_id && driversData) {
+                    const driver = driversData.find((d: any) => d.id === t.driver_id);
+                    setSelectedDriver(driver || null);
+                }
             } catch (e) {
                 setAlert({ visible: true, message: 'Error loading truck', type: 'danger' });
             } finally {
                 setLoading(false);
             }
         };
-        if (id) fetchTruck();
+        if (id) loadData();
     }, [id]);
 
     const fetchDrivers = async () => {
         try {
-            const { data, error } = await supabase.from('drivers').select('id, name, driver_number').eq('status', 'active').order('name');
+            const { data, error } = await supabase.from('drivers').select('id, name, driver_number, status').order('name');
             if (error) throw error;
             setDrivers(data || []);
         } catch (err) {
@@ -185,85 +203,171 @@ export default function EditTruck() {
                 </div>
             </div>
 
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold">Edit Truck</h1>
+                <p className="text-gray-500">Update truck information</p>
+            </div>
+
             {alert.visible && (
                 <div className="mb-6">
                     <Alert type={alert.type} title={alert.type === 'success' ? 'Success' : 'Error'} message={alert.message} onClose={() => setAlert({ visible: false, message: '', type: 'success' })} />
                 </div>
             )}
 
-            <div className="panel">
-                <div className="mb-5">
-                    <h5 className="text-lg font-semibold dark:text-white-light">Truck Information</h5>
-                </div>
+            <Tab.Group>
+                <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconBox className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Basic Information
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconUser className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Assignment & Status
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconCamera className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Photo & Notes
+                            </button>
+                        )}
+                    </Tab>
+                </Tab.List>
 
-                <form onSubmit={onSubmit} className="space-y-5">
-                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Number</label>
-                            <input name="truck_number" value={form.truck_number} onChange={onChange} className="form-input" placeholder="e.g. 123456" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Plate</label>
-                            <input name="license_plate" value={form.license_plate} onChange={onChange} className="form-input" placeholder="e.g. 85-222-22" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Capacity (Gallons)</label>
-                            <input name="capacity_gallons" value={form.capacity_gallons} onChange={onChange} className="form-input" placeholder="e.g. 500" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
-                            <select name="status" value={form.status} onChange={onChange} className="form-select">
-                                <option value="available">Available</option>
-                                <option value="in_use">In Use</option>
-                                <option value="maintenance">Maintenance</option>
-                                <option value="out_of_service">Out of Service</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Purchase Date</label>
-                            <input type="date" name="purchase_date" value={form.purchase_date} onChange={onChange} className="form-input" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Last Maintenance</label>
-                            <input type="date" name="last_maintenance" value={form.last_maintenance} onChange={onChange} className="form-input" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Assigned Driver</label>
-                            <select name="driver_id" value={form.driver_id} onChange={onChange} className="form-select">
-                                <option value="">-- Select Driver --</option>
-                                {drivers.map((driver) => (
-                                    <option key={driver.id} value={driver.id}>
-                                        {driver.name} {driver.driver_number ? `(#${driver.driver_number})` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Photo</label>
-                            <div className="flex items-center gap-4">
-                                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-200 dark:bg-gray-700">
-                                    {photoPreview ? (
-                                        <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
-                                    ) : (
-                                        <img src={form.photo_url || '/assets/images/img-placeholder-fallback.webp'} alt="current" className="h-full w-full object-cover" />
-                                    )}
+                <Tab.Panels className="mt-5">
+                    {/* Basic Information Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit} className="space-y-5">
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Number</label>
+                                        <input name="truck_number" value={form.truck_number} onChange={onChange} className="form-input" placeholder="e.g. 123456" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Plate</label>
+                                        <input name="license_plate" value={form.license_plate} onChange={onChange} className="form-input" placeholder="e.g. 85-222-22" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Capacity (Gallons)</label>
+                                        <input name="capacity_gallons" value={form.capacity_gallons} onChange={onChange} className="form-input" placeholder="e.g. 500" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Purchase Date</label>
+                                        <input type="date" name="purchase_date" value={form.purchase_date} onChange={onChange} className="form-input" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Last Maintenance</label>
+                                        <input type="date" name="last_maintenance" value={form.last_maintenance} onChange={onChange} className="form-input" />
+                                    </div>
                                 </div>
-                                <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Notes (Optional)</label>
-                            <textarea name="notes" value={form.notes} onChange={onChange} className="form-textarea" rows={4} placeholder="Notes" />
-                        </div>
-                    </div>
 
-                    <div className="mt-8 flex justify-end gap-4">
-                        <Link href="/fleet" className="btn btn-outline-danger">Cancel</Link>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Update Truck'}</button>
-                    </div>
-                </form>
-            </div>
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/fleet" className="btn btn-outline-danger">Cancel</Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Update Truck'}</button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Assignment & Status Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit} className="space-y-5">
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
+                                        <StatusSelect
+                                            value={form.status}
+                                            onChange={(value) => setForm(prev => ({ ...prev, status: value as any }))}
+                                            type="truck"
+                                            className="form-select"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Assigned Driver</label>
+                                        <DriverSelect
+                                            selectedDriver={selectedDriver}
+                                            onDriverSelect={(driver) => {
+                                                setSelectedDriver(driver);
+                                                if (driver) {
+                                                    setForm(prev => ({ ...prev, driver_id: driver.id }));
+                                                } else {
+                                                    setForm(prev => ({ ...prev, driver_id: '' }));
+                                                }
+                                            }}
+                                            onCreateNew={() => router.push('/drivers/add')}
+                                            className="form-select"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/fleet" className="btn btn-outline-danger">Cancel</Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Update Truck'}</button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Photo & Notes Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit} className="space-y-5">
+                                <div>
+                                    <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Truck Photo</label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-md bg-gray-200 dark:bg-gray-700">
+                                            {photoPreview ? (
+                                                <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <img src={form.photo_url || '/assets/images/img-placeholder-fallback.webp'} alt="current" className="h-full w-full object-cover" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
+                                            <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Notes</label>
+                                    <textarea name="notes" value={form.notes} onChange={onChange} className="form-textarea" rows={6} placeholder="Enter notes about this truck" />
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/fleet" className="btn btn-outline-danger">Cancel</Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Update Truck'}</button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+                </Tab.Panels>
+            </Tab.Group>
         </div>
     );
 }

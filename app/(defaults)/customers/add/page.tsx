@@ -79,6 +79,7 @@ const AddCustomer = () => {
                 email: form.email.trim() || null,
                 address: form.address.trim() || null,
                 notes: form.notes.trim() || null,
+                balance: 0, // Initialize balance to 0 for new customers
             };
 
             if (customerType === 'private') {

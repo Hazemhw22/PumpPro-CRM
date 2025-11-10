@@ -14,9 +14,9 @@ export type Json =
 // Enums
 // ============================================
 
-export type AppRole = 'admin' | 'user';
+export type AppRole = 'admin' | 'driver';
 
-export type TruckStatus = 'active' | 'maintenance' | 'inactive' | 'retired';
+export type TruckStatus = 'available' | 'in_use' | 'maintenance' | 'out_of_service';
 
 export type CustomerType = 'private' | 'business';
 
@@ -184,7 +184,7 @@ export interface Database {
       customers: {
         Row: {
           id: string;
-          name: string;
+          name: string | null;
           type: CustomerType;
           email: string | null;
           phone: string;
@@ -193,12 +193,13 @@ export interface Database {
           tax_id: string | null;
           notes: string | null;
           photo_url: string | null;
+          balance: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          name: string;
+          name?: string | null;
           type: CustomerType;
           email?: string | null;
           phone: string;
@@ -207,12 +208,13 @@ export interface Database {
           tax_id?: string | null;
           notes?: string | null;
           photo_url?: string | null;
+          balance?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          name?: string;
+          name?: string | null;
           type?: CustomerType;
           email?: string | null;
           phone?: string;
@@ -221,6 +223,7 @@ export interface Database {
           tax_id?: string | null;
           notes?: string | null;
           photo_url?: string | null;
+          balance?: number;
           created_at?: string;
           updated_at?: string;
         };

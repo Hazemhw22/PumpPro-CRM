@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
+import { Tab } from '@headlessui/react';
+import IconBox from '@/components/icon/icon-box';
+import IconDollarSign from '@/components/icon/icon-dollar-sign';
+import IconSettings from '@/components/icon/icon-settings';
 
 interface Service {
     id: string;
@@ -150,56 +154,148 @@ export default function EditService() {
                 </ul>
             </div>
 
-            <div className="panel">
-                <div className="mb-5 flex items-center justify-between">
-                    <h5 className="text-lg font-semibold dark:text-white-light">Edit Service</h5>
-                    <Link href={`/services/preview/${id}`} className="btn btn-outline-info">
-                        View Details
-                    </Link>
-                </div>
-
-                {alert.visible && (
-                    <div className="mb-4">
-                        <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
-                    </div>
-                )}
-
-                <form onSubmit={onSubmit}>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Service Name *</label>
-                            <input type="text" name="name" value={form.name} onChange={onChange} className="form-input" placeholder="e.g. Fuel Delivery" required />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Price for Private Customers</label>
-                            <input type="number" step="0.01" name="price_private" value={form.price_private} onChange={onChange} className="form-input" placeholder="0.00" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Price for Business Customers</label>
-                            <input type="number" step="0.01" name="price_business" value={form.price_business} onChange={onChange} className="form-input" placeholder="0.00" />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Description</label>
-                            <textarea name="description" value={form.description} onChange={onChange} className="form-textarea" rows={4} placeholder="Service description..." />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="flex items-center cursor-pointer">
-                                <input type="checkbox" name="active" checked={form.active} onChange={onChange} className="form-checkbox" />
-                                <span className="ml-2 text-sm font-bold text-gray-700 dark:text-white">Active</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div className="mt-8 flex justify-end gap-4">
-                        <Link href="/services" className="btn btn-outline-danger">
-                            {t('cancel')}
-                        </Link>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? 'Saving...' : 'Update Service'}
-                        </button>
-                    </div>
-                </form>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold">Edit Service</h1>
+                <p className="text-gray-500">Update service information</p>
             </div>
+
+            {alert.visible && (
+                <div className="mb-4">
+                    <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
+                </div>
+            )}
+
+            <Tab.Group>
+                <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconBox className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Basic Information
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconDollarSign className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Pricing
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconSettings className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Status & Settings
+                            </button>
+                        )}
+                    </Tab>
+                </Tab.List>
+
+                <Tab.Panels className="mt-5">
+                    {/* Basic Information Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Service Name <span className="text-red-500">*</span></label>
+                                        <input type="text" name="name" value={form.name} onChange={onChange} className="form-input" placeholder="e.g. Fuel Delivery" required />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Description</label>
+                                        <textarea name="description" value={form.description} onChange={onChange} className="form-textarea" rows={4} placeholder="Service description..." />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/services" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Service'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Pricing Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Price for Private Customers</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                            <input type="number" step="0.01" name="price_private" value={form.price_private} onChange={onChange} className="form-input pl-8" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Price for Business Customers</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                            <input type="number" step="0.01" name="price_business" value={form.price_business} onChange={onChange} className="form-input pl-8" placeholder="0.00" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/services" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Service'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Status & Settings Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="flex items-center cursor-pointer">
+                                            <input type="checkbox" name="active" checked={form.active} onChange={onChange} className="form-checkbox" />
+                                            <span className="ml-2 text-sm font-bold text-gray-700 dark:text-white">Active Service</span>
+                                        </label>
+                                        <p className="mt-1 text-xs text-gray-500">Inactive services will not be available for new bookings</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/services" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Service'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+                </Tab.Panels>
+            </Tab.Group>
         </div>
     );
 }

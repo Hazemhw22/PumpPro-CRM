@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
+import { Tab } from '@headlessui/react';
+import IconUser from '@/components/icon/icon-user';
+import IconPhone from '@/components/icon/icon-phone';
+import IconCamera from '@/components/icon/icon-camera';
+import DriverStatusSelect from '@/components/driver-status-select/driver-status-select';
 
 interface Driver {
     id: string;
@@ -40,6 +45,9 @@ export default function EditDriver() {
         notes: '',
         photo_url: '',
     });
+
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string>('');
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
@@ -81,6 +89,13 @@ export default function EditDriver() {
     const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const onPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setPhotoFile(file);
+        if (file) setPhotoPreview(URL.createObjectURL(file));
+        else setPhotoPreview('');
     };
 
     const onSubmit = async (e: React.FormEvent) => {
@@ -162,70 +177,174 @@ export default function EditDriver() {
                 </ul>
             </div>
 
-            <div className="panel">
-                <div className="mb-5 flex items-center justify-between">
-                    <h5 className="text-lg font-semibold dark:text-white-light">Edit Driver</h5>
-                    <Link href={`/drivers/preview/${id}`} className="btn btn-outline-info">
-                        View Details
-                    </Link>
-                </div>
-
-                {alert.visible && (
-                    <div className="mb-4">
-                        <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
-                    </div>
-                )}
-
-                <form onSubmit={onSubmit}>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Driver Number (Optional)</label>
-                            <input type="text" name="driver_number" value={form.driver_number} onChange={onChange} className="form-input" placeholder="D001" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Name *</label>
-                            <input type="text" name="name" value={form.name} onChange={onChange} className="form-input" placeholder="Driver Name" required />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Phone</label>
-                            <input type="tel" name="phone" value={form.phone} onChange={onChange} className="form-input" placeholder="+1234567890" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Email</label>
-                            <input type="email" name="email" value={form.email} onChange={onChange} className="form-input" placeholder="driver@example.com" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Number</label>
-                            <input type="text" name="license_number" value={form.license_number} onChange={onChange} className="form-input" placeholder="License Number" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Expiry</label>
-                            <input type="date" name="license_expiry" value={form.license_expiry} onChange={onChange} className="form-input" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
-                            <select name="status" value={form.status} onChange={onChange} className="form-select">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="on_leave">On Leave</option>
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Notes (Optional)</label>
-                            <textarea name="notes" value={form.notes} onChange={onChange} className="form-textarea" rows={4} placeholder="Notes" />
-                        </div>
-                    </div>
-
-                    <div className="mt-8 flex justify-end gap-4">
-                        <Link href="/drivers" className="btn btn-outline-danger">
-                            {t('cancel')}
-                        </Link>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? 'Saving...' : 'Update Driver'}
-                        </button>
-                    </div>
-                </form>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold">Edit Driver</h1>
+                <p className="text-gray-500">Update driver information</p>
             </div>
+
+            {alert.visible && (
+                <div className="mb-4">
+                    <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
+                </div>
+            )}
+
+            <Tab.Group>
+                <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconUser className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Basic Information
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconPhone className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Contact & License
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconCamera className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Photo & Notes
+                            </button>
+                        )}
+                    </Tab>
+                </Tab.List>
+
+                <Tab.Panels className="mt-5">
+                    {/* Basic Information Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Driver Number</label>
+                                        <input type="text" name="driver_number" value={form.driver_number} onChange={onChange} className="form-input" placeholder="D001" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Name <span className="text-red-500">*</span></label>
+                                        <input type="text" name="name" value={form.name} onChange={onChange} className="form-input" placeholder="Driver Name" required />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
+                                        <DriverStatusSelect
+                                            value={form.status}
+                                            onChange={(value) => setForm(prev => ({ ...prev, status: value }))}
+                                            className="form-select"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/drivers" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Driver'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Contact & License Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Phone</label>
+                                        <input type="tel" name="phone" value={form.phone} onChange={onChange} className="form-input" placeholder="+1234567890" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Email</label>
+                                        <input type="email" name="email" value={form.email} onChange={onChange} className="form-input" placeholder="driver@example.com" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Number</label>
+                                        <input type="text" name="license_number" value={form.license_number} onChange={onChange} className="form-input" placeholder="License Number" />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">License Expiry</label>
+                                        <input type="date" name="license_expiry" value={form.license_expiry} onChange={onChange} className="form-input" />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/drivers" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Driver'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Photo & Notes Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={onSubmit}>
+                                <div className="space-y-5">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Driver Photo</label>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                                {photoPreview ? (
+                                                    <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
+                                                ) : form.photo_url ? (
+                                                    <img src={form.photo_url} alt="current" className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <IconUser className="w-16 h-16 text-gray-400" />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
+                                                <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Notes</label>
+                                        <textarea name="notes" value={form.notes} onChange={onChange} className="form-textarea" rows={6} placeholder="Enter notes about this driver" />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-4">
+                                    <Link href="/drivers" className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </Link>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Update Driver'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+                </Tab.Panels>
+            </Tab.Group>
         </div>
     );
 }

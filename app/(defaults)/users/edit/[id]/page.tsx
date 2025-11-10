@@ -4,8 +4,13 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import RoleSelect from '@/components/role-select/role-select';
 import { getTranslation } from '@/i18n';
 import type { Database } from '@/types/database.types';
+import { Tab } from '@headlessui/react';
+import IconUser from '@/components/icon/icon-user';
+import IconLockDots from '@/components/icon/icon-lock-dots';
+import IconSettings from '@/components/icon/icon-settings';
 
 interface User {
     id: string;
@@ -217,102 +222,186 @@ const EditUser = () => {
                 </div>
             )}
 
-            <div className="panel">
-                <div className="mb-5">
-                    <h5 className="text-lg font-semibold dark:text-white-light">User Information</h5>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Full Name */}
-                        <div>
-                            <label htmlFor="full_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Full Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="full_name"
-                                name="full_name"
-                                value={form.full_name}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter full name"
-                                required
-                            />
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Email <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value={form.email}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter email address"
-                                required
-                            />
-                        </div>
-
-                        {/* Role */}
-                        <div>
-                            <label htmlFor="role" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Role <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                id="role"
-                                name="role"
-                                value={form.role}
-                                onChange={handleInputChange}
-                                className="form-select"
-                                required
+            <Tab.Group>
+                <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                             >
-                                <option value="user">User</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                        </div>
+                                <IconUser className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Basic Information
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconSettings className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Role & Permissions
+                            </button>
+                        )}
+                    </Tab>
+                    <Tab as="div" className="flex-1">
+                        {({ selected }) => (
+                            <button
+                                type="button"
+                                className={`${
+                                    selected ? 'text-primary !outline-none before:!w-full' : ''
+                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                            >
+                                <IconLockDots className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                Security
+                            </button>
+                        )}
+                    </Tab>
+                </Tab.List>
 
-                        {/* Password (Optional) */}
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                New Password (Optional)
-                            </label>
-                            <input
-                                type="password"
-                                id="password"
-                                name="password"
-                                value={form.password}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Leave blank to keep current password"
-                                minLength={6}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Leave blank to keep current password</p>
-                        </div>
-                    </div>
+                <Tab.Panels className="mt-5">
+                    {/* Basic Information Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={handleSubmit} className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    {/* Full Name */}
+                                    <div>
+                                        <label htmlFor="full_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            Full Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="full_name"
+                                            name="full_name"
+                                            value={form.full_name}
+                                            onChange={handleInputChange}
+                                            className="form-input"
+                                            placeholder="Enter full name"
+                                            required
+                                        />
+                                    </div>
 
-                    {/* Submit Button */}
-                    <div className="flex justify-end gap-4 mt-8">
-                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                            {t('cancel')}
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? (
-                                <>
-                                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-l-transparent align-middle ltr:mr-2 rtl:ml-2"></span>
-                                    Updating...
-                                </>
-                            ) : (
-                                'Update User'
-                            )}
-                        </button>
-                    </div>
-                </form>
-            </div>
+                                    {/* Email */}
+                                    <div>
+                                        <label htmlFor="email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            Email <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="email"
+                                            id="email"
+                                            name="email"
+                                            value={form.email}
+                                            onChange={handleInputChange}
+                                            className="form-input"
+                                            placeholder="Enter email address"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Submit Button */}
+                                <div className="flex justify-end gap-4 mt-8">
+                                    <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </button>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? (
+                                            <>
+                                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-l-transparent align-middle ltr:mr-2 rtl:ml-2"></span>
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            'Update User'
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Role & Permissions Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={handleSubmit} className="space-y-5">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        Role <span className="text-red-500">*</span>
+                                    </label>
+                                    <RoleSelect
+                                        value={form.role}
+                                        onChange={(value) => setForm(prev => ({ ...prev, role: value }))}
+                                        className="form-select"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-4 mt-8">
+                                    <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </button>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? (
+                                            <>
+                                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-l-transparent align-middle ltr:mr-2 rtl:ml-2"></span>
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            'Update User'
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+
+                    {/* Security Tab */}
+                    <Tab.Panel>
+                        <div className="panel">
+                            <form onSubmit={handleSubmit} className="space-y-5">
+                                <div>
+                                    <label htmlFor="password" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        New Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        id="password"
+                                        name="password"
+                                        value={form.password}
+                                        onChange={handleInputChange}
+                                        className="form-input"
+                                        placeholder="Enter new password"
+                                        minLength={6}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Leave blank to keep current password. Minimum 6 characters.</p>
+                                </div>
+
+                                <div className="flex justify-end gap-4 mt-8">
+                                    <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                        {t('cancel')}
+                                    </button>
+                                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                                        {saving ? (
+                                            <>
+                                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-l-transparent align-middle ltr:mr-2 rtl:ml-2"></span>
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            'Update User'
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </Tab.Panel>
+                </Tab.Panels>
+            </Tab.Group>
         </div>
     );
 };

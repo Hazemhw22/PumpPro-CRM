@@ -227,11 +227,11 @@ const AccountingPage = () => {
                 </div>
                 <div className="panel">
                     <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm font-semibold text-gray-500">💰 Remaining Amount</div>
+                        <div className="text-sm font-semibold text-gray-500">💰 Total Debts</div>
                         <IconDollarSign className="h-8 w-8 text-danger" />
                     </div>
                     <div className="text-4xl font-bold text-danger">₪{invoiceStats.remainingAmount.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500 mt-2">Total remaining to collect</div>
+                    <div className="text-xs text-gray-500 mt-2">Remaining amount to collect</div>
                 </div>
             </div>
 
@@ -327,84 +327,85 @@ const AccountingPage = () => {
                 </Link>
             </div>
 
-            {/* Recent Activity */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {/* Recent Invoices */}
-                <div className="panel">
-                    <div className="mb-5 flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">Recent Invoices</h3>
-                        <Link href="/invoices" className="text-primary hover:underline text-sm">
-                            View All
-                        </Link>
-                    </div>
-                    {invoices.slice(0, 5).length === 0 ? (
-                        <div className="text-center py-5">
-                            <p className="text-gray-500 text-sm">No invoices yet</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {invoices.slice(0, 5).map((invoice) => (
-                                <div key={invoice.id} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3">
-                                    <div>
-                                        <div className="font-semibold text-sm">#{invoice.invoice_number || 'N/A'}</div>
-                                        <div className="text-xs text-gray-500">{invoice.customers?.name || 'N/A'}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="font-bold text-sm">₪{invoice.total_amount?.toFixed(2) || 0}</div>
-                                        <span className={`badge badge-sm ${
-                                            invoice.status === 'paid' ? 'badge-outline-success' :
-                                            invoice.status === 'overdue' ? 'badge-outline-danger' :
-                                            'badge-outline-warning'
-                                        }`}>
-                                            {invoice.status}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+            {/* Recent Transactions - Combined Invoices & Payments */}
+            <div className="panel">
+                <div className="mb-5">
+                    <h3 className="text-lg font-semibold">Recent Transactions</h3>
                 </div>
-
-                {/* Recent Payments */}
-                <div className="panel">
-                    <div className="mb-5 flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">Recent Payments</h3>
-                        <Link href="/payments" className="text-primary hover:underline text-sm">
-                            View All
-                        </Link>
+                {invoices.length === 0 && payments.length === 0 ? (
+                    <div className="text-center py-10">
+                        <p className="text-gray-500 text-sm">No transactions yet</p>
                     </div>
-                    {payments.slice(0, 5).length === 0 ? (
-                        <div className="text-center py-5">
-                            <p className="text-gray-500 text-sm">No payments yet</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {payments.slice(0, 5).map((payment) => {
-                                const invoice = invoices.find(inv => inv.id === payment.invoice_id);
-                                const customerName = payment.invoices?.customers?.name || invoice?.customers?.name;
-                                return (
-                                    <div key={payment.id} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3">
-                                        <div>
-                                            <div className="font-semibold text-sm">{customerName || 'N/A'}</div>
-                                            <div className="text-xs text-gray-500">
-                                                {payment.payment_date ? 
-                                                    new Date(payment.payment_date).toLocaleDateString('en-GB') : 
-                                                    'N/A'
-                                                }
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="font-bold text-sm text-success">₪{payment.amount?.toFixed(2)}</div>
-                                            <span className="badge badge-sm badge-outline-info">
-                                                {payment.payment_method?.replace('_', ' ')}
+                ) : (
+                    <div className="table-responsive">
+                        <table className="table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Reference</th>
+                                    <th>Customer</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    ...invoices.slice(0, 5).map(inv => ({
+                                        id: inv.id,
+                                        date: inv.created_at,
+                                        type: 'Invoice',
+                                        customer: inv.customers?.name || 'N/A',
+                                        reference: `#${inv.invoice_number}`,
+                                        amount: inv.total_amount,
+                                        status: inv.status,
+                                        isInvoice: true
+                                    })),
+                                    ...payments.slice(0, 5).map(pay => {
+                                        const invoice = invoices.find(inv => inv.id === pay.invoice_id);
+                                        const customerName = pay.invoices?.customers?.name || invoice?.customers?.name;
+                                        return {
+                                            id: pay.id,
+                                            date: pay.payment_date,
+                                            type: 'Payment',
+                                            customer: customerName || 'N/A',
+                                            reference: pay.payment_method?.replace('_', ' '),
+                                            amount: pay.amount,
+                                            status: 'completed',
+                                            isInvoice: false
+                                        };
+                                    })
+                                ]
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                .slice(0, 10)
+                                .map((transaction) => (
+                                    <tr key={transaction.id}>
+                                        <td className="font-semibold">{transaction.reference}</td>
+                                        <td>{transaction.customer}</td>
+                                        <td>
+                                            <span className={`badge ${transaction.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>
+                                                {transaction.type}
                                             </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
+                                        </td>
+                                        <td className={transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>
+                                            ₪{transaction.amount?.toFixed(2) || 0}
+                                        </td>
+                                        <td>
+                                            <span className={`badge badge-sm ${
+                                                transaction.status === 'paid' || transaction.status === 'completed' ? 'badge-outline-success' :
+                                                transaction.status === 'overdue' ? 'badge-outline-danger' :
+                                                'badge-outline-warning'
+                                            }`}>
+                                                {transaction.status}
+                                            </span>
+                                        </td>
+                                        <td>{new Date(transaction.date).toLocaleDateString('en-GB')}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     );
