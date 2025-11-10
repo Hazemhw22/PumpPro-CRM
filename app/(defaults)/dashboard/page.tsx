@@ -26,6 +26,7 @@ import IconUsersGroup from '@/components/icon/icon-users-group';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import IconCash from '@/components/icon/icon-cash-banknotes';
+import IconDollarSign from '@/components/icon/icon-dollar-sign';
 
 
 interface DashboardStats {
@@ -410,11 +411,15 @@ const HomePage = () => {
                 const confirmedBookings = confirmedBookingsResult.count || 0;
                 const paidInvoices = paidInvoicesResult.count || 0;
                 
-                // Calculate total debts from overdue invoices
-                const totalDebts = (overdueInvoicesData || []).reduce((sum: number, invoice: any) => {
-                    const remaining = (invoice.total_amount || 0) - (invoice.amount_paid || 0);
-                    return sum + remaining;
-                }, 0);
+                // Calculate total debts from all invoices (same as accounting page)
+                const { data: allInvoicesData, error: allInvoicesError } = await supabase
+                    .from('invoices')
+                    .select('*');
+
+                const totalDebts = (allInvoicesData || []).reduce(
+                    (sum: number, invoice: any) => sum + (invoice.remaining_amount || 0), 
+                    0
+                );
 
                 // Process recent payments
                 const recentPayments = (recentPaymentsData || []).map((payment: any) => ({
@@ -1100,16 +1105,12 @@ const HomePage = () => {
 
                     {/* Total Debts */}
                     <div className="panel">
-                        <div className="mb-5 flex items-center justify-between">
-                            <h5 className="text-lg font-semibold dark:text-white-light">{t('total_debts') || 'Total Debts'}</h5>
-                            <Link href="/invoices?status=overdue" className="text-primary hover:underline text-sm">
-                                {t('view_all') || 'View All'}
-                            </Link>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="text-sm font-semibold text-gray-500">💰 {t('total_debts') || 'Total Debts'}</div>
+                            <IconDollarSign className="h-8 w-8 text-danger" />
                         </div>
-                        <div className="text-3xl font-bold text-danger">
-                            {formatCurrency(stats.totalDebts || 0)}
-                        </div>
-                        <p className="text-sm text-gray-500 mt-2">{t('outstanding_payments') || 'Outstanding payments'}</p>
+                        <div className="text-4xl font-bold text-danger">₪{stats.totalDebts?.toFixed(2) || '0.00'}</div>
+                        <div className="text-xs text-gray-500 mt-2">{t('remaining_amount_to_collect') || 'Remaining amount to collect'}</div>
                     </div>
 
                     {/* Paid Invoices */}
@@ -1147,7 +1148,7 @@ const HomePage = () => {
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-sm">{payment.customer_name || 'N/A'}</p>
-                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString( 'en-GB')}</p>
+                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString()}</p>
                                             </div>
                                         </div>
                                         <div className="text-right">
