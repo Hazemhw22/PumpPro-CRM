@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
+import UsersFilters, { UsersFilters as UsersFiltersType } from '@/components/users-filters/users-filters';
 import { getTranslation } from '@/i18n';
 
 interface User {
@@ -34,11 +35,10 @@ const UsersList = () => {
     const [records, setRecords] = useState<User[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<User[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
-    const [sortStatus, setSortStatus] = useState<{ 
-        columnAccessor: keyof User | 'created_at'; 
-        direction: 'asc' | 'desc' 
+    const [filters, setFilters] = useState<UsersFiltersType>({ search: '', role: '', dateFrom: '', dateTo: '' });
+    const [sortStatus, setSortStatus] = useState<{
+        columnAccessor: keyof User | 'created_at';
+        direction: 'asc' | 'desc';
     }>({
         columnAccessor: 'created_at',
         direction: 'desc',
@@ -55,11 +55,8 @@ const UsersList = () => {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
-            
+            const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+
             if (error) throw error;
             setItems((data || []) as User[]);
         } catch (error) {
@@ -81,19 +78,27 @@ const UsersList = () => {
     useEffect(() => {
         setInitialRecords(() => {
             return items.filter((item) => {
-                const inRole = roleFilter === 'all' || item.role === roleFilter;
-                if (!inRole) return false;
-                
-                const searchTerm = search.toLowerCase();
-                return (
-                    !searchTerm ||
-                    (item.full_name && item.full_name.toLowerCase().includes(searchTerm)) ||
-                    item.email.toLowerCase().includes(searchTerm) ||
-                    item.role.toLowerCase().includes(searchTerm)
-                );
+                // role filter
+                if (filters.role && filters.role !== 'all' && item.role !== filters.role) return false;
+
+                const searchTerm = (filters.search || '').toLowerCase();
+                if (searchTerm) {
+                    if (!((item.full_name || '').toLowerCase().includes(searchTerm) || item.email.toLowerCase().includes(searchTerm) || item.role.toLowerCase().includes(searchTerm))) return false;
+                }
+
+                // date range
+                if (filters.dateFrom || filters.dateTo) {
+                    const itemDate = new Date(item.created_at);
+                    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null;
+                    const dateTo = filters.dateTo ? new Date(filters.dateTo) : null;
+                    if (dateFrom && itemDate < dateFrom) return false;
+                    if (dateTo && itemDate > dateTo) return false;
+                }
+
+                return true;
             });
         });
-    }, [items, search, roleFilter]);
+    }, [items, filters]);
 
     useEffect(() => {
         const data = sortBy(initialRecords, (x) => {
@@ -131,10 +136,7 @@ const UsersList = () => {
         });
     };
 
-    const isAllPageSelected = useMemo(
-        () => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)),
-        [records, selectedRecords]
-    );
+    const isAllPageSelected = useMemo(() => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)), [records, selectedRecords]);
 
     const deleteRow = (id: string | null = null) => {
         if (id) {
@@ -150,11 +152,8 @@ const UsersList = () => {
         if (!userToDelete) return;
         try {
             // Delete from profiles table
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', userToDelete.id);
-            
+            const { error: profileError } = await supabase.from('profiles').delete().eq('id', userToDelete.id);
+
             if (profileError) throw profileError;
 
             // Call API to delete from auth
@@ -190,7 +189,6 @@ const UsersList = () => {
         });
     };
 
-
     const totalRecords = initialRecords.length;
     const from = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
     const to = Math.min(page * pageSize, totalRecords);
@@ -211,11 +209,7 @@ const UsersList = () => {
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
                     <div className="flex items-center gap-2">
-                        <button 
-                            type="button" 
-                            className="btn btn-danger gap-2" 
-                            disabled={selectedRecords.length === 0}
-                        >
+                        <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
                             <IconTrashLines />
                             Delete
                         </button>
@@ -224,23 +218,8 @@ const UsersList = () => {
                             Add New User
                         </Link>
                     </div>
-                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                        <select 
-                            className="form-select w-36 py-1 text-sm" 
-                            value={roleFilter} 
-                            onChange={(e) => setRoleFilter(e.target.value as any)}
-                        >
-                            <option value="all">All Roles</option>
-                            <option value="admin">Admin</option>
-                            <option value="user">User</option>
-                        </select>
-                        <input
-                            type="text"
-                            className="form-input w-auto"
-                            placeholder="Search users..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
+                    <div className="flex-grow">
+                        <UsersFilters onFilterChange={setFilters} onClearFilters={() => setFilters({ search: '', role: '', dateFrom: '', dateTo: '' })} />
                     </div>
                 </div>
 
@@ -250,12 +229,7 @@ const UsersList = () => {
                             <thead>
                                 <tr>
                                     <th className="w-10">
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox outline-primary"
-                                            checked={isAllPageSelected}
-                                            onChange={toggleSelectAllOnPage}
-                                        />
+                                        <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
                                     </th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('full_name')}>
                                         Full Name {sortStatus.columnAccessor === 'full_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
@@ -273,22 +247,11 @@ const UsersList = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {records.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} className="py-10 text-center text-sm opacity-70">
-                                            No records
-                                        </td>
-                                    </tr>
-                                )}
+                                {/* Empty-state row removed - no placeholder shown when there are no records */}
                                 {records.map((row) => (
                                     <tr key={row.id}>
                                         <td>
-                                            <input
-                                                type="checkbox"
-                                                className="form-checkbox outline-primary"
-                                                checked={selectedRecords.some((s) => s.id === row.id)}
-                                                onChange={() => toggleRow(row)}
-                                            />
+                                            <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
                                         </td>
                                         <td>
                                             <div className="flex items-center gap-2">
@@ -304,9 +267,7 @@ const UsersList = () => {
                                         </td>
                                         <td>{row.email}</td>
                                         <td>
-                                            <span className={`badge ${row.role === 'admin' ? 'badge-outline-danger' : 'badge-outline-primary'}`}>
-                                                {row.role}
-                                            </span>
+                                            <span className={`badge ${row.role === 'admin' ? 'badge-outline-danger' : 'badge-outline-primary'}`}>{row.role}</span>
                                         </td>
                                         <td>
                                             {new Date(row.created_at).toLocaleDateString('en-GB', {
@@ -323,11 +284,7 @@ const UsersList = () => {
                                                 <Link href={`/users/edit/${row.id}`} className="flex hover:text-info">
                                                     <IconEdit className="h-4.5 w-4.5" />
                                                 </Link>
-                                                <button 
-                                                    type="button" 
-                                                    className="flex hover:text-danger" 
-                                                    onClick={() => deleteRow(row.id)}
-                                                >
+                                                <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
                                                     <IconTrashLines />
                                                 </button>
                                             </div>
@@ -343,11 +300,7 @@ const UsersList = () => {
                             <span>
                                 Showing {from} to {to} of {totalRecords} entries
                             </span>
-                            <select 
-                                className="form-select w-20 py-1 text-sm" 
-                                value={pageSize} 
-                                onChange={(e) => setPageSize(Number(e.target.value))}
-                            >
+                            <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
                                 {PAGE_SIZES.map((size) => (
                                     <option key={size} value={size}>
                                         {size}
@@ -356,12 +309,7 @@ const UsersList = () => {
                             </select>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                disabled={page === 1}
-                                onClick={() => setPage(page - 1)}
-                            >
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
                                 Previous
                             </button>
                             <div className="flex items-center gap-1">
@@ -375,11 +323,7 @@ const UsersList = () => {
                                     .map((p, i, arr) => (
                                         <React.Fragment key={p}>
                                             {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                            <button
-                                                type="button"
-                                                className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                onClick={() => setPage(p)}
-                                            >
+                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
                                                 {p}
                                             </button>
                                         </React.Fragment>

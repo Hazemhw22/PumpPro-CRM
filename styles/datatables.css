@@ -1,0 +1,244 @@
+table > thead > tr > th,
+table > tbody > tr > td {
+    @apply !py-3 !px-4 text-sm;
+}
+table > thead > tr > th.mantine-187dsit {
+    background-color: rgb(224 230 237 / 0.3);
+}
+.datatables table tbody tr {
+    @apply bg-white dark:!border-[#191e3a] dark:bg-black;
+}
+
+.datatables table tr.mantine-1ublbff.mantine-1ublbff {
+    @apply bg-transparent;
+}
+.datatables table tbody tr td {
+    @apply !border-0 !border-none;
+}
+table tr .mantine-Checkbox-root {
+    @apply flex;
+}
+.datatables table thead tr th {
+    @apply !border-b-0 !bg-white-light/30  text-black dark:!bg-[#1a2941] dark:!text-white-dark;
+}
+
+.datatables .table-bordered table thead tr th,
+.datatables .table-bordered table tbody tr td {
+    @apply !border !border-solid !border-[#f6f7fa] dark:!border-[#191e3a];
+}
+
+.datatables .table-compact table thead tr th,
+.datatables .table-compact table tbody tr td {
+    @apply !py-2 !px-3;
+}
+/* .datatables table thead tr th.text-center > div {
+    @apply text-center;
+} */
+.datatables .mantine-gzzjso,
+.datatables .mantine-lrzwoq {
+    @apply border-t-0 !p-0 !pt-5 !bg-transparent;
+}
+.datatables.pagination-padding .mantine-gzzjso {
+    @apply !px-5;
+}
+[dir='rtl'] .datatables .mantine-ScrollArea-root.mantine-lvjyp7 {
+    direction: rtl;
+}
+.mantine-Table-root[data-hover] tbody tr:hover {
+    @apply !bg-[#e0e6ed33] dark:!bg-[#1a2941]/40;
+}
+.mantine-Table-root[data-striped] tbody tr:nth-of-type(odd) {
+    @apply bg-white-light/20 dark:!bg-[#1a2941]/40;
+}
+.datatables table {
+    /* Use explicit font-family instead of a non-existent Tailwind utility */
+    font-family:
+        'Almarai',
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        'Helvetica Neue',
+        Arial,
+        'Noto Sans',
+        'Liberation Sans',
+        sans-serif;
+    color: #000;
+}
+/* Dark mode text color for datatables */
+.dark .datatables table {
+    /* Avoid bright white table text in dark mode - use a softer muted color to match design */
+    color: #b9c4d4; /* soft slate */
+}
+/* Ensure table header text is slightly brighter than body but not pure white */
+.dark .datatables table thead tr th {
+    color: #9aa6bd;
+}
+/* Make pagination/summary text muted in dark mode */
+.dark .datatables .mantine-Text-root {
+    color: #9aa6bd;
+}
+
+/* Stronger overrides to prevent utility classes (e.g., text-white) from forcing white text */
+.dark .datatables table tbody tr td,
+.dark .datatables table tbody td,
+.dark .datatables table td,
+.dark .datatables table tr td,
+.dark .datatables .mantine-Table-root tbody tr td,
+.dark .datatables .mantine-Text-root {
+    color: #b9c4d4 !important;
+}
+
+.dark .datatables table thead tr th,
+.dark .datatables thead th,
+.dark .datatables .mantine-Table-root thead th {
+    color: #9aa6bd !important;
+}
+
+/* Make small helper text (IDs, pagination small text) slightly muted */
+.dark .datatables .mantine-Text-root.small,
+.dark .datatables .datatable-small,
+.dark .datatables .mantine-Text-root[data-small] {
+    color: #90a0b6 !important;
+}
+.datatables .mantine-Text-root {
+    /* flex-none -> flex: 0 0 auto */
+    flex: 0 0 auto;
+    font-family:
+        'Almarai',
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        'Helvetica Neue',
+        Arial,
+        'Noto Sans',
+        'Liberation Sans',
+        sans-serif;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* font-medium */
+}
+
+.datatables thead tr th .mantine-Group-root.mantine-1d34tqu div > svg {
+    @apply dark:!text-[#888ea8]/30;
+}
+.datatables thead tr th .mantine-Group-root.mantine-1d34tqu {
+    @apply justify-start;
+}
+.datatables thead tr th .mantine-Group-root.mantine-1d34tqu .mantine-oqxib5 {
+    @apply flex-grow-0;
+}
+.mantine-Group-root > .mantine-Text-root {
+    @apply hidden;
+}
+.mantine-Group-root .mantine-UnstyledButton-root {
+    @apply hover:bg-inherit dark:!border-[#191e3a] dark:text-white-dark;
+}
+
+.mantine-Table-root th.text-right .mantine-Group-root {
+    @apply !justify-end;
+}
+.datatables .mantine-Group-root[role='navigation'] {
+    @apply flex-auto justify-end gap-1;
+}
+.mantine-Menu-dropdown {
+    @apply dark:!border-[#191e3a] dark:!bg-[#1a2941] dark:text-white-dark;
+}
+
+.mantine-Checkbox-body {
+    @apply grid h-5 w-5 place-content-center overflow-hidden rounded  border-0  bg-transparent text-primary;
+}
+.mantine-Checkbox-inner > .mantine-Checkbox-input {
+    @apply border-2 border-white-light bg-transparent dark:!border-[#253b5c];
+}
+.mantine-Checkbox-inner > .mantine-Checkbox-input:checked {
+    @apply !border-primary bg-primary;
+}
+
+.mantine-y4ntz3 {
+    @apply rounded border border-white-light outline-0 focus:ring-1 focus:ring-white-light/40;
+}
+.mantine-3xbgk5 .mantine-qo1k2 {
+    @apply p-2 text-sm;
+}
+.mantine-Pagination-item {
+    height: 2.25rem; /* h-9 */
+    width: 2.25rem; /* w-9 */
+    border-radius: 9999px; /* rounded-full */
+    border-color: var(--border-white-light, #f6f7fa);
+    background-color: var(--bg-white-light, #fff);
+    font-family:
+        'Almarai',
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        'Helvetica Neue',
+        Arial,
+        'Noto Sans',
+        'Liberation Sans',
+        sans-serif;
+    font-size: 0.875rem; /* text-sm */
+    color: #3b3f5c;
+}
+.mantine-Pagination-item[data-active] {
+    @apply !bg-primary !text-white;
+}
+.mantine-Menu-item .mantine-Text-root {
+    text-align: center;
+    font-family:
+        'Almarai',
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        'Helvetica Neue',
+        Arial,
+        'Noto Sans',
+        'Liberation Sans',
+        sans-serif;
+    font-size: 0.875rem;
+}
+.mantine-Menu-item {
+    @apply hover:bg-primary hover:text-white dark:text-white-dark dark:hover:text-white;
+}
+.mantine-Menu-arrow {
+    @apply dark:!border-[#191e3a];
+}
+.mantine-Menu-item:disabled {
+    @apply !text-[#adb5bd];
+}
+.mantine-ScrollArea-viewport > div:first-child > div {
+    @apply bg-none;
+}
+
+/* Fix for pagination buttons in dark mode */
+.dark .mantine-Pagination-control {
+    @apply bg-[#1b2e4b] text-white-dark border-[#191e3a];
+}
+
+.dark .mantine-Pagination-control[data-active] {
+    @apply !bg-primary !text-white;
+}
+
+/* Fix for records per page dropdown button in dark mode */
+.dark .mantine-y4ntz3,
+.dark .mantine-UnstyledButton-root.mantine-Button-root.mantine-y4ntz3 {
+    @apply bg-[#1b2e4b] text-white-dark border-[#191e3a];
+}
+
+/* RTL Table Headers Alignment */
+.rtl-table-headers th {
+    text-align: right !important;
+    direction: rtl;
+}
+
+[dir='ltr'] .rtl-table-headers th {
+    text-align: left !important;
+    direction: ltr;
+}
+
+[dir='rtl'] .rtl-table-headers th {
+    text-align: right !important;
+    direction: rtl;
+}

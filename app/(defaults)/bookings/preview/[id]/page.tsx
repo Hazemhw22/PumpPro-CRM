@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { Tab } from '@headlessui/react';
+import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 
 interface Booking {
     id: string;
@@ -65,6 +66,15 @@ interface Payment {
     payment_date: string;
 }
 
+interface BookingTrack {
+    id: string;
+    booking_id: string;
+    old_status?: string;
+    new_status?: string;
+    notes?: string | null;
+    created_at?: string;
+}
+
 const BookingPreview = () => {
     const { t } = getTranslation();
     const params = useParams();
@@ -72,7 +82,13 @@ const BookingPreview = () => {
     const [booking, setBooking] = useState<Booking | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
     const [loading, setLoading] = useState(true);
+    const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' }>({
+        visible: false,
+        message: '',
+        type: 'success',
+    });
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
         amount: '',
@@ -85,11 +101,7 @@ const BookingPreview = () => {
         const fetchData = async () => {
             try {
                 // Fetch booking
-                const { data: bookingData, error: bookingError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('id', params?.id)
-                    .single();
+                const { data: bookingData, error: bookingError } = await supabase.from('bookings').select('*').eq('id', params?.id).single();
 
                 if (bookingError) throw bookingError;
 
@@ -102,18 +114,13 @@ const BookingPreview = () => {
                 ]);
 
                 // Fetch invoices for this booking
-                const { data: invoicesData, error: invoicesError } = await supabase
-                    .from('invoices')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: invoicesData, error: invoicesError } = await supabase.from('invoices').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
 
                 // Fetch payments for this booking
-                const { data: paymentsData, error: paymentsError } = await supabase
-                    .from('payments')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('payment_date', { ascending: false });
+                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('booking_id', params?.id).order('payment_date', { ascending: false });
+
+                // Fetch booking tracks (status change history) - newest first
+                const { data: tracksData, error: tracksError } = await supabase.from('booking_tracks').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
 
                 // Combine data
                 const enrichedBooking = {
@@ -130,6 +137,9 @@ const BookingPreview = () => {
                 if (!paymentsError && paymentsData) {
                     setPayments(paymentsData as any);
                 }
+                if (!tracksError && tracksData) {
+                    setBookingTracks(tracksData as any);
+                }
             } catch (error) {
                 console.error('Error fetching data:', error);
             } finally {
@@ -142,14 +152,126 @@ const BookingPreview = () => {
         }
     }, [params?.id]);
 
+    // dedicated fetch for booking tracks so we can re-use after inserts/updates
+    const fetchBookingTracks = async () => {
+        if (!params?.id) return;
+        try {
+            const { data, error } = await supabase.from('booking_tracks').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching booking tracks:', error);
+                return;
+            }
+            setBookingTracks((data as any) || []);
+        } catch (err) {
+            console.error('Error fetching booking tracks:', err);
+        }
+    };
+
+    // real-time subscription so new tracks appear immediately for this booking
+    useEffect(() => {
+        if (!params?.id) return;
+
+        try {
+            const channelName = `booking_tracks_${params.id}`;
+            const channel = supabase
+                .channel(channelName)
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'booking_tracks', filter: `booking_id=eq.${params.id}` }, (payload) => {
+                    try {
+                        const newRow = (payload as any).new as BookingTrack;
+                        setBookingTracks((prev) => [newRow, ...(prev || [])]);
+                    } catch (e) {
+                        console.error('Error handling realtime payload for booking_tracks:', e);
+                    }
+                })
+                .subscribe();
+
+            return () => {
+                try {
+                    supabase.removeChannel(channel);
+                } catch (e) {
+                    // best-effort cleanup
+                    console.warn('Could not remove realtime channel', e);
+                }
+            };
+        } catch (e) {
+            console.warn('Realtime subscription not available:', e);
+        }
+    }, [params?.id]);
+
     useEffect(() => {
         if (booking?.price) {
-            setPaymentForm(prev => ({
+            setPaymentForm((prev) => ({
                 ...prev,
-                amount: String(booking.price)
+                amount: String(booking.price),
             }));
         }
     }, [booking?.price]);
+
+    // selected status for editing
+    const [selectedStatus, setSelectedStatus] = useState<string>('');
+
+    useEffect(() => {
+        if (booking?.status) setSelectedStatus(booking.status);
+    }, [booking?.status]);
+
+    const handleUpdateStatus = async () => {
+        if (!booking) return;
+        if (!selectedStatus || selectedStatus === booking.status) return;
+
+        try {
+            // Update booking status
+            const { error: updateError } = await (supabase.from('bookings').update as any)({ status: selectedStatus }).eq('id', booking.id);
+
+            if (updateError) throw updateError;
+
+            // Insert a booking track entry
+            const { data: insertedTrack, error: insertTrackError } = await supabase
+                .from('booking_tracks')
+                .insert(
+                    [
+                        {
+                            booking_id: booking.id,
+                            old_status: booking.status,
+                            new_status: selectedStatus,
+                            created_at: new Date().toISOString(),
+                        },
+                    ] as any
+                )
+                .select()
+                .maybeSingle();
+
+            if (insertTrackError) {
+                // Surface the error so devs/users can see why insert failed (likely missing table / RLS)
+                console.error('Could not insert booking track:', insertTrackError);
+                try {
+                    const msg = (insertTrackError as any)?.message || JSON.stringify(insertTrackError);
+                    setAlert({ visible: true, message: 'Could not record booking track: ' + msg, type: 'danger' });
+                } catch (e) {
+                    // ignore failures
+                }
+            }
+
+            // Update local booking status first
+            setBooking((prev) => (prev ? ({ ...prev, status: selectedStatus } as any) : prev));
+
+            // Re-fetch tracks from server to ensure persisted records are shown (prevents disappearing when page reloads)
+            try {
+                await fetchBookingTracks();
+            } catch (e) {
+                // fallback: still append a local track so user sees immediate feedback
+                setBookingTracks((prev) => [
+                    ...prev,
+                    { id: Date.now().toString(), booking_id: booking.id, old_status: booking.status, new_status: selectedStatus, created_at: new Date().toISOString() },
+                ]);
+            }
+
+            setAlert({ visible: true, message: 'Status updated', type: 'success' });
+        } catch (err) {
+            console.error('Error updating status:', err);
+            setAlert({ visible: true, message: 'Error updating status', type: 'danger' });
+        }
+    };
 
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
@@ -194,6 +316,7 @@ const BookingPreview = () => {
         <div>
             {/* Header */}
             <div className="container mx-auto p-6">
+                {alert.visible && <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ visible: false, message: '', type: 'success' })} />}
                 <div className="flex items-center gap-5 mb-6">
                     <div onClick={() => router.back()}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -292,7 +415,21 @@ const BookingPreview = () => {
                                         <div className="space-y-4">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
-                                                <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="form-select">
+                                                            <option value="pending">{t('pending') || 'Pending'}</option>
+                                                            <option value="confirmed">{t('confirmed') || 'Confirmed'}</option>
+                                                            <option value="in_progress">{t('in_progress') || 'In Progress'}</option>
+                                                            <option value="completed">{t('completed') || 'Completed'}</option>
+                                                            <option value="cancelled">{t('cancelled') || 'Cancelled'}</option>
+                                                        </select>
+                                                        <button onClick={handleUpdateStatus} className="btn btn-outline-primary">
+                                                            Update
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="space-y-3">
                                                 <div className="flex items-center">
@@ -360,9 +497,7 @@ const BookingPreview = () => {
                                                     <IconUser className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
                                                     <span className="text-sm text-gray-600">Service Type:</span>
                                                 </div>
-                                                <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                                    {(booking as any).service_name || booking.service_type || '-'}
-                                                </span>
+                                                <span className="font-semibold text-gray-700 dark:text-gray-300">{(booking as any).service_name || booking.service_type || '-'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -481,50 +616,36 @@ const BookingPreview = () => {
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Add Payment</h3>
-                                    <button
-                                        onClick={() => setShowPaymentModal(true)}
-                                        className="btn btn-primary"
-                                    >
+                                    <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
                                         Record New Payment
                                     </button>
                                 </div>
 
-                                {payments.length === 0 ? (
-                                    <div className="text-center py-10">
-                                        <p className="text-gray-500">No payments found for this booking. Click "Record New Payment" to add a payment.</p>
-                                    </div>
-                                ) : (
-                                    <div className="table-responsive">
-                                        <table className="table-bordered">
-                                            <thead>
-                                                <tr>
-                                                    <th>Payment Date</th>
-                                                    <th>Customer</th>
-                                                    <th>Amount</th>
-                                                    <th>Payment Method</th>
-                                                    <th>Transaction ID</th>
-                                                    <th>Notes</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {payments.map((payment) => (
-                                                    <tr key={payment.id}>
-                                                        <td>{new Date(payment.payment_date).toLocaleDateString('en-GB')}</td>
-                                                        <td>{booking?.customer_name || '-'}</td>
-                                                        <td className="text-success font-bold">₪{payment.amount?.toFixed(2) || '0.00'}</td>
-                                                        <td>
-                                                            <span className="badge badge-outline-info">
-                                                                {payment.payment_method?.replace('_', ' ').toUpperCase()}
-                                                            </span>
-                                                        </td>
-                                                        <td>{payment.transaction_id || '-'}</td>
-                                                        <td className="max-w-xs truncate">{payment.notes || '-'}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
+                                {/* Recent Payments (compact like dashboard) */}
+                                <div className="">
+                                    <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Payments</h5>
+                                    {payments && payments.length > 0 ? (
+                                        payments.slice(0, 5).map((p, idx) => (
+                                            <div key={p.id || idx} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 mb-3 last:border-b-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
+                                                        <IconDollarSign className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-sm">{booking?.customer_name || 'N/A'}</p>
+                                                        <p className="text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-GB')}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-success">₪{p.amount?.toFixed(2) || '0.00'}</p>
+                                                    <p className="text-xs text-gray-500">{p.payment_method}</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center text-gray-500 py-4">No recent payments</div>
+                                    )}
+                                </div>
                             </div>
                         </Tab.Panel>
 
@@ -538,7 +659,7 @@ const BookingPreview = () => {
                                     </div>
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                            <span className="text-sm text-gray-600">Booking Created:</span>
+                                            <span className="font-medium">Booking Created:</span>
                                             <span className="font-medium">
                                                 {new Date(booking.created_at).toLocaleDateString('en-GB', {
                                                     year: 'numeric',
@@ -548,7 +669,7 @@ const BookingPreview = () => {
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                            <span className="text-sm text-gray-600">Scheduled Date:</span>
+                                            <span className="font-medium">Scheduled Date:</span>
                                             <span className="font-medium">
                                                 {new Date(booking.scheduled_date).toLocaleDateString('en-GB', {
                                                     year: 'numeric',
@@ -558,9 +679,69 @@ const BookingPreview = () => {
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                            <span className="text-sm text-gray-600">Status Changes:</span>
+                                            <span className="font-medium">Service:</span>
+                                            <span className="font-medium">{(booking as any).service_name || booking.service_type || '-'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                            <span className="font-medium">Status Changes:</span>
                                             <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{booking.status}</span>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Booking Track */}
+                                <div className="panel">
+                                    <div className="mb-5">
+                                        <h3 className="text-lg font-semibold">Booking Track</h3>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {/* Booking Created */}
+                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                            <div>
+                                                <div className="font-medium">Booking Created</div>
+                                                <div className="text-xs text-gray-500">Created at</div>
+                                            </div>
+                                            <div className="text-sm text-gray-600">{booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-GB') : '-'}</div>
+                                        </div>
+                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                            <span className="font-medium">Invoice Date (Latest):</span>
+                                            <span className="font-medium">
+                                                {invoices && invoices.length > 0 ? (invoices[0].created_at ? new Date(invoices[0].created_at).toLocaleDateString('en-GB') : '-') : '-'}
+                                            </span>
+                                        </div>
+                                        {/* Payments (recent/payments with date & amount) */}
+                                        {payments && payments.length > 0 ? (
+                                            payments.map((p) => (
+                                                <div key={p.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                    <div>
+                                                        <div className="font-medium">Payment</div>
+                                                        <div className="text-xs text-gray-500">{p.payment_method ? p.payment_method.replace('_', ' ').toUpperCase() : ''}</div>
+                                                    </div>
+                                                    <div className="text-sm text-gray-600">
+                                                        <div>{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB') : '-'}</div>
+                                                        <div className="text-success font-bold">₪{p.amount?.toFixed(2) || '0.00'}</div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-2">No payments recorded</div>
+                                        )}
+
+                                        {/* Status changes */}
+                                        {bookingTracks && bookingTracks.length > 0 ? (
+                                            bookingTracks.map((track) => (
+                                                <div key={track.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                    <div>
+                                                        <div className="font-medium">{track.old_status ? `${track.old_status} → ${track.new_status}` : track.new_status}</div>
+                                                        <div className="text-xs text-gray-500">{track.notes || ''}</div>
+                                                    </div>
+                                                    <div className="text-sm text-gray-600">{track.created_at ? new Date(track.created_at).toLocaleDateString('en-GB') : '-'}</div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-2">No status changes recorded for this booking.</div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -579,6 +760,7 @@ const BookingPreview = () => {
                                                 <thead>
                                                     <tr>
                                                         <th>Invoice #</th>
+                                                        <th>Created At</th>
                                                         <th>Total Amount</th>
                                                         <th>Paid Amount</th>
                                                         <th>Remaining</th>
@@ -593,16 +775,22 @@ const BookingPreview = () => {
                                                             <td>
                                                                 <strong className="text-primary">#{invoice.invoice_number}</strong>
                                                             </td>
+                                                            <td>{invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-GB') : '-'}</td>
                                                             <td>₪{invoice.total_amount?.toFixed(2) || 0}</td>
                                                             <td className="text-success">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
                                                             <td className="text-danger">₪{invoice.remaining_amount?.toFixed(2) || 0}</td>
                                                             <td>
-                                                                <span className={`badge ${
-                                                                    invoice.status === 'paid' ? 'badge-outline-success' :
-                                                                    invoice.status === 'partial' ? 'badge-outline-warning' :
-                                                                    invoice.status === 'overdue' ? 'badge-outline-danger' :
-                                                                    'badge-outline-info'
-                                                                }`}>
+                                                                <span
+                                                                    className={`badge ${
+                                                                        invoice.status === 'paid'
+                                                                            ? 'badge-outline-success'
+                                                                            : invoice.status === 'partial'
+                                                                              ? 'badge-outline-warning'
+                                                                              : invoice.status === 'overdue'
+                                                                                ? 'badge-outline-danger'
+                                                                                : 'badge-outline-info'
+                                                                    }`}
+                                                                >
                                                                     {invoice.status?.toUpperCase()}
                                                                 </span>
                                                             </td>
@@ -625,56 +813,11 @@ const BookingPreview = () => {
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Payments */}
-                                <div className="panel">
-                                    <div className="mb-5">
-                                        <h3 className="text-lg font-semibold">Payment History</h3>
-                                    </div>
-                                    {payments.length === 0 ? (
-                                        <div className="text-center py-10">
-                                            <p className="text-gray-500">No payments found for this booking</p>
-                                        </div>
-                                    ) : (
-                                        <div className="table-responsive">
-                                            <table className="table-bordered">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Payment Date</th>
-                                                        <th>Customer</th>
-                                                        <th>Amount</th>
-                                                        <th>Payment Method</th>
-                                                        <th>Transaction ID</th>
-                                                        <th>Notes</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {payments.map((payment) => (
-                                                        <tr key={payment.id}>
-                                                            <td>{new Date(payment.payment_date).toLocaleDateString('en-GB')}</td>
-                                                            <td>{booking?.customer_name || '-'}</td>
-                                                            <td className="text-success font-bold">₪{payment.amount?.toFixed(2) || 0}</td>
-                                                            <td>
-                                                                <span className="badge badge-outline-info">
-                                                                    {payment.payment_method?.replace('_', ' ').toUpperCase()}
-                                                                </span>
-                                                            </td>
-                                                            <td>{payment.transaction_id || '-'}</td>
-                                                            <td className="max-w-xs truncate">{payment.notes || '-'}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         </Tab.Panel>
                     </Tab.Panels>
                 </Tab.Group>
             </div>
-            
-          
 
             {/* Payment Modal */}
             {showPaymentModal && (
@@ -684,159 +827,157 @@ const BookingPreview = () => {
                             <h5 className="text-lg font-semibold">Record New Payment</h5>
                             <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
                         </div>
 
-                    <form onSubmit={async (e) => {
-                        e.preventDefault();
+                        <form
+                            onSubmit={async (e) => {
+                                e.preventDefault();
 
-                        try {
-                            // Create invoice if not exists
-                            // @ts-ignore
-                            const { data: existingInvoice, error: invoiceCheckError } = await supabase
-                                .from('invoices')
-                                .select('*')
-                                .eq('booking_id', params?.id)
-                                .maybeSingle();
-
-                            if (invoiceCheckError) {
-                                console.error('Error checking invoice:', invoiceCheckError);
-                                throw invoiceCheckError;
-                            }
-
-                            // @ts-ignore
-                            let invoiceId = existingInvoice?.id;
-
-                            if (!existingInvoice) {
-                                console.log('Creating new invoice...');
-                                // Generate invoice number
-                                const invoiceNumber = `INV-${Date.now()}`;
-
-                                const { data: newInvoice, error: invoiceError } = await supabase
-                                    .from('invoices')
+                                try {
+                                    // Create invoice if not exists
                                     // @ts-ignore
-                                    .insert({
-                                        invoice_number: invoiceNumber,
-                                        booking_id: params?.id,
-                                        customer_id: booking?.customer_id,
-                                        total_amount: parseFloat(paymentForm.amount),
-                                        paid_amount: 0,
-                                        remaining_amount: parseFloat(paymentForm.amount),
-                                        status: 'pending',
-                                        due_date: new Date().toISOString().split('T')[0]
-                                    })
-                                    .select()
-                                    .single();
+                                    const { data: existingInvoice, error: invoiceCheckError } = await supabase.from('invoices').select('*').eq('booking_id', params?.id).maybeSingle();
 
-                                if (invoiceError) {
-                                    console.error('Invoice creation error:', invoiceError);
-                                    throw invoiceError;
+                                    if (invoiceCheckError) {
+                                        console.error('Error checking invoice:', invoiceCheckError);
+                                        throw invoiceCheckError;
+                                    }
+
+                                    // @ts-ignore
+                                    let invoiceId = existingInvoice?.id;
+
+                                    if (!existingInvoice) {
+                                        console.log('Creating new invoice...');
+                                        // Generate invoice number
+                                        const invoiceNumber = `INV-${Date.now()}`;
+
+                                        const { data: newInvoice, error: invoiceError } = await supabase
+                                            .from('invoices')
+                                            // @ts-ignore
+                                            .insert({
+                                                invoice_number: invoiceNumber,
+                                                booking_id: params?.id,
+                                                customer_id: booking?.customer_id,
+                                                total_amount: parseFloat(paymentForm.amount),
+                                                paid_amount: 0,
+                                                remaining_amount: parseFloat(paymentForm.amount),
+                                                status: 'pending',
+                                                due_date: new Date().toISOString().split('T')[0],
+                                            })
+                                            .select()
+                                            .single();
+
+                                        if (invoiceError) {
+                                            console.error('Invoice creation error:', invoiceError);
+                                            throw invoiceError;
+                                        }
+                                        // @ts-ignore
+                                        invoiceId = newInvoice?.id;
+                                        console.log('Invoice created:', invoiceId);
+                                    }
+
+                                    // Create payment
+                                    console.log('Creating payment...');
+                                    const { error: paymentError } = await supabase
+                                        .from('payments')
+                                        // @ts-ignore
+                                        .insert({
+                                            invoice_id: invoiceId,
+                                            booking_id: params?.id,
+                                            customer_id: booking?.customer_id,
+                                            amount: parseFloat(paymentForm.amount),
+                                            payment_method: paymentForm.payment_method,
+                                            transaction_id: paymentForm.transaction_id || null,
+                                            notes: paymentForm.notes || null,
+                                            payment_date: new Date().toISOString(),
+                                        });
+
+                                    if (paymentError) {
+                                        console.error('Payment creation error:', paymentError);
+                                        throw paymentError;
+                                    }
+
+                                    console.log('Payment recorded successfully');
+                                    setAlert({ visible: true, message: 'Payment recorded successfully!', type: 'success' });
+                                    setShowPaymentModal(false);
+                                    window.location.reload();
+                                } catch (error: any) {
+                                    console.error('Error recording payment:', error);
+                                    setAlert({ visible: true, message: `Error recording payment: ${error.message || 'Unknown error'}`, type: 'danger' });
                                 }
-                                // @ts-ignore
-                                invoiceId = newInvoice?.id;
-                                console.log('Invoice created:', invoiceId);
-                            }
+                            }}
+                        >
+                            <div className="space-y-4">
+                                {/* Amount */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Amount (₪) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={paymentForm.amount}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                                        className="form-input"
+                                        placeholder={`Enter amount (Service Price: ₪${booking?.price || 0})`}
+                                        required
+                                    />
+                                </div>
 
-                            // Create payment
-                            console.log('Creating payment...');
-                            const { error: paymentError } = await supabase
-                                .from('payments')
-                                // @ts-ignore
-                                .insert({
-                                    invoice_id: invoiceId,
-                                    booking_id: params?.id,
-                                    customer_id: booking?.customer_id,
-                                    amount: parseFloat(paymentForm.amount),
-                                    payment_method: paymentForm.payment_method,
-                                    transaction_id: paymentForm.transaction_id || null,
-                                    notes: paymentForm.notes || null,
-                                    payment_date: new Date().toISOString()
-                                });
+                                {/* Payment Method */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Payment Method *</label>
+                                    <select
+                                        value={paymentForm.payment_method}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="cash">Cash</option>
+                                        <option value="credit_card">Credit Card</option>
+                                        <option value="bank_transfer">Bank Transfer</option>
+                                        <option value="check">Check</option>
+                                    </select>
+                                </div>
 
-                            if (paymentError) {
-                                console.error('Payment creation error:', paymentError);
-                                throw paymentError;
-                            }
+                                {/* Transaction ID */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={paymentForm.transaction_id}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
+                                        className="form-input"
+                                        placeholder="Enter transaction ID"
+                                    />
+                                </div>
 
-                            console.log('Payment recorded successfully');
-                            alert('Payment recorded successfully!');
-                            setShowPaymentModal(false);
-                            window.location.reload();
-                        } catch (error: any) {
-                            console.error('Error recording payment:', error);
-                            alert(`Error recording payment: ${error.message || 'Unknown error'}`);
-                        }
-                    }}>
-                        <div className="space-y-4">
-                            {/* Amount */}
-                            <div>
-                                <label className="block text-sm font-bold mb-2">Amount (₪) *</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={paymentForm.amount}
-                                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                                    className="form-input"
-                                    placeholder={`Enter amount (Service Price: ₪${booking?.price || 0})`}
-                                    required
-                                />
+                                {/* Notes */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
+                                    <textarea
+                                        value={paymentForm.notes}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                                        className="form-textarea"
+                                        rows={3}
+                                        placeholder="Enter payment notes"
+                                    />
+                                </div>
                             </div>
 
-                            {/* Payment Method */}
-                            <div>
-                                <label className="block text-sm font-bold mb-2">Payment Method *</label>
-                                <select
-                                    value={paymentForm.payment_method}
-                                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
-                                    className="form-select"
-                                    required
-                                >
-                                    <option value="cash">Cash</option>
-                                    <option value="credit_card">Credit Card</option>
-                                    <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="check">Check</option>
-                                </select>
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-outline-danger">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary">
+                                    Record Payment
+                                </button>
                             </div>
-
-                            {/* Transaction ID */}
-                            <div>
-                                <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
-                                <input
-                                    type="text"
-                                    value={paymentForm.transaction_id}
-                                    onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
-                                    className="form-input"
-                                    placeholder="Enter transaction ID"
-                                />
-                            </div>
-
-                            {/* Notes */}
-                            <div>
-                                <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
-                                <textarea
-                                    value={paymentForm.notes}
-                                    onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                                    className="form-textarea"
-                                    rows={3}
-                                    placeholder="Enter payment notes"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-outline-danger">
-                                Cancel
-                            </button>
-                            <button type="submit" className="btn btn-primary">
-                                Record Payment
-                            </button>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
-            </div>
-        )}
+            )}
         </div>
     );
 };

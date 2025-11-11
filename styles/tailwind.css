@@ -1,6 +1,43 @@
 /* Animate css */
 @import './animate.css';
+/* tippy css */
+@import './tippy.css';
 
+/* swiper css */
+@import './swiper.css';
+
+/* Elements - Progressbar */
+@import './progressbar.css';
+
+/* Data tables css */
+@import './datatables.css';
+
+/* scrumboard */
+@import './scrumboard.css';
+
+/* calendar css */
+@import './fullcalendar.css';
+
+/* sweetalert css */
+@import './sweetalert.css';
+
+/* flatpickr css */
+@import './flatpickr.css';
+
+/* quill-editor css */
+@import './quill-editor.css';
+
+/* markdown-editor css */
+@import './markdown-editor.css';
+
+/* file upload with preview */
+@import './file-upload-preview.css';
+
+/* form element*/
+@import './form-elements.css';
+
+/* Select2*/
+@import './select2.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -11,7 +48,19 @@
     }
 
     body {
-        @apply bg-[#fafafa] font-nunito;
+        @apply bg-[#fafafa];
+        /* Use explicit font-family instead of a non-existent Tailwind utility */
+        font-family:
+            'Almarai',
+            system-ui,
+            -apple-system,
+            'Segoe UI',
+            Roboto,
+            'Helvetica Neue',
+            Arial,
+            'Noto Sans',
+            'Liberation Sans',
+            sans-serif;
     }
 
     body.dark {
@@ -20,7 +69,7 @@
 
     /* Panel */
     .panel {
-        @apply relative rounded-md bg-white p-5 shadow dark:bg-black;
+        @apply relative rounded-2xl bg-white p-5 shadow dark:bg-black max-w-[1500px];
     }
     /* Navbar */
     .navbar-sticky header,
@@ -71,7 +120,7 @@ hover:text-primary hover:before:!bg-primary ltr:before:mr-2 rtl:before:ml-2 dark
 
     .sidebar .nav-item a div:first-child svg,
     .sidebar .nav-item button div:first-child svg {
-        @apply h-5 w-5 text-black/50 dark:text-white/50;
+        @apply h-5 w-5 text-[#0056e5ba] dark:text-white/50;
     }
 
     .main-container .main-content {
@@ -322,14 +371,6 @@ hover:text-primary hover:before:!bg-primary ltr:before:mr-2 rtl:before:ml-2 dark
     .form-select,
     .form-multiselect {
         @apply w-full rounded-md border border-white-light bg-white px-4 py-2 text-sm font-semibold text-black !outline-none focus:border-primary focus:ring-transparent dark:border-[#17263c] dark:bg-[#121e32] dark:text-white-dark dark:focus:border-primary;
-    }
-    /* إزالة السهم الافتراضي الذي يضيفه المتصفح */
-    select,
-    .form-select {
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    -moz-appearance: none !important;
-    background-image: none !important;
     }
 
     .form-input-lg,
@@ -686,59 +727,23 @@ img.dark-img {
     @apply !block;
 }
 
-/* Print Styles */
-@media print {
-    /* Hide navigation, sidebar, and other UI elements */
-    header,
-    .sidebar,
-    nav,
-    .navbar,
-    .print\\:hidden,
-    button:not(.print-button) {
-        display: none !important;
-    }
+/* Remove number input spinner arrows */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 
-    /* Hide all buttons except print button */
-    .btn,
-    .badge {
-        display: none !important;
-    }
+input[type='number'] {
+    -moz-appearance: textfield;
+}
 
-    /* Reset page margins and padding */
-    body {
-        margin: 0;
-        padding: 0;
-        background: white !important;
-    }
+/* Date input calendar icon in dark mode */
+.dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
 
-    /* Make content full width */
-    .main-content,
-    .panel {
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 20px !important;
-        box-shadow: none !important;
-        border: none !important;
-    }
-
-    /* Ensure good print quality */
-    * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
-
-    /* Page breaks */
-    .panel {
-        page-break-inside: avoid;
-    }
-
-    table {
-        page-break-inside: auto;
-    }
-
-    tr {
-        page-break-inside: avoid;
-        page-break-after: auto;
-    }
+.dark input[type='date']::-webkit-calendar-picker-indicator:hover {
+    filter: invert(1) brightness(1.2);
 }

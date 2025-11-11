@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
+import BookingsFilters, { BookingFilters as BookingFiltersType } from '@/components/bookings-filters/bookings-filters';
 
 interface Booking {
     id: string;
@@ -36,13 +37,12 @@ const BookingsList = () => {
     const [records, setRecords] = useState<Booking[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<Booking[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Booking | 'created_at'; direction: 'asc' | 'desc' }>(
-        {
-            columnAccessor: 'created_at',
-            direction: 'desc',
-        },
-    );
+    const [filters, setFilters] = useState<BookingFiltersType>({ search: '', status: '', serviceType: '', dateFrom: '', dateTo: '' });
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Booking | 'created_at'; direction: 'asc' | 'desc' }>({
+        columnAccessor: 'created_at',
+        direction: 'desc',
+    });
 
     // Modal and alert states
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -57,11 +57,8 @@ const BookingsList = () => {
         const fetchBookings = async () => {
             try {
                 // Fetch bookings
-                const { data: bookingsData, error: bookingsError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                
+                const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+
                 if (bookingsError) throw bookingsError;
 
                 // Fetch related data separately
@@ -119,19 +116,38 @@ const BookingsList = () => {
     useEffect(() => {
         setInitialRecords(
             items.filter((item) => {
-                const q = search.toLowerCase();
-                return (
-                    !q ||
-                    item.booking_number.toLowerCase().includes(q) ||
-                    item.customer_name.toLowerCase().includes(q) ||
-                    item.customer_phone.toLowerCase().includes(q) ||
-                    item.service_address.toLowerCase().includes(q) ||
-                    item.service_type.toLowerCase().includes(q) ||
-                    item.status.toLowerCase().includes(q)
-                );
+                // status filter
+                if (filters.status && item.status !== filters.status) return false;
+
+                // service type filter
+                if (filters.serviceType && !(item.service_type || '').toLowerCase().includes(filters.serviceType.toLowerCase())) return false;
+
+                // search filter
+                const q = (filters.search || '').toLowerCase();
+                if (q) {
+                    const matches =
+                        (item.booking_number || '').toLowerCase().includes(q) ||
+                        (item.customer_name || '').toLowerCase().includes(q) ||
+                        (item.customer_phone || '').toLowerCase().includes(q) ||
+                        (item.service_address || '').toLowerCase().includes(q) ||
+                        (item.service_type || '').toLowerCase().includes(q) ||
+                        (item.status || '').toLowerCase().includes(q);
+                    if (!matches) return false;
+                }
+
+                // date range filter (use scheduled_date if available)
+                if (filters.dateFrom || filters.dateTo) {
+                    const itemDate = item.scheduled_date ? new Date(item.scheduled_date) : new Date(item.created_at);
+                    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null;
+                    const dateTo = filters.dateTo ? new Date(filters.dateTo) : null;
+                    if (dateFrom && itemDate < dateFrom) return false;
+                    if (dateTo && itemDate > dateTo) return false;
+                }
+
+                return true;
             }),
         );
-    }, [items, search]);
+    }, [items, filters]);
 
     useEffect(() => {
         setPage(1);
@@ -160,10 +176,7 @@ const BookingsList = () => {
         });
     };
 
-    const isAllPageSelected = useMemo(
-        () => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)),
-        [records, selectedRecords],
-    );
+    const isAllPageSelected = useMemo(() => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)), [records, selectedRecords]);
 
     const statusBadge = (status?: string) => {
         switch (status) {
@@ -208,14 +221,7 @@ const BookingsList = () => {
         }
     };
 
-    const setSort = (
-        columnAccessor:
-            | 'created_at'
-            | 'booking_number'
-            | 'customer_name'
-            | 'service_address'
-            | 'customer_phone',
-    ) => {
+    const setSort = (columnAccessor: 'created_at' | 'booking_number' | 'customer_name' | 'service_address' | 'customer_phone') => {
         setSortStatus((curr) => {
             if (curr.columnAccessor === columnAccessor) {
                 return { columnAccessor, direction: curr.direction === 'asc' ? 'desc' : 'asc' };
@@ -252,13 +258,20 @@ const BookingsList = () => {
                             {t('add_new_booking')}
                         </Link>
                     </div>
-                    <div className="ltr:ml-auto rtl:mr-auto">
-                        <input
-                            type="text"
-                            className="form-input w-auto"
-                            placeholder={t('search')}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                    <div className="flex-grow">
+                        <BookingsFilters
+                            onFilterChange={setFilters}
+                            onClearFilters={() =>
+                                setFilters({
+                                    search: '',
+                                    status: '',
+                                    serviceType: '',
+                                    dateFrom: '',
+                                    dateTo: '',
+                                })
+                            }
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
                         />
                     </div>
                 </div>
@@ -269,12 +282,7 @@ const BookingsList = () => {
                             <thead>
                                 <tr>
                                     <th className="w-10">
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox outline-primary"
-                                            checked={isAllPageSelected}
-                                            onChange={toggleSelectAllOnPage}
-                                        />
+                                        <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
                                     </th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('booking_number')}>
                                         Booking # {sortStatus.columnAccessor === 'booking_number' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
@@ -297,22 +305,11 @@ const BookingsList = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {records.length === 0 && (
-                                    <tr>
-                                        <td colSpan={13} className="py-10 text-center text-sm opacity-70">
-                                            {t('no_records') || 'No records'}
-                                        </td>
-                                    </tr>
-                                )}
+                                {/* Empty-state row intentionally removed to avoid showing "No records" placeholder */}
                                 {records.map((row) => (
                                     <tr key={row.id}>
                                         <td>
-                                            <input
-                                                type="checkbox"
-                                                className="form-checkbox outline-primary"
-                                                checked={selectedRecords.some((s) => s.id === row.id)}
-                                                onChange={() => toggleRow(row)}
-                                            />
+                                            <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
                                         </td>
                                         <td>
                                             <div className="flex items-center gap-2">
@@ -323,15 +320,9 @@ const BookingsList = () => {
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
-                                        <td>
-                                            {(row as any).service_name || (row as any).service_type || '-'}
-                                        </td>
+                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
                                         <td className="max-w-xs truncate">{row.service_address || '-'}</td>
-                                        <td>
-                                            {row.scheduled_date && row.scheduled_time
-                                                ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}`
-                                                : '-'}
-                                        </td>
+                                        <td>{row.scheduled_date && row.scheduled_time ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}` : '-'}</td>
                                         <td>${(row as any).price || 0}</td>
                                         <td>${(row as any).profit || 0}</td>
                                         <td>
@@ -340,9 +331,7 @@ const BookingsList = () => {
                                         <td>{(row as any).truck?.truck_number || '-'}</td>
                                         <td>{(row as any).driver?.name || '-'}</td>
                                         <td>
-                                            <span className={`badge ${statusBadge(row.status)}`}>
-                                                {row.status?.replace('_', ' ') || 'pending'}
-                                            </span>
+                                            <span className={`badge ${statusBadge(row.status)}`}>{row.status?.replace('_', ' ') || 'pending'}</span>
                                         </td>
                                         <td>
                                             <div className="mx-auto flex w-max items-center gap-2">
@@ -373,51 +362,39 @@ const BookingsList = () => {
                                 ))}
                             </select>
                         </div>
-                       <div className="flex items-center gap-2">
-                                                   <button
-                                                       type="button"
-                                                       className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                       disabled={page === 1}
-                                                       onClick={() => setPage(page - 1)}
-                                                   >
-                                                       Previous
-                                                   </button>
-                                                   <div className="flex items-center gap-1">
-                                                       {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
-                                                           .filter((p) => {
-                                                               if (Math.ceil(totalRecords / pageSize) <= 5) return true;
-                                                               if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
-                                                               if (p >= page - 1 && p <= page + 1) return true;
-                                                               return false;
-                                                           })
-                                                           .map((p, i, arr) => (
-                                                               <React.Fragment key={p}>
-                                                                   {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                                                   <button
-                                                                       type="button"
-                                                                       className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                                       onClick={() => setPage(p)}
-                                                                   >
-                                                                       {p}
-                                                                   </button>
-                                                               </React.Fragment>
-                                                           ))}
-                                                   </div>
-                                                   <button
-                                                       type="button"
-                                                       className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                       disabled={page === Math.ceil(totalRecords / pageSize)}
-                                                       onClick={() => setPage(page + 1)}
-                                                   >
-                                                       Next
-                                                   </button>
-                                                 
-                                               </div>
+                        <div className="flex items-center gap-2">
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                    .filter((p) => {
+                                        if (Math.ceil(totalRecords / pageSize) <= 5) return true;
+                                        if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
+                                        if (p >= page - 1 && p <= page + 1) return true;
+                                        return false;
+                                    })
+                                    .map((p, i, arr) => (
+                                        <React.Fragment key={p}>
+                                            {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
+                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
+                                                {p}
+                                            </button>
+                                        </React.Fragment>
+                                    ))}
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                disabled={page === Math.ceil(totalRecords / pageSize)}
+                                onClick={() => setPage(page + 1)}
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
 
-                    {loading && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-black-dark-light/60" />
-                    )}
+                    {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-black-dark-light/60" />}
                 </div>
             </div>
 

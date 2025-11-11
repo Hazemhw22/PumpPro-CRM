@@ -5,6 +5,7 @@ import { sortBy } from 'lodash';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
+import ServicesFilters, { ServicesFilters as ServicesFiltersType } from '@/components/services-filters/services-filters';
 import IconPlus from '@/components/icon/icon-plus';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconEdit from '@/components/icon/icon-edit';
@@ -33,8 +34,7 @@ export default function ServicesList() {
     const [records, setRecords] = useState<Service[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<Service[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const [filters, setFilters] = useState<ServicesFiltersType>({ search: '', status: '', priceFrom: '', priceTo: '' });
     const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Service | 'created_at'; direction: 'asc' | 'desc' }>({
         columnAccessor: 'created_at',
         direction: 'desc',
@@ -53,10 +53,7 @@ export default function ServicesList() {
     const fetchServices = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('services')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data, error } = await supabase.from('services').select('*').order('created_at', { ascending: false });
             if (error) throw error;
             setItems(data || []);
             setInitialRecords(data || []);
@@ -74,17 +71,24 @@ export default function ServicesList() {
         setInitialRecords(() => {
             return items.filter((s) => {
                 const isActive = s.active !== false;
-                const inStatus = statusFilter === 'all' || (statusFilter === 'active' && isActive) || (statusFilter === 'inactive' && !isActive);
+                const inStatus = !filters.status || filters.status === 'all' || (filters.status === 'active' && isActive) || (filters.status === 'inactive' && !isActive);
                 if (!inStatus) return false;
-                const q = search.toLowerCase();
-                return (
-                    !q ||
-                    (s.name || '').toLowerCase().includes(q) ||
-                    (s.description || '').toLowerCase().includes(q)
-                );
+
+                const q = (filters.search || '').toLowerCase();
+                if (q && !((s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))) return false;
+
+                if (filters.priceFrom || filters.priceTo) {
+                    const p = Number(s.price_private || s.price_business || 0);
+                    const from = filters.priceFrom ? Number(filters.priceFrom) : null;
+                    const to = filters.priceTo ? Number(filters.priceTo) : null;
+                    if (from !== null && p < (from as number)) return false;
+                    if (to !== null && p > (to as number)) return false;
+                }
+
+                return true;
             });
         });
-    }, [items, search, statusFilter]);
+    }, [items, filters]);
 
     useEffect(() => {
         const data = sortBy(initialRecords, (x) => {
@@ -143,9 +147,7 @@ export default function ServicesList() {
 
     return (
         <div className="space-y-6">
-            {alert.visible && (
-                <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
-            )}
+            {alert.visible && <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />}
 
             <div className="panel">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
@@ -159,89 +161,74 @@ export default function ServicesList() {
                             Add New Service
                         </Link>
                     </div>
-                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                        <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-                            <option value="all">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
-                        <input type="text" className="form-input w-auto" placeholder="Search services..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <div className="flex-grow">
+                        <ServicesFilters onFilterChange={setFilters} onClearFilters={() => setFilters({ search: '', status: '', priceFrom: '', priceTo: '' })} />
                     </div>
                 </div>
 
                 <div className="relative px-5 pb-5">
                     <div className="overflow-auto rounded-md">
-                            <table className="table-hover whitespace-nowrap rtl-table-headers">
-                                <thead>
-                                    <tr>
-                                        <th className="w-10">
-                                            <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
-                                        </th>
-                                        <th className="cursor-pointer select-none" onClick={() => setSort('name')}>
-                                            Service Name {sortStatus.columnAccessor === 'name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                        <th>Description</th>
-                                        <th className="cursor-pointer select-none" onClick={() => setSort('price_private')}>
-                                            Price Private {sortStatus.columnAccessor === 'price_private' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                        <th className="cursor-pointer select-none" onClick={() => setSort('price_business')}>
-                                            Price Business {sortStatus.columnAccessor === 'price_business' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                        <th className="cursor-pointer select-none" onClick={() => setSort('active')}>
-                                            Status {sortStatus.columnAccessor === 'active' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                        <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
-                                            Created At {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                        <th className="text-center">Actions</th>
+                        <table className="table-hover whitespace-nowrap rtl-table-headers">
+                            <thead>
+                                <tr>
+                                    <th className="w-10">
+                                        <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
+                                    </th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('name')}>
+                                        Service Name {sortStatus.columnAccessor === 'name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
+                                    <th>Description</th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('price_private')}>
+                                        Price Private {sortStatus.columnAccessor === 'price_private' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('price_business')}>
+                                        Price Business {sortStatus.columnAccessor === 'price_business' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('active')}>
+                                        Status {sortStatus.columnAccessor === 'active' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
+                                        Created At {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
+                                    <th className="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {/* Empty-state row removed - no placeholder when no records */}
+                                {records.map((row) => (
+                                    <tr key={row.id}>
+                                        <td>
+                                            <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
+                                        </td>
+                                        <td className="font-semibold">{row.name || '-'}</td>
+                                        <td className="max-w-xs truncate">{row.description || '-'}</td>
+                                        <td>{row.price_private ? `$${row.price_private.toFixed(2)}` : '-'}</td>
+                                        <td>{row.price_business ? `$${row.price_business.toFixed(2)}` : '-'}</td>
+                                        <td>
+                                            <span className={`badge ${statusBadge(row.active)}`}>{row.active !== false ? 'Active' : 'Inactive'}</span>
+                                        </td>
+                                        <td>{row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}</td>
+                                        <td>
+                                            <div className="mx-auto flex w-max items-center gap-2">
+                                                <Link href={`/services/preview/${row.id}`} className="flex hover:text-primary" title="View">
+                                                    <IconEye className="h-4.5 w-4.5" />
+                                                </Link>
+                                                <Link href={`/services/edit/${row.id}`} className="flex hover:text-info" title="Edit">
+                                                    <IconEdit className="h-4.5 w-4.5" />
+                                                </Link>
+                                            </div>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {records.length === 0 && (
-                                        <tr>
-                                            <td colSpan={8} className="py-10 text-center text-sm opacity-70">
-                                                No records
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {records.map((row) => (
-                                        <tr key={row.id}>
-                                            <td>
-                                                <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
-                                            </td>
-                                            <td className="font-semibold">{row.name || '-'}</td>
-                                            <td className="max-w-xs truncate">{row.description || '-'}</td>
-                                            <td>{row.price_private ? `$${row.price_private.toFixed(2)}` : '-'}</td>
-                                            <td>{row.price_business ? `$${row.price_business.toFixed(2)}` : '-'}</td>
-                                            <td>
-                                                <span className={`badge ${statusBadge(row.active)}`}>{row.active !== false ? 'Active' : 'Inactive'}</span>
-                                            </td>
-                                            <td>
-                                                {row.created_at
-                                                    ? new Date(row.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })
-                                                    : '-'}
-                                            </td>
-                                            <td>
-                                                <div className="mx-auto flex w-max items-center gap-2">
-                                                    <Link href={`/services/preview/${row.id}`} className="flex hover:text-primary" title="View">
-                                                        <IconEye className="h-4.5 w-4.5" />
-                                                    </Link>
-                                                    <Link href={`/services/edit/${row.id}`} className="flex hover:text-info" title="Edit">
-                                                        <IconEdit className="h-4.5 w-4.5" />
-                                                    </Link>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
 
                     {/* Pagination */}
                     <div className="mt-5 flex flex-col items-center justify-between gap-4 sm:flex-row">
                         <div className="text-sm">
                             Showing {from} to {to} of {totalRecords} entries
-                              <select className="form-select w-20 py-1 text-sm ml-2" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                            <select className="form-select w-20 py-1 text-sm ml-2" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
                                 {PAGE_SIZES.map((size) => (
                                     <option key={size} value={size}>
                                         {size}
@@ -249,14 +236,9 @@ export default function ServicesList() {
                                 ))}
                             </select>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                disabled={page === 1}
-                                onClick={() => setPage(page - 1)}
-                            >
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
                                 Previous
                             </button>
                             <div className="flex items-center gap-1">
@@ -270,11 +252,7 @@ export default function ServicesList() {
                                     .map((p, i, arr) => (
                                         <React.Fragment key={p}>
                                             {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                            <button
-                                                type="button"
-                                                className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                onClick={() => setPage(p)}
-                                            >
+                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
                                                 {p}
                                             </button>
                                         </React.Fragment>
@@ -288,7 +266,6 @@ export default function ServicesList() {
                             >
                                 Next
                             </button>
-                          
                         </div>
                     </div>
                 </div>

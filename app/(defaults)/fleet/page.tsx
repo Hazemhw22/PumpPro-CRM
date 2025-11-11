@@ -8,6 +8,7 @@ import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconEye from '@/components/icon/icon-eye';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import FleetFilters, { FleetFilters as FleetFiltersType } from '@/components/fleet-filters/fleet-filters';
 
 interface Truck {
     id: string;
@@ -37,8 +38,7 @@ export default function FleetList() {
     const [records, setRecords] = useState<Truck[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<Truck[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'in_use' | 'maintenance' | 'out_of_service'>('all');
+    const [filters, setFilters] = useState<FleetFiltersType>({ search: '', status: '', capacityFrom: '', capacityTo: '', maintenanceFrom: '', maintenanceTo: '' });
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Truck | 'created_at'; direction: 'asc' | 'desc' }>({
         columnAccessor: 'created_at',
@@ -55,10 +55,7 @@ export default function FleetList() {
         const fetchTrucks = async () => {
             setLoading(true);
             try {
-                const { data, error } = await supabase
-                    .from('trucks')
-                    .select('*, driver:drivers(name, driver_number)')
-                    .order('created_at', { ascending: false });
+                const { data, error } = await supabase.from('trucks').select('*, driver:drivers(name, driver_number)').order('created_at', { ascending: false });
                 if (error) throw error;
                 setItems(data || []);
                 setInitialRecords(data || []);
@@ -77,17 +74,38 @@ export default function FleetList() {
     useEffect(() => {
         setInitialRecords(() => {
             return items.filter((t) => {
-                const inStatus = statusFilter === 'all' || (t.status || 'available') === statusFilter;
-                if (!inStatus) return false;
-                const q = search.toLowerCase();
-                return (
-                    !q ||
-                    (t.truck_number && t.truck_number.toLowerCase().includes(q)) ||
-                    (t.license_plate && t.license_plate.toLowerCase().includes(q))
-                );
+                // status filter
+                if (filters.status && filters.status !== 'all' && (t.status || 'available') !== filters.status) return false;
+
+                // search filter
+                const q = (filters.search || '').toLowerCase();
+                if (q) {
+                    if (!((t.truck_number || '').toLowerCase().includes(q) || (t.license_plate || '').toLowerCase().includes(q))) return false;
+                }
+
+                // capacity range
+                if (filters.capacityFrom || filters.capacityTo) {
+                    const cap = Number(t.capacity_gallons || 0);
+                    const from = filters.capacityFrom ? Number(filters.capacityFrom) : null;
+                    const to = filters.capacityTo ? Number(filters.capacityTo) : null;
+                    if (from !== null && cap < (from as number)) return false;
+                    if (to !== null && cap > (to as number)) return false;
+                }
+
+                // maintenance date range
+                if (filters.maintenanceFrom || filters.maintenanceTo) {
+                    const maint = t.last_maintenance ? new Date(t.last_maintenance) : null;
+                    if (!maint) return false;
+                    const from = filters.maintenanceFrom ? new Date(filters.maintenanceFrom) : null;
+                    const to = filters.maintenanceTo ? new Date(filters.maintenanceTo) : null;
+                    if (from && maint < from) return false;
+                    if (to && maint > to) return false;
+                }
+
+                return true;
             });
         });
-    }, [items, search, statusFilter]);
+    }, [items, filters]);
 
     useEffect(() => {
         const data = sortBy(initialRecords, (x) => {
@@ -159,7 +177,12 @@ export default function FleetList() {
         <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
             {alert.visible && (
                 <div className="mb-4 ml-4 max-w-96">
-                    <Alert type={alert.type} title={alert.type === 'success' ? 'Success' : 'Error'} message={alert.message} onClose={() => setAlert({ visible: false, message: '', type: 'success' })} />
+                    <Alert
+                        type={alert.type}
+                        title={alert.type === 'success' ? 'Success' : 'Error'}
+                        message={alert.message}
+                        onClose={() => setAlert({ visible: false, message: '', type: 'success' })}
+                    />
                 </div>
             )}
             <div className="invoice-table">
@@ -174,23 +197,20 @@ export default function FleetList() {
                             Add New Truck
                         </Link>
                     </div>
-                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                        <div className="hidden items-center gap-1 sm:flex">
-                            <button type="button" className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('list')}>
-                                List
-                            </button>
-                            <button type="button" className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('grid')}>
-                                Grid
-                            </button>
-                        </div>
-                        <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-                            <option value="all">All Status</option>
-                            <option value="available">Available</option>
-                            <option value="in_use">In Use</option>
-                            <option value="maintenance">Maintenance</option>
-                            <option value="out_of_service">Out of Service</option>
-                        </select>
-                        <input type="text" className="form-input w-auto" placeholder="Search trucks by number or license plate..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <div className="flex-grow">
+                        <FleetFilters
+                            onFilterChange={setFilters}
+                            onClearFilters={() =>
+                                setFilters({
+                                    search: '',
+                                    status: '',
+                                    capacityFrom: '',
+                                    capacityTo: '',
+                                    maintenanceFrom: '',
+                                    maintenanceTo: '',
+                                })
+                            }
+                        />
                     </div>
                 </div>
 
@@ -225,17 +245,16 @@ export default function FleetList() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {records.length === 0 && (
-                                        <tr>
-                                            <td colSpan={10} className="py-10 text-center text-sm opacity-70">
-                                                No records
-                                            </td>
-                                        </tr>
-                                    )}
+                                    {/* Empty-state row removed - no placeholder when there are no records */}
                                     {records.map((row) => (
                                         <tr key={row.id}>
                                             <td>
-                                                <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-checkbox outline-primary"
+                                                    checked={selectedRecords.some((s) => s.id === row.id)}
+                                                    onChange={() => toggleRow(row)}
+                                                />
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
@@ -253,11 +272,7 @@ export default function FleetList() {
                                                 <span className={`badge ${statusBadge(row.status)}`}>{(row.status || 'available').replace('_', ' ')}</span>
                                             </td>
                                             <td>{row.capacity_gallons ? `${row.capacity_gallons} gallons` : '-'}</td>
-                                            <td>
-                                                {row.last_maintenance
-                                                    ? new Date(row.last_maintenance).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })
-                                                    : '-'}
-                                            </td>
+                                            <td>{row.last_maintenance ? new Date(row.last_maintenance).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}</td>
                                             <td>{row.driver?.name || '-'}</td>
                                             <td className="max-w-52 truncate">{row.notes || 'N/A'}</td>
                                             <td>
@@ -274,7 +289,7 @@ export default function FleetList() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                            {records.length === 0 && <div className="col-span-full py-10 text-center text-sm opacity-70">No records</div>}
+                            {/* Empty-state placeholder removed */}
                             {records.map((row) => (
                                 <div key={row.id} className="rounded-md border border-white-light bg-white p-4 shadow dark:border-[#17263c] dark:bg-[#121e32]">
                                     <div className="flex items-start gap-3">
@@ -316,45 +331,35 @@ export default function FleetList() {
                             </select>
                         </div>
                         <div className="flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                        disabled={page === 1}
-                                                        onClick={() => setPage(page - 1)}
-                                                    >
-                                                        Previous
-                                                    </button>
-                                                    <div className="flex items-center gap-1">
-                                                        {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
-                                                            .filter((p) => {
-                                                                if (Math.ceil(totalRecords / pageSize) <= 5) return true;
-                                                                if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
-                                                                if (p >= page - 1 && p <= page + 1) return true;
-                                                                return false;
-                                                            })
-                                                            .map((p, i, arr) => (
-                                                                <React.Fragment key={p}>
-                                                                    {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                                        onClick={() => setPage(p)}
-                                                                    >
-                                                                        {p}
-                                                                    </button>
-                                                                </React.Fragment>
-                                                            ))}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                        disabled={page === Math.ceil(totalRecords / pageSize)}
-                                                        onClick={() => setPage(page + 1)}
-                                                    >
-                                                        Next
-                                                    </button>
-                                                  
-                                                </div>
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                    .filter((p) => {
+                                        if (Math.ceil(totalRecords / pageSize) <= 5) return true;
+                                        if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
+                                        if (p >= page - 1 && p <= page + 1) return true;
+                                        return false;
+                                    })
+                                    .map((p, i, arr) => (
+                                        <React.Fragment key={p}>
+                                            {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
+                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
+                                                {p}
+                                            </button>
+                                        </React.Fragment>
+                                    ))}
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                disabled={page === Math.ceil(totalRecords / pageSize)}
+                                onClick={() => setPage(page + 1)}
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
 
                     {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-black-dark-light/60" />}

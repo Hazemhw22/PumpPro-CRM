@@ -8,6 +8,7 @@ import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconEye from '@/components/icon/icon-eye';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import DriversFilters, { DriversFilters as DriversFiltersType } from '@/components/drivers-filters/drivers-filters';
 
 interface Driver {
     id: string;
@@ -35,8 +36,7 @@ export default function DriversList() {
     const [records, setRecords] = useState<Driver[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<Driver[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'on_leave'>('all');
+    const [filters, setFilters] = useState<DriversFiltersType>({ search: '', status: '', licenseFrom: '', licenseTo: '' });
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Driver | 'created_at'; direction: 'asc' | 'desc' }>({
         columnAccessor: 'created_at',
@@ -70,22 +70,37 @@ export default function DriversList() {
 
     useEffect(() => {
         let filtered = [...initialRecords];
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter((d) => d.status === statusFilter);
+        if (filters.status && filters.status !== 'all') {
+            filtered = filtered.filter((d) => d.status === filters.status);
         }
-        if (search) {
+        if (filters.search) {
+            const q = filters.search.toLowerCase();
             filtered = filtered.filter((d) => {
                 return (
-                    d.name?.toLowerCase().includes(search.toLowerCase()) ||
-                    d.driver_number?.toLowerCase().includes(search.toLowerCase()) ||
-                    d.phone?.toLowerCase().includes(search.toLowerCase()) ||
-                    d.license_number?.toLowerCase().includes(search.toLowerCase())
+                    (d.name || '').toLowerCase().includes(q) ||
+                    (d.driver_number || '').toLowerCase().includes(q) ||
+                    (d.phone || '').toLowerCase().includes(q) ||
+                    (d.license_number || '').toLowerCase().includes(q)
                 );
             });
         }
+
+        // license expiry range filter
+        if (filters.licenseFrom || filters.licenseTo) {
+            filtered = filtered.filter((d) => {
+                if (!d.license_expiry) return false;
+                const exp = new Date(d.license_expiry);
+                const from = filters.licenseFrom ? new Date(filters.licenseFrom) : null;
+                const to = filters.licenseTo ? new Date(filters.licenseTo) : null;
+                if (from && exp < from) return false;
+                if (to && exp > to) return false;
+                return true;
+            });
+        }
+
         setItems(filtered);
         setPage(1);
-    }, [search, statusFilter, initialRecords]);
+    }, [filters, initialRecords]);
 
     useEffect(() => {
         const from = (page - 1) * pageSize;
@@ -165,9 +180,7 @@ export default function DriversList() {
 
     return (
         <div className="space-y-6">
-            {alert.visible && (
-                <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />
-            )}
+            {alert.visible && <Alert type={alert.type} message={alert.message} onClose={() => setAlert({ ...alert, visible: false })} />}
 
             <div className="panel">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
@@ -181,22 +194,20 @@ export default function DriversList() {
                             Add New Driver
                         </Link>
                     </div>
-                    <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                        <div className="hidden items-center gap-1 sm:flex">
-                            <button type="button" className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('list')}>
-                                List
-                            </button>
-                            <button type="button" className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setViewMode('grid')}>
-                                Grid
-                            </button>
-                        </div>
-                        <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-                            <option value="all">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="on_leave">On Leave</option>
-                        </select>
-                        <input type="text" className="form-input w-auto" placeholder="Search drivers..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <div className="flex-grow">
+                        <DriversFilters
+                            onFilterChange={setFilters}
+                            onClearFilters={() =>
+                                setFilters({
+                                    search: '',
+                                    status: '',
+                                    licenseFrom: '',
+                                    licenseTo: '',
+                                })
+                            }
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                        />
                     </div>
                 </div>
 
@@ -229,17 +240,16 @@ export default function DriversList() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {records.length === 0 && (
-                                        <tr>
-                                            <td colSpan={8} className="py-10 text-center text-sm opacity-70">
-                                                No records
-                                            </td>
-                                        </tr>
-                                    )}
+                                    {/* Empty-state row removed - no placeholder shown when there are no records */}
                                     {records.map((row) => (
                                         <tr key={row.id}>
                                             <td>
-                                                <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-checkbox outline-primary"
+                                                    checked={selectedRecords.some((s) => s.id === row.id)}
+                                                    onChange={() => toggleRow(row)}
+                                                />
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
@@ -277,7 +287,7 @@ export default function DriversList() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                            {records.length === 0 && <div className="col-span-full py-10 text-center text-sm opacity-70">No records</div>}
+                            {/* Empty-state placeholder removed */}
                             {records.map((row) => (
                                 <div key={row.id} className="rounded-md border border-white-light bg-white p-4 shadow dark:border-[#17263c] dark:bg-[#121e32]">
                                     <div className="flex items-start gap-3">
@@ -313,7 +323,7 @@ export default function DriversList() {
                             <span>
                                 Showing {from} to {to} of {totalRecords} entries
                             </span>
-                             <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                            <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
                                 {PAGE_SIZES.map((size) => (
                                     <option key={size} value={size}>
                                         {size}
@@ -322,45 +332,35 @@ export default function DriversList() {
                             </select>
                         </div>
                         <div className="flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                        disabled={page === 1}
-                                                        onClick={() => setPage(page - 1)}
-                                                    >
-                                                        Previous
-                                                    </button>
-                                                    <div className="flex items-center gap-1">
-                                                        {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
-                                                            .filter((p) => {
-                                                                if (Math.ceil(totalRecords / pageSize) <= 5) return true;
-                                                                if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
-                                                                if (p >= page - 1 && p <= page + 1) return true;
-                                                                return false;
-                                                            })
-                                                            .map((p, i, arr) => (
-                                                                <React.Fragment key={p}>
-                                                                    {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                                        onClick={() => setPage(p)}
-                                                                    >
-                                                                        {p}
-                                                                    </button>
-                                                                </React.Fragment>
-                                                            ))}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                                        disabled={page === Math.ceil(totalRecords / pageSize)}
-                                                        onClick={() => setPage(page + 1)}
-                                                    >
-                                                        Next
-                                                    </button>
-                                                  
-                                                </div>
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                    .filter((p) => {
+                                        if (Math.ceil(totalRecords / pageSize) <= 5) return true;
+                                        if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
+                                        if (p >= page - 1 && p <= page + 1) return true;
+                                        return false;
+                                    })
+                                    .map((p, i, arr) => (
+                                        <React.Fragment key={p}>
+                                            {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
+                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
+                                                {p}
+                                            </button>
+                                        </React.Fragment>
+                                    ))}
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary disabled:opacity-50"
+                                disabled={page === Math.ceil(totalRecords / pageSize)}
+                                onClick={() => setPage(page + 1)}
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
