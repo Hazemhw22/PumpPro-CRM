@@ -28,7 +28,7 @@ const Sidebar = () => {
     const [currentMenu, setCurrentMenu] = useState<string>('');
     const themeConfig = useSelector((state: IRootState) => state.themeConfig);
     const semidark = useSelector((state: IRootState) => state.themeConfig.semidark);
-    
+
     const toggleMenu = (value: string) => {
         setCurrentMenu((oldValue) => {
             return oldValue === value ? '' : value;
@@ -128,6 +128,17 @@ const Sidebar = () => {
                             </li>
 
                             {/* Drivers */}
+                            {/* Contractors (new) */}
+                            <li className="nav-item">
+                                <Link href="/contractors" className="group">
+                                    <div className="flex items-center py-2">
+                                        <IconUser className="h-5 w-5 shrink-0 group-hover:!text-primary" />
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Contractors</span>
+                                    </div>
+                                </Link>
+                            </li>
+
+                            {/* Drivers */}
                             <li className="nav-item">
                                 <Link href="/drivers" className="group">
                                     <div className="flex items-center py-2">
@@ -178,7 +189,9 @@ const Sidebar = () => {
                                 <Link href="/accounting" className="group">
                                     <div className="flex items-center py-2">
                                         <IconMenuInvoice className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('accounting') || 'Accounting'}</span>
+                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                            {t('accounting') || 'Accounting'}
+                                        </span>
                                     </div>
                                 </Link>
                             </li>

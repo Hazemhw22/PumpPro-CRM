@@ -8,6 +8,7 @@ import CustomerSelect from '@/components/customer-select/customer-select';
 import ServiceSelect from '@/components/service-select/service-select';
 import TruckSelect from '@/components/truck-select/truck-select';
 import DriverSelect from '@/components/driver-select/driver-select';
+import ContractorSelect from '@/components/contractor-select/contractor-select';
 import { getTranslation } from '@/i18n';
 
 interface Customer {
@@ -49,6 +50,7 @@ const AddBooking = () => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [trucks, setTrucks] = useState<Truck[]>([]);
     const [drivers, setDrivers] = useState<Driver[]>([]);
+    const [contractors, setContractors] = useState<any[]>([]);
     const [services, setServices] = useState<Service[]>([]);
 
     const [form, setForm] = useState({
@@ -73,15 +75,16 @@ const AddBooking = () => {
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
     const [selectedDriver, setSelectedDriver] = useState<{ id: string; name: string; phone: string; license_number: string | null; status: 'active' | 'inactive' | 'on_leave' } | null>(null);
+    const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string; phone?: string; email?: string } | null>(null);
     const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
-    
+
     const addAlert = (type: 'success' | 'danger' | 'warning' | 'info', message: string, title?: string) => {
         const id = Date.now().toString();
-        setAlerts(prev => [...prev, { id, type, message, title }]);
+        setAlerts((prev) => [...prev, { id, type, message, title }]);
     };
-    
+
     const removeAlert = (id: string) => {
-        setAlerts(prev => prev.filter(alert => alert.id !== id));
+        setAlerts((prev) => prev.filter((alert) => alert.id !== id));
     };
 
     // Load data on mount
@@ -101,6 +104,14 @@ const AddBooking = () => {
                 if (trucksData) setTrucks(trucksData as any);
                 if (driversData) setDrivers(driversData as any);
                 if (servicesData) setServices(servicesData as any);
+                // fetch contractors
+                try {
+                    // @ts-ignore
+                    const { data: contractorsData } = await supabase.from('contractors').select('id, name, phone, email, balance');
+                    if (contractorsData) setContractors(contractorsData as any);
+                } catch (err) {
+                    console.warn('Failed to fetch contractors', err);
+                }
             } catch (error) {
                 console.error('Error loading data:', error);
             }
@@ -116,11 +127,11 @@ const AddBooking = () => {
         if (name === 'service_type' || name === 'customer_type') {
             const serviceId = name === 'service_type' ? value : form.service_type;
             const customerType = name === 'customer_type' ? value : form.customer_type;
-            
+
             const selectedService = services.find((s: Service) => s.id === serviceId);
             if (selectedService) {
                 const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
-                setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
+                setForm((prev) => ({ ...prev, price: price ? price.toString() : '' }));
             }
         }
 
@@ -128,7 +139,7 @@ const AddBooking = () => {
         if (name === 'truck_id' && value) {
             const selectedTruck = trucks.find((t: Truck) => t.id === value);
             if (selectedTruck && selectedTruck.driver_id) {
-                setForm(prev => ({ ...prev, driver_id: selectedTruck.driver_id || '' }));
+                setForm((prev) => ({ ...prev, driver_id: selectedTruck.driver_id || '' }));
             }
         }
 
@@ -136,7 +147,7 @@ const AddBooking = () => {
         if (name === 'customer_id' && value) {
             const selectedCustomer = customers.find((c: Customer) => c.id === value);
             if (selectedCustomer) {
-                setForm(prev => ({
+                setForm((prev) => ({
                     ...prev,
                     customer_name: selectedCustomer.name,
                     customer_phone: selectedCustomer.phone,
@@ -195,6 +206,7 @@ const AddBooking = () => {
                 profit: parseFloat(form.profit) || 0,
                 truck_id: form.truck_id || null,
                 driver_id: form.driver_id || null,
+                contractor_id: selectedContractor ? selectedContractor.id : null,
                 notes: form.notes.trim() || null,
                 status: form.status,
             };
@@ -203,7 +215,7 @@ const AddBooking = () => {
             const { data: bookingResult, error: bookingError } = await supabase.from('bookings').insert([bookingData]).select();
 
             if (bookingError) throw bookingError;
-            
+
             if (!bookingResult || bookingResult.length === 0) {
                 throw new Error('Failed to create booking');
             }
@@ -245,330 +257,313 @@ const AddBooking = () => {
     return (
         <>
             <AlertContainer alerts={alerts} onClose={removeAlert} />
-            
+
             <div className="container mx-auto p-6">
-            <div className="flex items-center gap-5 mb-6">
-                <div onClick={() => router.back()}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                </div>
-                <ul className="flex space-x-2 rtl:space-x-reverse mb-4">
-                    <li>
-                        <Link href="/" className="text-primary hover:underline">
-                            {t('home')}
-                        </Link>
-                    </li>
-                    <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                        <Link href="/bookings" className="text-primary hover:underline">
-                            {t('bookings') || 'Bookings'}
-                        </Link>
-                    </li>
-                    <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                        <span>{t('add_new_booking') || 'Add New Booking'}</span>
-                    </li>
-                </ul>
-            </div>
-
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold">{t('add_new_booking') || 'Add New Booking'}</h1>
-                <p className="text-gray-500">{t('create_booking_description') || 'Create a new booking for your service'}</p>
-            </div>
-
-
-            <div className="panel">
-                <div className="mb-5">
-                    <h5 className="text-lg font-semibold dark:text-white-light">{t('booking_information') || 'Booking Information'}</h5>
+                <div className="flex items-center gap-5 mb-6">
+                    <div onClick={() => router.back()}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </div>
+                    <ul className="flex space-x-2 rtl:space-x-reverse mb-4">
+                        <li>
+                            <Link href="/" className="text-primary hover:underline">
+                                {t('home')}
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <Link href="/bookings" className="text-primary hover:underline">
+                                {t('bookings') || 'Bookings'}
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <span>{t('add_new_booking') || 'Add New Booking'}</span>
+                        </li>
+                    </ul>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Customer Type */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            Customer Type <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex gap-4">
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="customer_type"
-                                    value="private"
-                                    checked={form.customer_type === 'private'}
-                                    onChange={handleInputChange}
-                                    className="form-radio text-primary"
-                                />
-                                <span className="ltr:ml-2 rtl:mr-2">Private Customer</span>
-                            </label>
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="customer_type"
-                                    value="business"
-                                    checked={form.customer_type === 'business'}
-                                    onChange={handleInputChange}
-                                    className="form-radio text-primary"
-                                />
-                                <span className="ltr:ml-2 rtl:mr-2">Business Customer</span>
-                            </label>
-                        </div>
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold">{t('add_new_booking') || 'Add New Booking'}</h1>
+                    <p className="text-gray-500">{t('create_booking_description') || 'Create a new booking for your service'}</p>
+                </div>
+
+                <div className="panel">
+                    <div className="mb-5">
+                        <h5 className="text-lg font-semibold dark:text-white-light">{t('booking_information') || 'Booking Information'}</h5>
                     </div>
 
-                    {/* Select Existing Customer */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            Select Existing Customer (Optional)
-                        </label>
-                        <CustomerSelect
-                            selectedCustomer={selectedCustomer}
-                            onCustomerSelect={(customer) => {
-                                setSelectedCustomer(customer);
-                                if (customer) {
-                                    setForm(prev => ({
-                                        ...prev,
-                                        customer_id: customer.id,
-                                        customer_name: customer.name,
-                                        customer_phone: customer.phone,
-                                        customer_email: (customer as any).email || '',
-                                    }));
-                                } else {
-                                    setForm(prev => ({
-                                        ...prev,
-                                        customer_id: '',
-                                        customer_name: '',
-                                        customer_phone: '',
-                                        customer_email: '',
-                                    }));
-                                }
-                            }}
-                            onCreateNew={() => {
-                                router.push('/customers/add');
-                            }}
-                            className="form-select"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Customer Name */}
-                        <div>
-                            <label htmlFor="customer_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Customer Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="customer_name"
-                                name="customer_name"
-                                value={form.customer_name}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter customer name"
-                                required
-                            />
-                        </div>
-
-                        {/* Phone */}
-                        <div>
-                            <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Phone <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="tel"
-                                id="customer_phone"
-                                name="customer_phone"
-                                value={form.customer_phone}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter phone number"
-                                required
-                            />
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                            <label htmlFor="customer_email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Email (Optional)
-                            </label>
-                            <input
-                                type="email"
-                                id="customer_email"
-                                name="customer_email"
-                                value={form.customer_email}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter email"
-                            />
-                        </div>
-
-                        {/* Service Address */}
-                        <div>
-                            <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Service Address <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="service_address"
-                                name="service_address"
-                                value={form.service_address}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter service address"
-                                required
-                            />
-                        </div>
-
-                        {/* Date */}
-                        <div>
-                            <label htmlFor="scheduled_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Date <span className="text-red-500">*</span>
-                            </label>
-                            <input type="date" id="scheduled_date" name="scheduled_date" value={form.scheduled_date} onChange={handleInputChange} className="form-input" required />
-                        </div>
-
-                        {/* Time */}
-                        <div>
-                            <label htmlFor="scheduled_time" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Time <span className="text-red-500">*</span>
-                            </label>
-                            <input type="time" id="scheduled_time" name="scheduled_time" value={form.scheduled_time} onChange={handleInputChange} className="form-input" required />
-                        </div>
-
-                        {/* Service Type */}
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Customer Type */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Service Type <span className="text-red-500">*</span>
+                                Customer Type <span className="text-red-500">*</span>
                             </label>
-                            <ServiceSelect
-                                selectedService={selectedService}
-                                onServiceSelect={(service) => {
-                                    setSelectedService(service);
-                                    if (service) {
-                                        setForm(prev => ({
+                            <div className="flex gap-4">
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="customer_type"
+                                        value="private"
+                                        checked={form.customer_type === 'private'}
+                                        onChange={handleInputChange}
+                                        className="form-radio text-primary"
+                                    />
+                                    <span className="ltr:ml-2 rtl:mr-2">Private Customer</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="customer_type"
+                                        value="business"
+                                        checked={form.customer_type === 'business'}
+                                        onChange={handleInputChange}
+                                        className="form-radio text-primary"
+                                    />
+                                    <span className="ltr:ml-2 rtl:mr-2">Business Customer</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Select Existing Customer */}
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Select Existing Customer (Optional)</label>
+                            <CustomerSelect
+                                selectedCustomer={selectedCustomer}
+                                onCustomerSelect={(customer) => {
+                                    setSelectedCustomer(customer);
+                                    if (customer) {
+                                        setForm((prev) => ({
                                             ...prev,
-                                            service_type: service.id,
-                                            price: (form.customer_type === 'private' ? service.price_private : service.price_business).toString()
+                                            customer_id: customer.id,
+                                            customer_name: customer.name,
+                                            customer_phone: customer.phone,
+                                            customer_email: (customer as any).email || '',
                                         }));
                                     } else {
-                                        setForm(prev => ({ ...prev, service_type: '', price: '' }));
+                                        setForm((prev) => ({
+                                            ...prev,
+                                            customer_id: '',
+                                            customer_name: '',
+                                            customer_phone: '',
+                                            customer_email: '',
+                                        }));
                                     }
                                 }}
-                                onCreateNew={() => router.push('/services/add')}
-                                customerType={form.customer_type}
+                                onCreateNew={() => {
+                                    router.push('/customers/add');
+                                }}
                                 className="form-select"
                             />
                         </div>
 
-                        {/* Price */}
-                        <div>
-                            <label htmlFor="price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Price ($) <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="number"
-                                id="price"
-                                name="price"
-                                value={form.price}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="0"
-                                required
-                            />
-                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {/* Customer Name */}
+                            <div>
+                                <label htmlFor="customer_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Customer Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="customer_name"
+                                    name="customer_name"
+                                    value={form.customer_name}
+                                    onChange={handleInputChange}
+                                    className="form-input"
+                                    placeholder="Enter customer name"
+                                    required
+                                />
+                            </div>
 
-                        {/* Profit - Admin Only */}
-                        <div>
-                            <label htmlFor="profit" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Profit ($) - Admin Only
-                            </label>
-                            <input
-                                type="number"
-                                id="profit"
-                                name="profit"
-                                value={form.profit}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="0"
-                            />
-                        </div>
+                            {/* Phone */}
+                            <div>
+                                <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Phone <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="tel"
+                                    id="customer_phone"
+                                    name="customer_phone"
+                                    value={form.customer_phone}
+                                    onChange={handleInputChange}
+                                    className="form-input"
+                                    placeholder="Enter phone number"
+                                    required
+                                />
+                            </div>
 
-                        {/* Assign Truck */}
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Assign Truck (Optional)
-                            </label>
-                            <TruckSelect
-                                selectedTruck={selectedTruck as any}
-                                onTruckSelect={(truck) => {
-                                    setSelectedTruck(truck as any);
-                                    if (truck) {
-                                        setForm(prev => ({
-                                            ...prev,
-                                            truck_id: truck.id,
-                                            driver_id: truck.driver_id || prev.driver_id
-                                        }));
-                                        // Auto-select driver if truck has one assigned
-                                        if (truck.driver_id) {
-                                            const driver = drivers.find(d => d.id === truck.driver_id);
-                                            if (driver) {
-                                                setSelectedDriver(driver as any);
-                                            }
+                            {/* Email */}
+                            <div>
+                                <label htmlFor="customer_email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Email (Optional)
+                                </label>
+                                <input
+                                    type="email"
+                                    id="customer_email"
+                                    name="customer_email"
+                                    value={form.customer_email}
+                                    onChange={handleInputChange}
+                                    className="form-input"
+                                    placeholder="Enter email"
+                                />
+                            </div>
+
+                            {/* Service Address */}
+                            <div>
+                                <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Service Address <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="service_address"
+                                    name="service_address"
+                                    value={form.service_address}
+                                    onChange={handleInputChange}
+                                    className="form-input"
+                                    placeholder="Enter service address"
+                                    required
+                                />
+                            </div>
+
+                            {/* Date */}
+                            <div>
+                                <label htmlFor="scheduled_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Date <span className="text-red-500">*</span>
+                                </label>
+                                <input type="date" id="scheduled_date" name="scheduled_date" value={form.scheduled_date} onChange={handleInputChange} className="form-input" required />
+                            </div>
+
+                            {/* Time */}
+                            <div>
+                                <label htmlFor="scheduled_time" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Time <span className="text-red-500">*</span>
+                                </label>
+                                <input type="time" id="scheduled_time" name="scheduled_time" value={form.scheduled_time} onChange={handleInputChange} className="form-input" required />
+                            </div>
+
+                            {/* Service Type */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Service Type <span className="text-red-500">*</span>
+                                </label>
+                                <ServiceSelect
+                                    selectedService={selectedService}
+                                    onServiceSelect={(service) => {
+                                        setSelectedService(service);
+                                        if (service) {
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                service_type: service.id,
+                                                price: (form.customer_type === 'private' ? service.price_private : service.price_business).toString(),
+                                            }));
+                                        } else {
+                                            setForm((prev) => ({ ...prev, service_type: '', price: '' }));
                                         }
-                                    } else {
-                                        setForm(prev => ({ ...prev, truck_id: '' }));
-                                    }
-                                }}
-                                onCreateNew={() => router.push('/fleet/add')}
-                                className="form-select"
-                            />
+                                    }}
+                                    onCreateNew={() => router.push('/services/add')}
+                                    customerType={form.customer_type}
+                                    className="form-select"
+                                />
+                            </div>
+
+                            {/* Price */}
+                            <div>
+                                <label htmlFor="price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Price ($) <span className="text-red-500">*</span>
+                                </label>
+                                <input type="number" id="price" name="price" value={form.price} onChange={handleInputChange} className="form-input" placeholder="0" required />
+                            </div>
+
+                            {/* Profit - Admin Only */}
+                            <div>
+                                <label htmlFor="profit" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Profit ($) - Admin Only
+                                </label>
+                                <input type="number" id="profit" name="profit" value={form.profit} onChange={handleInputChange} className="form-input" placeholder="0" />
+                            </div>
+
+                            {/* Assign Truck */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assign Truck (Optional)</label>
+                                <TruckSelect
+                                    selectedTruck={selectedTruck as any}
+                                    onTruckSelect={(truck) => {
+                                        setSelectedTruck(truck as any);
+                                        if (truck) {
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                truck_id: truck.id,
+                                                driver_id: truck.driver_id || prev.driver_id,
+                                            }));
+                                            // Auto-select driver if truck has one assigned
+                                            if (truck.driver_id) {
+                                                const driver = drivers.find((d) => d.id === truck.driver_id);
+                                                if (driver) {
+                                                    setSelectedDriver(driver as any);
+                                                }
+                                            }
+                                        } else {
+                                            setForm((prev) => ({ ...prev, truck_id: '' }));
+                                        }
+                                    }}
+                                    onCreateNew={() => router.push('/fleet/add')}
+                                    className="form-select"
+                                />
+                            </div>
+
+                            {/* Assign Driver */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assign Driver (Optional)</label>
+                                <DriverSelect
+                                    selectedDriver={selectedDriver}
+                                    onDriverSelect={(driver) => {
+                                        setSelectedDriver(driver);
+                                        if (driver) {
+                                            setForm((prev) => ({ ...prev, driver_id: driver.id }));
+                                        } else {
+                                            setForm((prev) => ({ ...prev, driver_id: '' }));
+                                        }
+                                    }}
+                                    onCreateNew={() => router.push('/drivers/add')}
+                                    className="form-select"
+                                />
+                            </div>
+
+                            {/* Contractor (Optional) */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor (Optional)</label>
+                                <ContractorSelect
+                                    selectedContractor={selectedContractor as any}
+                                    onContractorSelect={(c) => {
+                                        setSelectedContractor(c as any);
+                                        if (c) setForm((prev) => ({ ...prev, contractor_id: c.id }) as any);
+                                        else setForm((prev) => ({ ...prev, contractor_id: '' }) as any);
+                                    }}
+                                    onCreateNew={() => router.push('/contractors/add')}
+                                    className="form-select"
+                                />
+                            </div>
                         </div>
 
-                        {/* Assign Driver */}
+                        {/* Notes */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Assign Driver (Optional)
+                            <label htmlFor="notes" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                Notes (Optional)
                             </label>
-                            <DriverSelect
-                                selectedDriver={selectedDriver}
-                                onDriverSelect={(driver) => {
-                                    setSelectedDriver(driver);
-                                    if (driver) {
-                                        setForm(prev => ({ ...prev, driver_id: driver.id }));
-                                    } else {
-                                        setForm(prev => ({ ...prev, driver_id: '' }));
-                                    }
-                                }}
-                                onCreateNew={() => router.push('/drivers/add')}
-                                className="form-select"
-                            />
+                            <textarea id="notes" name="notes" value={form.notes} onChange={handleInputChange} className="form-textarea" placeholder="Enter any additional notes..." rows={4} />
                         </div>
-                    </div>
 
-                    {/* Notes */}
-                    <div>
-                        <label htmlFor="notes" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            Notes (Optional)
-                        </label>
-                        <textarea
-                            id="notes"
-                            name="notes"
-                            value={form.notes}
-                            onChange={handleInputChange}
-                            className="form-textarea"
-                            placeholder="Enter any additional notes..."
-                            rows={4}
-                        />
-                    </div>
-
-                    {/* Submit Button */}
-                    <div className="flex justify-end gap-4 mt-8">
-                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                            {t('cancel')}
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? t('creating') || 'Creating...' : t('create_booking') || 'Create Booking'}
-                        </button>
-                    </div>
-                </form>
+                        {/* Submit Button */}
+                        <div className="flex justify-end gap-4 mt-8">
+                            <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                {t('cancel')}
+                            </button>
+                            <button type="submit" className="btn btn-primary" disabled={saving}>
+                                {saving ? t('creating') || 'Creating...' : t('create_booking') || 'Create Booking'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-        </div>
         </>
     );
 };

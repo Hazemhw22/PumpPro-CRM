@@ -1,9 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
-import IconArrowLeft from '@/components/icon/icon-arrow-left';
+import { getTranslation } from '@/i18n';
+import IconDollarSign from '@/components/icon/icon-dollar-sign';
+import IconDownload from '@/components/icon/icon-download';
 import IconPrinter from '@/components/icon/icon-printer';
+import { generateBillPDF, BillData } from '@/utils/pdf-generator';
+import { BillPayment } from '@/types/payment';
 
 interface Invoice {
     id: string;
@@ -17,6 +23,42 @@ interface Invoice {
     due_date: string;
     created_at: string;
     updated_at: string;
+    // Extended fields (from migration)
+    invoice_type?: string;
+    invoice_direction?: string;
+    invoice_date?: string;
+    customer_name?: string;
+    customer_phone?: string;
+    service_name?: string;
+    service_description?: string;
+    tax_amount?: number;
+    subtotal_amount?: number;
+    notes?: string;
+    commission?: number;
+    bill_description?: string;
+    tranzila_document_id?: string;
+    tranzila_document_number?: string;
+    tranzila_retrieval_key?: string;
+    tranzila_created_at?: string;
+}
+
+interface Booking {
+    id: string;
+    booking_number: string;
+    service_type: string;
+    service_address: string;
+    scheduled_date: string;
+    customer_name: string;
+    customer_phone: string;
+    customer_email?: string;
+}
+
+interface Service {
+    id: string;
+    name: string;
+    description?: string;
+    price_private?: number;
+    price_business?: number;
 }
 
 interface Customer {
@@ -29,94 +71,176 @@ interface Customer {
     type: string;
 }
 
-interface Booking {
-    id: string;
-    booking_number: string;
-    service_type: string;
-    service_address: string;
-    scheduled_date: string;
-}
-
-interface Service {
-    id: string;
-    name: string;
-    description?: string;
-}
+// Helper function to convert Invoice to BillData format for PDF generation
+const convertInvoiceToBillData = (invoice: Invoice, booking?: Booking | null, service?: Service | null): BillData => {
+    return {
+        id: invoice.id,
+        bill_type: invoice.invoice_type || 'tax_invoice',
+        customer_name: invoice.customer_name || booking?.customer_name || 'Customer',
+        customer_phone: invoice.customer_phone || booking?.customer_phone || '',
+        created_at: invoice.invoice_date || invoice.created_at,
+        bill_amount: invoice.subtotal_amount || invoice.total_amount,
+        bill_description: invoice.service_name || service?.name || invoice.bill_description || '',
+        total: invoice.subtotal_amount || invoice.total_amount,
+        tax_amount: invoice.tax_amount || 0,
+        total_with_tax: invoice.total_amount,
+        commission: invoice.commission || null,
+        car_details: invoice.service_name || service?.name || '',
+        payment_type: null,
+        cash_amount: null,
+        visa_amount: null,
+        bank_amount: null,
+        check_amount: null,
+    };
+};
 
 const InvoicePreview = () => {
-    const params = useParams();
+    const { t } = getTranslation();
     const router = useRouter();
+    const params = useParams();
+    const invoiceId = params?.id as string;
+    const [loading, setLoading] = useState(true);
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [booking, setBooking] = useState<Booking | null>(null);
     const [service, setService] = useState<Service | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [payments, setPayments] = useState<BillPayment[]>([]);
+    const [downloadingPDF, setDownloadingPDF] = useState(false);
 
     useEffect(() => {
-        const fetchInvoiceData = async () => {
-            try {
-                // Fetch invoice
-                // @ts-ignore
-                const { data: invoiceData, error: invoiceError } = await supabase
-                    .from('invoices')
+        fetchInvoice();
+    }, [invoiceId]);
+
+    const fetchInvoice = async () => {
+        try {
+            // Fetch invoice with extended fields
+            const { data: invoiceData, error: invoiceError } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('id', invoiceId)
+                .single();
+
+            if (invoiceError) throw invoiceError;
+            const invoiceRecord = invoiceData as any;
+            setInvoice(invoiceRecord);
+
+            // Fetch customer
+            if (invoiceRecord?.customer_id) {
+                const { data: customerData } = await supabase
+                    .from('customers')
                     .select('*')
-                    .eq('id', params?.id)
+                    .eq('id', invoiceRecord.customer_id)
                     .single();
+                
+                if (customerData) setCustomer(customerData as any);
+            }
 
-                if (invoiceError) throw invoiceError;
-                setInvoice(invoiceData as any);
+            // Fetch booking
+            if (invoiceRecord?.booking_id) {
+                const { data: bookingData } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .eq('id', invoiceRecord.booking_id)
+                    .single();
+                
+                if (bookingData) {
+                    const bookingRecord = bookingData as any;
+                    setBooking(bookingRecord);
 
-                // Fetch customer
-                // @ts-ignore
-                if (invoiceData?.customer_id) {
-                    // @ts-ignore
-                    const { data: customerData } = await supabase
-                        .from('customers')
-                        .select('*')
-                        // @ts-ignore
-                        .eq('id', invoiceData.customer_id)
-                        .single();
-                    
-                    if (customerData) setCustomer(customerData as any);
-                }
-
-                // Fetch booking
-                // @ts-ignore
-                if (invoiceData?.booking_id) {
-                    // @ts-ignore
-                    const { data: bookingData } = await supabase
-                        .from('bookings')
-                        .select('*')
-                        // @ts-ignore
-                        .eq('id', invoiceData.booking_id)
-                        .single();
-                    
-                    if (bookingData) {
-                        setBooking(bookingData as any);
-
-                        // Fetch service
-                        // @ts-ignore
-                        const { data: serviceData } = await supabase
+                    // Fetch service - try by ID first, then by name
+                    const serviceType = bookingRecord.service_type;
+                    if (serviceType) {
+                        // Try to fetch by ID
+                        const { data: serviceById } = await supabase
                             .from('services')
                             .select('*')
-                            // @ts-ignore
-                            .eq('id', bookingData.service_type)
+                            .eq('id', serviceType)
                             .single();
                         
-                        if (serviceData) setService(serviceData as any);
+                        if (serviceById) {
+                            setService(serviceById as any);
+                        } else {
+                            // Try to fetch by name
+                            const { data: serviceByName } = await supabase
+                                .from('services')
+                                .select('*')
+                                .eq('name', serviceType)
+                                .eq('active', true)
+                                .single();
+                            
+                            if (serviceByName) {
+                                setService(serviceByName as any);
+                            }
+                        }
                     }
                 }
-            } catch (error) {
-                console.error('Error fetching invoice:', error);
-            } finally {
-                setLoading(false);
             }
-        };
 
-        if (params?.id) {
-            fetchInvoiceData();
+            // Fetch payments
+            const { data: paymentsData } = await supabase
+                .from('payments')
+                .select('*')
+                .eq('invoice_id', invoiceId)
+                .order('created_at', { ascending: false });
+            
+            if (paymentsData) {
+                setPayments(paymentsData as any);
+            }
+
+            console.log('Fetched invoice:', invoiceRecord);
+        } catch (error) {
+            console.error('Error fetching invoice:', error);
+        } finally {
+            setLoading(false);
         }
-    }, [params?.id]);
+    };
+
+    const getInvoiceTypeLabel = (type?: string) => {
+        if (!type) return t('invoice') || 'Invoice';
+        switch (type) {
+            case 'tax_invoice':
+                return t('tax_invoice_only') || 'Tax Invoice Only';
+            case 'receipt_only':
+                return t('receipt_only') || 'Receipt Only';
+            case 'general':
+                return t('general_bill') || 'General Bill';
+            default:
+                return type;
+        }
+    };
+
+    const handleDownloadPDF = async () => {
+        if (!invoice) return;
+
+        setDownloadingPDF(true);
+        try {
+            // Check if invoice has Tranzila retrieval key
+            const tranzilaRetrievalKey = invoice.tranzila_retrieval_key;
+
+            if (tranzilaRetrievalKey) {
+                // Open Tranzila PDF in new tab via our proxy API
+                const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+                window.open(proxyUrl, '_blank');
+            } else {
+                // Fallback to local PDF generation
+                // Get language from localStorage or default to Hebrew
+                const currentLang = typeof window !== 'undefined' 
+                    ? (localStorage.getItem('i18nextLng') || 'he')
+                    : 'he';
+                const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
+
+                await generateBillPDF(convertInvoiceToBillData(invoice, booking, service), {
+                    filename: `invoice-${invoice.id}-${(invoice.customer_name || booking?.customer_name || 'customer').replace(/\s+/g, '-').toLowerCase()}.pdf`,
+                    language,
+                });
+            }
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            // You might want to show an error notification here
+        } finally {
+            setDownloadingPDF(false);
+        }
+    };
 
     const handlePrint = () => {
         window.print();
@@ -124,7 +248,7 @@ const InvoicePreview = () => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex justify-center items-center min-h-screen">
                 <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
             </div>
         );
@@ -132,174 +256,405 @@ const InvoicePreview = () => {
 
     if (!invoice) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="container mx-auto p-6">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-4">Invoice Not Found</h2>
-                    <button onClick={() => router.back()} className="btn btn-primary">
-                        Go Back
-                    </button>
+                    <h1 className="text-2xl font-bold text-red-600">{t('invoice_not_found') || 'Invoice Not Found'}</h1>
+                    <Link href="/invoices" className="btn btn-primary mt-4">
+                        {t('back_to_invoices') || 'Back to Invoices'}
+                    </Link>
                 </div>
             </div>
         );
     }
 
+    const invoiceType = invoice.invoice_type || 'tax_invoice';
+    const serviceName = invoice.service_name || service?.name || booking?.service_type || '';
+    const servicePrice = invoice.subtotal_amount || invoice.total_amount;
+    const taxAmount = invoice.tax_amount || ((servicePrice || 0) * 0.18);
+    const totalWithTax = invoice.total_amount;
+
     return (
-        <div>
-            {/* Print Buttons - Hidden when printing */}
-            <div className="mb-5 flex items-center justify-between print:hidden">
-                <button onClick={() => router.back()} className="btn btn-outline-dark">
-                    <IconArrowLeft className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                    Back
-                </button>
-                <button onClick={handlePrint} className="btn btn-primary">
-                    <IconPrinter className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                    Print Invoice
-                </button>
+        <div className="container mx-auto p-6">
+            {/* Header - Hide when printing */}
+            <div className="print:hidden mb-6">
+                <div className="flex items-center gap-5 mb-6">
+                    <div onClick={() => router.back()}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </div>
+                    {/* Breadcrumb Navigation */}
+                    <ul className="flex space-x-2 rtl:space-x-reverse mb-4">
+                        <li>
+                            <Link href="/" className="text-primary hover:underline">
+                                {t('home') || 'Home'}
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <Link href="/invoices" className="text-primary hover:underline">
+                                {t('invoices') || 'Invoices'}
+                            </Link>
+                        </li>
+                        <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
+                            <span>{t('invoice_preview') || 'Invoice Preview'}</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold">{t('invoice_preview') || 'Invoice Preview'}</h1>
+                        <p className="text-gray-500">{t('view_invoice_details') || 'View invoice details'}</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={handlePrint} className="btn btn-outline-primary gap-2">
+                            <IconPrinter className="w-4 h-4" />
+                            {t('print') || 'Print'}
+                        </button>
+                        <button onClick={handleDownloadPDF} disabled={downloadingPDF} className="btn btn-outline-primary gap-2">
+                            <IconDownload className="w-4 h-4" />
+                            {downloadingPDF ? t('generating_pdf') || 'Generating PDF...' : t('download_pdf') || 'Download PDF'}
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Invoice Content */}
-            <div className="panel">
-                <div className="flex flex-wrap justify-between gap-4 px-4">
-                    <div className="text-2xl font-semibold uppercase">Invoice</div>
-                    <div className="shrink-0">
-                        <img src="/assets/images/logo.svg" alt="Logo" className="w-14 ltr:ml-auto rtl:mr-auto" />
+            <div className="space-y-6">
+                {/* Invoice Header */}
+                <div className="panel">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-primary mb-4">{t('invoice_information') || 'Invoice Information'}</h2>
+                            <div className="space-y-3">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('invoice_number') || 'Invoice Number'}:</span>
+                                    <span className="font-medium">#{invoice.invoice_number}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('invoice_type') || 'Invoice Type'}:</span>
+                                    <span className="badge badge-outline-info">{getInvoiceTypeLabel(invoiceType)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('status') || 'Status'}:</span>
+                                    <span className={`badge ${
+                                        invoice.status === 'paid' ? 'badge-outline-success' :
+                                        invoice.status === 'overdue' ? 'badge-outline-danger' :
+                                        'badge-outline-warning'
+                                    }`}>
+                                        {invoice.status?.toUpperCase()}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('created_at') || 'Created At'}:</span>
+                                    <span className="font-medium">
+                                        {new Date(invoice.invoice_date || invoice.created_at).toLocaleDateString('en-GB', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                        })}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('due_date') || 'Due Date'}:</span>
+                                    <span className="font-medium">
+                                        {new Date(invoice.due_date).toLocaleDateString('en-GB', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                        })}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h2 className="text-xl font-bold text-primary mb-4">{t('associated_booking') || 'Associated Booking'}</h2>
+                            <div className="space-y-3">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('booking_number') || 'Booking Number'}:</span>
+                                    <span className="font-medium">{booking?.booking_number || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('customer') || 'Customer'}:</span>
+                                    <span className="font-medium">{invoice.customer_name || booking?.customer_name || customer?.name || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('service') || 'Service'}:</span>
+                                    <span className="font-medium">{serviceName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('service_address') || 'Service Address'}:</span>
+                                    <span className="font-medium">{booking?.service_address || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">{t('scheduled_date') || 'Scheduled Date'}:</span>
+                                    <span className="font-medium">
+                                        {booking?.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <hr className="my-6 border-[#e0e6ed] dark:border-[#1b2e4b]" />
-
-                <div className="flex flex-col lg:flex-row justify-between gap-6 flex-wrap">
-                    {/* Company Info */}
-                    <div className="flex-1">
-                        <div className="space-y-1 text-white-dark">
-                            <div className="text-lg font-semibold text-black dark:text-white">PumpPro CRM</div>
-                            <div>Water Tank Cleaning Services</div>
-                            <div>Phone: +962 123456789</div>
-                            <div>Email: info@pumppro.com</div>
+                {/* Tax Invoice Details Table - Show for tax_invoice type */}
+                {invoiceType === 'tax_invoice' && booking && (
+                    <div className="panel">
+                        <div className="mb-5 flex items-center gap-3">
+                            <IconDollarSign className="w-5 h-5 text-primary" />
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('tax_invoice_details') || 'Tax Invoice Details'}</h5>
                         </div>
-                    </div>
+                        <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                            {/* Table Header */}
+                            <div className="grid grid-cols-4 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('item') || 'Item'}</div>
+                                <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('price') || 'Price'}</div>
+                                <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('quantity') || 'Quantity'}</div>
+                                <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('total') || 'Total'}</div>
+                            </div>
 
-                    {/* Customer Info */}
-                    <div className="flex-1">
-                        <div className="text-lg font-semibold text-black dark:text-white mb-2">Bill To:</div>
-                        <div className="space-y-1 text-white-dark">
-                            <div className="font-semibold text-black dark:text-white">
-                                {customer?.type === 'business' ? customer?.business_name : customer?.name}
+                            {/* Row 1: Service Details */}
+                            <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                    <div className="font-medium">{t('service') || 'Service'}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {serviceName}
+                                        {booking.service_address && ` - ${booking.service_address}`}
+                                        {booking.booking_number && ` - #${booking.booking_number}`}
+                                    </div>
+                                    {(invoice.service_description || service?.description) && (
+                                        <div className="text-xs text-gray-400 mt-1">
+                                            {invoice.service_description || service?.description}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-center">-</div>
+                                <div className="text-center">-</div>
+                                <div className="text-center">-</div>
                             </div>
-                            {customer?.address && <div>{customer.address}</div>}
-                            <div>Phone: {customer?.phone}</div>
-                            {customer?.email && <div>Email: {customer.email}</div>}
-                        </div>
-                    </div>
 
-                    {/* Invoice Details */}
-                    <div className="flex-1">
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <div className="font-semibold text-black dark:text-white">Invoice Number:</div>
-                                <div className="text-primary">#{invoice.invoice_number}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="font-semibold text-black dark:text-white">Issue Date:</div>
-                                <div>{new Date(invoice.created_at).toLocaleDateString('en-GB')}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="font-semibold text-black dark:text-white">Due Date:</div>
-                                <div>{new Date(invoice.due_date).toLocaleDateString('en-GB')}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="font-semibold text-black dark:text-white">Status:</div>
-                                <span className={`badge ${
-                                    invoice.status === 'paid' ? 'badge-outline-success' :
-                                    invoice.status === 'overdue' ? 'badge-outline-danger' :
-                                    'badge-outline-warning'
-                                }`}>
-                                    {invoice.status?.toUpperCase()}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <hr className="my-6 border-[#e0e6ed] dark:border-[#1b2e4b]" />
-
-                {/* Service Details */}
-                {booking && (
-                    <div className="mb-6">
-                        <div className="text-lg font-semibold text-black dark:text-white mb-3">Service Details:</div>
-                        <div className="space-y-2 text-white-dark">
-                            <div className="flex gap-2">
-                                <span className="font-semibold">Booking Number:</span>
-                                <span>{booking.booking_number}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="font-semibold">Service:</span>
-                                <span>{service?.name || booking.service_type}</span>
-                            </div>
-                            {service?.description && (
-                                <div className="flex gap-2">
-                                    <span className="font-semibold">Description:</span>
-                                    <span>{service.description}</span>
+                            {/* Row 2: Service Price */}
+                            {servicePrice && (
+                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('service_price') || 'Service Price'}</div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
+                                    </div>
                                 </div>
                             )}
-                            <div className="flex gap-2">
-                                <span className="font-semibold">Service Address:</span>
-                                <span>{booking.service_address}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="font-semibold">Service Date:</span>
-                                <span>{new Date(booking.scheduled_date).toLocaleDateString('en-GB')}</span>
-                            </div>
+
+                            {/* Separator */}
+                            <div className="border-t border-gray-300 dark:border-gray-600 my-4"></div>
+
+                            {/* Tax Calculations */}
+                            {servicePrice && (
+                                <div className="space-y-3">
+                                    {/* Price Before Tax */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax') || 'Price Before Tax'}:</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
+                                    </div>
+
+                                    {/* Tax - calculated as 18% of the price before tax */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('tax') || 'Tax'} 18%:</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{taxAmount.toFixed(2)}</span>
+                                    </div>
+
+                                    {/* Total Including Tax */}
+                                    <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                                        <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax') || 'Total Including Tax'}:</span>
+                                        <span className="text-lg font-bold text-primary">₪{totalWithTax.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
-                {/* Invoice Items Table */}
-                <div className="table-responsive">
-                    <table className="table-striped">
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th className="text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>{service?.name || 'Water Tank Cleaning Service'}</td>
-                                <td className="text-right">${invoice.total_amount?.toFixed(2)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                {/* Receipt Details - Multiple Payments - Show for receipt_only type */}
+                {(invoiceType === 'receipt_only' || payments.length > 0) && (
+                    <div className="panel">
+                        <div className="mb-5 flex items-center gap-3">
+                            <IconDollarSign className="w-5 h-5 text-primary" />
+                            <h2 className="text-xl font-bold text-primary">{t('receipt_details') || 'Receipt Details'}</h2>
+                        </div>
 
-                <hr className="my-6 border-[#e0e6ed] dark:border-[#1b2e4b]" />
+                        {/* Display multiple payments if they exist */}
+                        {payments.length > 0 ? (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                                    {t('payments') || 'Payments'} ({payments.length})
+                                </h3>
+                                {payments.map((payment, index) => (
+                                    <div key={payment.id || index} className="p-4 rounded-lg border">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h4 className="font-medium text-gray-900 dark:text-white">
+                                                {t('payment') || 'Payment'} #{index + 1} - {t(payment.payment_type) || payment.payment_type}
+                                            </h4>
+                                            <span className="font-bold text-lg text-primary">₪{new Intl.NumberFormat('he-IL').format(payment.amount || 0)}</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {payment.payment_type === 'visa' && (
+                                                <>
+                                                    {payment.visa_installments && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('visa_installments') || 'Installments'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.visa_installments}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.visa_card_type && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('visa_card_type') || 'Card Type'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.visa_card_type}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.visa_last_four && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('visa_last_four') || 'Last 4 Digits'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.visa_last_four}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.approval_number && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('approval_number') || 'Approval Number'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.approval_number}</p>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
 
-                {/* Totals */}
-                <div className="grid sm:grid-cols-2 gap-6">
-                    <div></div>
+                                            {payment.payment_type === 'bank_transfer' && (
+                                                <>
+                                                    {payment.transfer_bank_name && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('bank_name') || 'Bank Name'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.transfer_bank_name}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.transfer_branch && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('bank_branch') || 'Branch'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.transfer_branch}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.transfer_account_number && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('account_number') || 'Account Number'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.transfer_account_number}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.transfer_number && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('transfer_number') || 'Transfer Number'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.transfer_number}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.transfer_holder_name && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('transfer_holder_name') || 'Holder Name'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.transfer_holder_name}</p>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {payment.payment_type === 'check' && (
+                                                <>
+                                                    {payment.check_number && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('check_number') || 'Check Number'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.check_number}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.check_bank_name && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('check_bank_name') || 'Bank Name'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.check_bank_name}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.check_holder_name && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('check_holder_name') || 'Holder Name'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.check_holder_name}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.check_branch && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('check_branch') || 'Branch'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.check_branch}</p>
+                                                        </div>
+                                                    )}
+                                                    {payment.check_account_number && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('check_account_number') || 'Account Number'}</label>
+                                                            <p className="text-sm text-gray-900 dark:text-white">{payment.check_account_number}</p>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {payment.payment_type === 'cash' && (
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('payment_type') || 'Payment Type'}</label>
+                                                    <p className="text-sm text-gray-900 dark:text-white">{t('cash') || 'Cash'}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Total Payments Summary */}
+                                <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-medium text-gray-900 dark:text-white">{t('total_payments') || 'Total Payments'}</span>
+                                        <span className="font-bold text-lg text-primary">
+                                            ₪{new Intl.NumberFormat('he-IL').format(payments.reduce((sum, payment) => sum + (payment.amount || 0), 0))}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-4 text-gray-500">
+                                <p>{t('no_payments_found') || 'No payments found'}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Invoice Summary */}
+                <div className="panel">
+                    <h2 className="text-xl font-bold text-primary mb-4">{t('invoice_summary') || 'Invoice Summary'}</h2>
                     <div className="space-y-3">
                         <div className="flex justify-between items-center text-lg font-semibold">
-                            <div>Total Amount:</div>
-                            <div>${invoice.total_amount?.toFixed(2)}</div>
+                            <div>{t('total_amount') || 'Total Amount'}:</div>
+                            <div>₪{invoice.total_amount?.toFixed(2)}</div>
                         </div>
                         <div className="flex justify-between items-center text-success">
-                            <div>Paid Amount:</div>
-                            <div>${invoice.paid_amount?.toFixed(2)}</div>
+                            <div>{t('paid_amount') || 'Paid Amount'}:</div>
+                            <div>₪{invoice.paid_amount?.toFixed(2)}</div>
                         </div>
                         <div className="flex justify-between items-center text-danger font-bold text-xl">
-                            <div>Remaining Balance:</div>
-                            <div>${invoice.remaining_amount?.toFixed(2)}</div>
+                            <div>{t('remaining_balance') || 'Remaining Balance'}:</div>
+                            <div>₪{invoice.remaining_amount?.toFixed(2)}</div>
                         </div>
                     </div>
                 </div>
 
-                <hr className="my-6 border-[#e0e6ed] dark:border-[#1b2e4b]" />
-
-                {/* Footer */}
-                <div className="text-center text-sm text-white-dark">
-                    <p>Thank you for your business!</p>
-                    <p className="mt-2">For any questions, please contact us at info@pumppro.com</p>
-                </div>
+                {/* Notes Section */}
+                {invoice.notes && (
+                    <div className="panel">
+                        <h2 className="text-xl font-bold text-primary mb-4">{t('notes') || 'Notes'}</h2>
+                        <p className="text-gray-700 dark:text-gray-300">{invoice.notes}</p>
+                    </div>
+                )}
             </div>
         </div>
     );
