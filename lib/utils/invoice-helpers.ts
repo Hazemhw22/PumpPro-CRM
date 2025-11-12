@@ -24,7 +24,8 @@ interface Deal {
 export const getCustomerIdFromDeal = (deal: Deal | null): string | null => {
     if (!deal) return null;
 
-    let customerId: number | string | undefined = null;
+    // allow null initial value
+    let customerId: number | string | null | undefined = null;
 
     if (deal.deal_type === 'intermediary') {
         // For intermediary deals, prefer seller, then buyer
@@ -45,20 +46,11 @@ export const getCustomerIdFromDeal = (deal: Deal | null): string | null => {
 export const getCustomerIdByName = async (customerName: string): Promise<string | null> => {
     try {
         // Search by name (case-insensitive, partial match)
-        const { data, error } = await supabase
-            .from('customers')
-            .select('id')
-            .ilike('name', `%${customerName}%`)
-            .limit(1)
-            .single();
+        const { data, error } = await (supabase as any).from('customers').select('id').ilike('name', `%${customerName}%`).limit(1).single();
 
         if (error) {
             // If single() fails, try with maybeSingle() and get first result
-            const { data: dataArray, error: arrayError } = await supabase
-                .from('customers')
-                .select('id')
-                .ilike('name', `%${customerName}%`)
-                .limit(1);
+            const { data: dataArray, error: arrayError } = await (supabase as any).from('customers').select('id').ilike('name', `%${customerName}%`).limit(1);
 
             if (arrayError || !dataArray || dataArray.length === 0) {
                 console.error('Error fetching customer by name:', arrayError);
@@ -68,7 +60,7 @@ export const getCustomerIdByName = async (customerName: string): Promise<string 
             return String(dataArray[0].id);
         }
 
-        return data?.id ? String(data.id) : null;
+        return (data as any)?.id ? String((data as any).id) : null;
     } catch (error) {
         console.error('Error in getCustomerIdByName:', error);
         return null;
@@ -95,21 +87,10 @@ export const logActivity = async (data: { type: string; invoice?: any; [key: str
 /**
  * Handle receipt created and update customer balance
  */
-export const handleReceiptCreated = async (
-    invoiceId: number | string,
-    customerId: string,
-    billData: any,
-    customerName: string,
-    dealSellingPrice: number = 0,
-    payments?: any[]
-): Promise<boolean> => {
+export const handleReceiptCreated = async (invoiceId: number | string, customerId: string, billData: any, customerName: string, dealSellingPrice: number = 0, payments?: any[]): Promise<boolean> => {
     try {
         // Get current customer balance
-        const { data: customer, error: customerError } = await supabase
-            .from('customers')
-            .select('balance, id')
-            .eq('id', customerId)
-            .single();
+        const { data: customer, error: customerError } = await (supabase as any).from('customers').select('balance, id').eq('id', customerId).single();
 
         if (customerError || !customer) {
             console.error('Error fetching customer:', customerError);
@@ -131,7 +112,7 @@ export const handleReceiptCreated = async (
             // For receipts, calculate from payments
             if (payments && payments.length > 0) {
                 const totalPaid = payments.reduce((sum, payment) => sum + (parseFloat(payment.amount?.toString() || '0') || 0), 0);
-                
+
                 if (billData.bill_direction === 'positive') {
                     // Positive receipt: payment received (reduces customer debt or adds credit)
                     balanceChange = totalPaid;
@@ -151,23 +132,20 @@ export const handleReceiptCreated = async (
         }
 
         // Update customer balance
-        const newBalance = (customer.balance || 0) + balanceChange;
+        const c: any = customer;
+        const newBalance = (c.balance || 0) + balanceChange;
 
-        const { error: updateError } = await supabase
-            .from('customers')
-            .update({ balance: newBalance })
-            .eq('id', customerId);
+        const { error: updateError } = await (supabase as any).from('customers').update({ balance: newBalance }).eq('id', customerId);
 
         if (updateError) {
             console.error('Error updating customer balance:', updateError);
             return false;
         }
 
-        console.log(`Customer ${customerName} balance updated: ${customer.balance} -> ${newBalance} (change: ${balanceChange > 0 ? '+' : ''}${balanceChange})`);
+        console.log(`Customer ${customerName} balance updated: ${c.balance} -> ${newBalance} (change: ${balanceChange > 0 ? '+' : ''}${balanceChange})`);
         return true;
     } catch (error) {
         console.error('Error in handleReceiptCreated:', error);
         return false;
     }
 };
-
