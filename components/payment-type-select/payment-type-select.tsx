@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconBank from '@/components/icon/icon-bank';
-import IconTransfer from '@/components/icon/icon-transfer';
 import IconCheck from '@/components/icon/icon-check';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import { getTranslation } from '@/i18n';
