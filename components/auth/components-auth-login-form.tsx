@@ -76,11 +76,11 @@ const ComponentsAuthLoginForm = () => {
                         .eq('id', userId)
                         .maybeSingle();
                     if (profile?.role === 'contractor') {
-                        router.replace('/contractor');
+                        router.replace('/dashboard');
                         return;
                     }
                     if (profile?.role === 'driver') {
-                        router.replace('/driver');
+                        router.replace('/dashboard');
                         return;
                     }
 
