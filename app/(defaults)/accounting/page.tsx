@@ -58,6 +58,7 @@ interface Service {
 const AccountingPage = () => {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [role, setRole] = useState<string | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
@@ -85,17 +86,59 @@ const AccountingPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                // Determine role and contractor id
+                let r: string | null = null;
+                let contractorId: string | null = null;
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        r = (profile as any)?.role || null;
+                        setRole(r);
+                        if (r === 'contractor') {
+                            // @ts-ignore
+                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                            contractorId = (c as any)?.id || null;
+                            if (!contractorId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                contractorId = (c2 as any)?.id || null;
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Enforce: driver sees zeros; contractor without id sees zeros
+                if (r === 'driver') {
+                    setInvoices([] as any); setPayments([] as any); setBookings([] as any);
+                    setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
+                    setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
+                    setBookingStats({ totalBookings: 0 });
+                    setLoading(false);
+                    return;
+                }
+                if (r === 'contractor' && !contractorId) {
+                    setInvoices([] as any); setPayments([] as any); setBookings([] as any);
+                    setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
+                    setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
+                    setBookingStats({ totalBookings: 0 });
+                    setLoading(false);
+                    return;
+                }
+
                 // Fetch invoices with customer data
                 // @ts-ignore
-                const { data: invoicesData, error: invoicesError } = await supabase
+                let invoicesQuery: any = supabase
                     .from('invoices')
                     .select(`
                         *,
                         customers (
                             name
                         )
-                    `)
-                    .order('created_at', { ascending: false });
+                    `);
+                if (r === 'contractor') invoicesQuery = invoicesQuery.eq('contractor_id', contractorId);
+                const { data: invoicesData, error: invoicesError } = await invoicesQuery.order('created_at', { ascending: false });
 
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
@@ -116,17 +159,17 @@ const AccountingPage = () => {
 
                 // Fetch payments with invoice and customer data
                 // @ts-ignore
-                const { data: paymentsData, error: paymentsError } = await supabase
+                let paymentsQuery: any = supabase
                     .from('payments')
                     .select(`
                         *,
                         invoices (
-                            customers (
-                                name
-                            )
+                            customers ( name )
                         )
                     `)
                     .order('payment_date', { ascending: false });
+                if (r === 'contractor') paymentsQuery = paymentsQuery.eq('contractor_id', contractorId);
+                const { data: paymentsData, error: paymentsError } = await paymentsQuery;
 
                 if (!paymentsError && paymentsData) {
                     setPayments(paymentsData as any);
@@ -149,9 +192,11 @@ const AccountingPage = () => {
 
                 // Fetch bookings
                 // @ts-ignore
-                const { data: bookingsData, error: bookingsError } = await supabase
+                let bookingsQuery: any = supabase
                     .from('bookings')
                     .select('id, booking_number, service_type');
+                if (r === 'contractor') bookingsQuery = bookingsQuery.eq('contractor_id', contractorId);
+                const { data: bookingsData, error: bookingsError } = await bookingsQuery;
 
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);

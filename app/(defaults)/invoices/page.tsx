@@ -40,6 +40,7 @@ interface Service {
 
 const InvoicesPage = () => {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [role, setRole] = useState<string | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,22 +58,49 @@ const InvoicesPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch invoices with customer and booking data
-                // @ts-ignore
-                const { data: invoicesData, error: invoicesError } = await supabase
+                // Determine role and related ids
+                let r: string | null = null;
+                let contractorId: string | null = null;
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        r = (profile as any)?.role || null;
+                        setRole(r);
+                        if (r === 'contractor') {
+                            // @ts-ignore
+                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                            contractorId = (c as any)?.id || null;
+                            if (!contractorId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                contractorId = (c2 as any)?.id || null;
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Enforce role filtering strictly
+                if (r === 'contractor' && !contractorId) { setInvoices([] as any); setLoading(false); return; }
+
+                // Build invoices query
+                let invoicesQuery: any = supabase
                     .from('invoices')
-                    .select(
-                        `
+                    .select(`
                         *,
-                        customers (
-                            name
-                        ),
-                        bookings (
-                            service_type
-                        )
-                    `,
-                    )
-                    .order('created_at', { ascending: false });
+                        customers ( name ),
+                        bookings ( service_type, contractor_id )
+                    `);
+                if (r === 'contractor') invoicesQuery = invoicesQuery.eq('contractor_id', contractorId);
+
+                // Try by invoices.contractor_id
+                let { data: invoicesData, error: invoicesError } = await invoicesQuery.order('created_at', { ascending: false });
+
+                // Fallback: filter client-side by booking.contractor_id if invoices lack contractor_id
+                if (!invoicesError && invoicesData && r === 'contractor' && contractorId) {
+                    invoicesData = (invoicesData as any[]).filter((inv: any) => (inv as any).contractor_id === contractorId || (inv as any)?.bookings?.contractor_id === contractorId);
+                }
 
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
@@ -86,9 +114,14 @@ const InvoicesPage = () => {
                     setStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
                 }
 
-                // Fetch bookings
+                // Fetch bookings (for service name mapping)
                 // @ts-ignore
-                const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('id, booking_number, service_type');
+                let { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('id, booking_number, service_type, contractor_id');
+                if (r === 'contractor' && contractorId) {
+                    // @ts-ignore
+                    const res = await supabase.from('bookings').select('id, booking_number, service_type, contractor_id').eq('contractor_id', contractorId);
+                    bookingsData = res.data as any;
+                }
 
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);

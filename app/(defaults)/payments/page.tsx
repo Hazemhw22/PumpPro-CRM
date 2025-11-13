@@ -8,6 +8,7 @@ interface Payment {
     invoice_id: string;
     booking_id: string | null;
     customer_id: string | null;
+    contractor_id?: string | null;
     amount: number;
     payment_method: string;
     transaction_id: string | null;
@@ -55,9 +56,12 @@ interface Service {
 
 const PaymentsPage = () => {
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [role, setRole] = useState<string | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [services, setServices] = useState<Service[]>([]);
+    const [contractorsMap, setContractorsMap] = useState<Map<string, { id: string; name: string }>>(new Map());
+    const [customersMap, setCustomersMap] = useState<Map<string, { id: string; name: string }>>(new Map());
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [methodFilter, setMethodFilter] = useState<'all' | 'cash' | 'credit_card' | 'bank_transfer' | 'check'>('all');
@@ -75,9 +79,35 @@ const PaymentsPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch payments with invoice, customer and booking data
-                // @ts-ignore
-                const { data: paymentsData, error: paymentsError } = await supabase
+                // Determine role and contractor id
+                let r: string | null = null;
+                let contractorId: string | null = null;
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        r = (profile as any)?.role || null;
+                        setRole(r);
+                        if (r === 'contractor') {
+                            // @ts-ignore
+                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                            contractorId = (c as any)?.id || null;
+                            if (!contractorId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                contractorId = (c2 as any)?.id || null;
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Enforce: driver sees none; contractor must have id
+                if (r === 'driver') { setPayments([] as any); setStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0, remainingAmount: 0 }); setLoading(false); return; }
+                if (r === 'contractor' && !contractorId) { setPayments([] as any); setLoading(false); return; }
+
+                // Build payments query
+                let paymentsQuery: any = supabase
                     .from('payments')
                     .select(`
                         *,
@@ -86,15 +116,14 @@ const PaymentsPage = () => {
                             invoice_number,
                             booking_id,
                             remaining_amount,
-                            customers (
-                                name
-                            ),
-                            bookings (
-                                service_type
-                            )
+                            customers ( name ),
+                            bookings ( service_type )
                         )
                     `)
                     .order('payment_date', { ascending: false });
+                if (r === 'contractor') paymentsQuery = paymentsQuery.eq('contractor_id', contractorId);
+
+                const { data: paymentsData, error: paymentsError } = await paymentsQuery;
 
                 if (!paymentsError && paymentsData) {
                     setPayments(paymentsData as any);
@@ -113,6 +142,39 @@ const PaymentsPage = () => {
                         .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                     
                     setStats({ totalPayments, totalReceived, cash, creditCard, bankTransfer, remainingAmount: 0 });
+
+                    // Fetch contractors for payments that have contractor_id
+                    try {
+                        const contractorIds = Array.from(new Set((paymentsData as any[]).map(p => p.contractor_id).filter(Boolean)));
+                        if (contractorIds.length > 0) {
+                            // @ts-ignore
+                            const { data: consData } = await supabase
+                                .from('contractors')
+                                .select('id, name')
+                                .in('id', contractorIds);
+                            if (consData) {
+                                const map = new Map<string, { id: string; name: string }>((consData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name }]));
+                                setContractorsMap(map);
+                            }
+                        }
+                        // Fallback: fetch customers by direct customer_id if invoice relation missing
+                        const customerIds = Array.from(new Set((paymentsData as any[])
+                            .filter(p => p.customer_id)
+                            .map(p => p.customer_id)));
+                        if (customerIds.length > 0) {
+                            // @ts-ignore
+                            const { data: custData } = await supabase
+                                .from('customers')
+                                .select('id, name')
+                                .in('id', customerIds);
+                            if (custData) {
+                                const cmap = new Map<string, { id: string; name: string }>((custData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name }]));
+                                setCustomersMap(cmap);
+                            }
+                        }
+                    } catch (e) {
+                        // silent
+                    }
                 }
 
                 // Fetch invoices (for backward compatibility)
@@ -270,7 +332,7 @@ const PaymentsPage = () => {
                                     <thead>
                                         <tr>
                                             <th>Date</th>
-                                            <th>Customer</th>
+                                            <th>Name (Type)</th>
                                             <th>Invoice #</th>
                                             <th>Service</th>
                                             <th>Amount</th>
@@ -283,7 +345,10 @@ const PaymentsPage = () => {
                                         {filteredPayments.map((payment) => {
                                             const invoice = payment.invoices || invoices.find(inv => inv.id === payment.invoice_id);
                                             const booking = invoice?.bookings || (invoice ? bookings.find(b => b.id === invoice.booking_id) : null);
-                                            const customerName = invoice?.customers?.name;
+                                            const customerName = invoice?.customers?.name || (payment.customer_id ? customersMap.get(payment.customer_id || '')?.name : undefined);
+                                            const contractorName = payment.contractor_id ? contractorsMap.get(payment.contractor_id || '')?.name : undefined;
+                                            const payerType = payment.contractor_id ? 'Contractor' : 'Customer';
+                                            const displayName = payment.contractor_id ? contractorName : customerName;
                                             
                                             // Calculate remaining amount after this specific payment
                                             // Get all payments for this invoice that came AFTER this payment
@@ -303,7 +368,11 @@ const PaymentsPage = () => {
                                                             'N/A'
                                                         }
                                                     </td>
-                                                    <td>{customerName || 'N/A'}</td>
+                                                    <td>
+                                                        {displayName || 'N/A'} {displayName && (
+                                                            <span className="badge badge-outline-secondary ltr:ml-2 rtl:mr-2">{payerType}</span>
+                                                        )}
+                                                    </td>
                                                     <td>
                                                         {invoice ? (
                                                             <Link href={`/invoices/preview/${invoice.id}`} className="text-primary hover:underline">

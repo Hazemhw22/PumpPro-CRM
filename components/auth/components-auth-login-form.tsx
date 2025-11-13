@@ -4,6 +4,7 @@ import IconMail from '@/components/icon/icon-mail';
 import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import { signIn } from '@/lib/auth';
+import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { getTranslation } from '@/i18n';
 
@@ -12,6 +13,11 @@ interface FormErrors {
     password?: string;
     general?: string;
 }
+
+// Narrow row types for Supabase selects in this file
+type ProfileRoleRow = { role: string | null };
+type ContractorRow = { id: string };
+type DriverRow = { id: string };
 
 const ComponentsAuthLoginForm = () => {
     const { t } = getTranslation();
@@ -53,11 +59,57 @@ const ComponentsAuthLoginForm = () => {
         }
 
         try {
-            const { error } = await signIn(email, password);
+            const { data, error } = await signIn(email, password);
             if (error) {
                 setErrors({ general: t('invalid_credentials') });
             } else {
-                router.replace('/dashboard');
+                try {
+                    const userId = (data as any)?.user?.id;
+                    if (!userId) {
+                        router.replace('/dashboard');
+                        return;
+                    }
+                    // Prefer role from profiles table
+                    const { data: profile }: { data: ProfileRoleRow | null } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', userId)
+                        .maybeSingle();
+                    if (profile?.role === 'contractor') {
+                        router.replace('/contractor');
+                        return;
+                    }
+                    if (profile?.role === 'driver') {
+                        router.replace('/driver');
+                        return;
+                    }
+
+                    // Fallback: check presence in contractors/drivers tables
+                    // Check contractor role
+                    const { data: contractor }: { data: ContractorRow | null } = await supabase
+                        .from('contractors')
+                        .select('id')
+                        .eq('user_id', userId)
+                        .maybeSingle();
+                    if (contractor?.id) {
+                        router.replace('/dashboard');
+                        return;
+                    }
+                    // Check driver role
+                    const { data: driver }: { data: DriverRow | null } = await supabase
+                        .from('drivers')
+                        .select('id')
+                        .eq('user_id', userId)
+                        .maybeSingle();
+                    if (driver?.id) {
+                        router.replace('/dashboard');
+                        return;
+                    }
+                    // Default
+                    router.replace('/dashboard');
+                } catch (e) {
+                    router.replace('/dashboard');
+                }
             }
         } catch (error) {
             setErrors({ general: t('unexpected_error') });

@@ -175,6 +175,135 @@ const HomePage = () => {
                 // Consolidate all database queries into fewer parallel calls
                 const sixMonthsAgo = new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1);
 
+                // Resolve role and related ids
+                let role: string | null = null;
+                let contractorId: string | null = null;
+                let driverId: string | null = null;
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        role = (profile as any)?.role || null;
+                        if (role === 'contractor') {
+                            // @ts-ignore
+                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                            contractorId = (c as any)?.id || null;
+                            if (!contractorId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                contractorId = (c2 as any)?.id || null;
+                            }
+                        } else if (role === 'driver') {
+                            // @ts-ignore
+                            let { data: d } = await supabase.from('drivers').select('id, email').eq('user_id', user.id).maybeSingle();
+                            driverId = (d as any)?.id || null;
+                            if (!driverId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: d2 } = await supabase.from('drivers').select('id').eq('email', (user as any).email).maybeSingle();
+                                driverId = (d2 as any)?.id || null;
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // If contractor: compute filtered stats and return early
+                if (role === 'contractor') {
+                    if (!contractorId) { setStats(prev => ({ ...prev, loading: false })); return; }
+                    const [
+                        invRes,
+                        payRes,
+                        bookingsCountRes,
+                        recentInvRes,
+                        recentBookingsRes
+                    ] = await Promise.all([
+                        supabase.from('invoices').select('total_amount, remaining_amount, status, created_at').eq('contractor_id', contractorId),
+                        supabase.from('payments').select(`*, invoices ( invoice_number, customers ( name ) )`).eq('contractor_id', contractorId).order('payment_date', { ascending: false }).limit(5),
+                        supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('contractor_id', contractorId),
+                        supabase.from('invoices').select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)').eq('contractor_id', contractorId).order('created_at', { ascending: false }).limit(5),
+                        supabase.from('bookings').select('*').eq('contractor_id', contractorId).order('created_at', { ascending: false }).limit(10)
+                    ]);
+
+                    const invs: any[] = (invRes.data as any[]) || [];
+                    const pays: any[] = (payRes.data as any[]) || [];
+                    const totalRevenue = invs.reduce((s, x) => s + (x.total_amount || 0), 0);
+                    const remainingAmount = invs.reduce((s, x) => s + (x.remaining_amount || 0), 0);
+                    const paidInvoices = invs.filter((x) => x.status === 'paid').length;
+                    const totalInvoices = invs.length;
+                    const totalBookings = bookingsCountRes.count || 0;
+                    const recentPayments = pays.map((p: any) => ({
+                        customer_name: p.invoices?.customers?.name || 'Unknown',
+                        amount: p.amount || 0,
+                        payment_date: p.payment_date,
+                        payment_method: p.payment_method || 'cash',
+                        invoice_number: p.invoices?.invoice_number || 'N/A',
+                    }));
+                    const recentInvoices = (recentInvRes.data as any[] || []).map((inv: any) => ({
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customers?.name || 'Unknown',
+                        total_amount: inv.total_amount || 0,
+                        status: inv.status,
+                    }));
+
+                    setStats(prev => ({
+                        ...prev,
+                        totalTrucks: 0,
+                        totalBookings,
+                        totalCustomers: 0,
+                        totalDrivers: 0,
+                        totalRevenue,
+                        monthlyRevenue: totalRevenue,
+                        totalInvoices,
+                        trucksGrowth: 0,
+                        bookingsGrowth: 0,
+                        customersGrowth: 0,
+                        revenueGrowth: 0,
+                        loading: false,
+                        chartData: { months: prev.chartData.months, trucks: [0,0,0,0,0,0], bookings: [0,0,0,0,0,0], revenue: [0,0,0,0,0,0] },
+                        recentActivity: (recentBookingsRes.data as any[]) || [],
+                        bookingsByType: {}, trucksByStatus: {},
+                        pendingBookings: 0, confirmedBookings: 0,
+                        totalDebts: remainingAmount,
+                        paidInvoices,
+                        recentPayments,
+                        recentInvoices,
+                    }));
+                    return;
+                }
+
+                // If driver: show only own bookings KPIs and zero financials
+                if (role === 'driver') {
+                    if (!driverId) { setStats(prev => ({ ...prev, loading: false })); return; }
+                    const [bookingsCountRes, recentBookingsRes] = await Promise.all([
+                        supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('driver_id', driverId),
+                        supabase.from('bookings').select('*').eq('driver_id', driverId).order('created_at', { ascending: false }).limit(10),
+                    ]);
+                    setStats(prev => ({
+                        ...prev,
+                        totalTrucks: 0,
+                        totalBookings: bookingsCountRes.count || 0,
+                        totalCustomers: 0,
+                        totalDrivers: 0,
+                        totalRevenue: 0,
+                        monthlyRevenue: 0,
+                        totalInvoices: 0,
+                        trucksGrowth: 0,
+                        bookingsGrowth: 0,
+                        customersGrowth: 0,
+                        revenueGrowth: 0,
+                        loading: false,
+                        chartData: { months: prev.chartData.months, trucks: [0,0,0,0,0,0], bookings: [0,0,0,0,0,0], revenue: [0,0,0,0,0,0] },
+                        recentActivity: (recentBookingsRes.data as any[]) || [],
+                        bookingsByType: {}, trucksByStatus: {},
+                        pendingBookings: 0, confirmedBookings: 0,
+                        totalDebts: 0,
+                        paidInvoices: 0,
+                        recentPayments: [],
+                        recentInvoices: [],
+                    }));
+                    return;
+                }
+
                 const [
                     // Current period counts
                     trucksResult,

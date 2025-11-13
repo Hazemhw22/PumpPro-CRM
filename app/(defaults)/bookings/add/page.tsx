@@ -112,6 +112,24 @@ const AddBooking = () => {
                 } catch (err) {
                     console.warn('Failed to fetch contractors', err);
                 }
+
+                // Auto-select contractor according to logged-in user if role is contractor
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        if ((profile as any)?.role === 'contractor') {
+                            // @ts-ignore
+                            const { data: contr } = await supabase.from('contractors').select('id, name, phone, email').eq('user_id', user.id).maybeSingle();
+                            if (contr) {
+                                setSelectedContractor({ id: (contr as any).id, name: (contr as any).name, phone: (contr as any).phone, email: (contr as any).email } as any);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // ignore
+                }
             } catch (error) {
                 console.error('Error loading data:', error);
             }

@@ -28,6 +28,7 @@ interface Booking {
 const BookingsList = () => {
     const { t } = getTranslation();
     const [items, setItems] = useState<Booking[]>([]);
+    const [role, setRole] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [page, setPage] = useState(1);
@@ -56,8 +57,62 @@ const BookingsList = () => {
     useEffect(() => {
         const fetchBookings = async () => {
             try {
-                // Fetch bookings
-                const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+                // Determine role and related ids
+                let role: string | null = null;
+                let contractorId: string | null = null;
+                let driverId: string | null = null;
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        // @ts-ignore
+                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                        role = (profile as any)?.role || null;
+                        setRole(role);
+                        if (role === 'contractor') {
+                            // @ts-ignore
+                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                            contractorId = (c as any)?.id || null;
+                            // Fallback by email if user_id not linked
+                            if (!contractorId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                contractorId = (c2 as any)?.id || null;
+                            }
+                        } else if (role === 'driver') {
+                            // @ts-ignore
+                            let { data: d } = await supabase.from('drivers').select('id, email').eq('user_id', user.id).maybeSingle();
+                            driverId = (d as any)?.id || null;
+                            if (!driverId && (user as any).email) {
+                                // @ts-ignore
+                                const { data: d2 } = await supabase.from('drivers').select('id').eq('email', (user as any).email).maybeSingle();
+                                driverId = (d2 as any)?.id || null;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // ignore
+                }
+
+                // Enforce role-based filtering strictly
+                if (role === 'contractor' && !contractorId) {
+                    setItems([] as any);
+                    setInitialRecords([] as any);
+                    setLoading(false);
+                    return;
+                }
+                if (role === 'driver' && !driverId) {
+                    setItems([] as any);
+                    setInitialRecords([] as any);
+                    setLoading(false);
+                    return;
+                }
+
+                // Fetch bookings with optional role filter
+                let bookingsQuery: any = supabase.from('bookings').select('*');
+                if (role === 'contractor') bookingsQuery = bookingsQuery.eq('contractor_id', contractorId);
+                if (role === 'driver') bookingsQuery = bookingsQuery.eq('driver_id', driverId);
+
+                const { data: bookingsData, error: bookingsError } = await bookingsQuery.order('created_at', { ascending: false });
 
                 if (bookingsError) throw bookingsError;
 
@@ -253,14 +308,18 @@ const BookingsList = () => {
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
                     <div className="flex items-center gap-2">
-                        <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
-                            <IconTrashLines />
-                            {t('delete')}
-                        </button>
-                        <Link href="/bookings/add" className="btn btn-primary gap-2">
-                            <IconPlus />
-                            {t('add_new_booking')}
-                        </Link>
+                        {role !== 'driver' && (
+                            <>
+                                <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
+                                    <IconTrashLines />
+                                    {t('delete')}
+                                </button>
+                                <Link href="/bookings/add" className="btn btn-primary gap-2">
+                                    <IconPlus />
+                                    {t('add_new_booking')}
+                                </Link>
+                            </>
+                        )}
                     </div>
                     <div className="flex-grow">
                         <BookingsFilters
