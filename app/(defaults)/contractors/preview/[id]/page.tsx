@@ -34,19 +34,25 @@ interface Contractor {
 
 interface Booking {
     id: string;
-    date: string;
-    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-    amount: number;
-    description: string;
+    booking_number: string;
+    service_type: string;
+    service_address: string;
+    scheduled_date: string;
+    price: number;
+    status: string;
+    payment_status: string;
+    contractor_id?: string;
 }
 
-interface Transaction {
+interface Payment {
     id: string;
-    date: string;
-    type: 'payment' | 'withdrawal';
+    booking_id: string;
     amount: number;
-    description: string;
-    status: 'completed' | 'pending' | 'failed';
+    payment_method: string;
+    transaction_id?: string;
+    notes?: string;
+    payment_date: string;
+    contractor_id?: string;
 }
 
 const ContractorPreview = () => {
@@ -55,8 +61,16 @@ const ContractorPreview = () => {
     const router = useRouter();
     const [contractor, setContractor] = useState<Contractor | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentForm, setPaymentForm] = useState({
+        booking_id: '',
+        amount: '',
+        payment_method: 'cash' as 'cash' | 'credit_card' | 'bank_transfer' | 'check',
+        transaction_id: '',
+        notes: '',
+    });
 
     useEffect(() => {
         let mounted = true;
@@ -65,7 +79,7 @@ const ContractorPreview = () => {
             try {
                 const contractorId = Array.isArray(params.id) ? params.id[0] : params.id;
                 
-                // Fetch contractor data
+                // Fetch contractor data (with fresh balance from database)
                 const { data: contractorData, error: contractorError } = await supabase
                     .from('contractors')
                     .select('*')
@@ -77,46 +91,33 @@ const ContractorPreview = () => {
                 
                 setContractor(contractorData);
                 
-                // Mock data for bookings
-                const mockBookings: Booking[] = [
-                    {
-                        id: '1',
-                        date: '2023-06-15',
-                        status: 'pending',
-                        amount: 1500,
-                        description: 'Monthly service contract'
-                    },
-                    {
-                        id: '2',
-                        date: '2023-06-20',
-                        status: 'confirmed',
-                        amount: 2500,
-                        description: 'Project delivery'
-                    }
-                ];
+                // Fetch bookings for this contractor
+                // @ts-ignore
+                const { data: bookingsData, error: bookingsError } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .eq('contractor_id', contractorId)
+                    .order('scheduled_date', { ascending: false });
                 
-                // Mock data for transactions
-                const mockTransactions: Transaction[] = [
-                    {
-                        id: '1',
-                        date: '2023-06-10',
-                        type: 'payment',
-                        amount: 1500,
-                        description: 'Service payment',
-                        status: 'completed'
-                    },
-                    {
-                        id: '2',
-                        date: '2023-06-05',
-                        type: 'withdrawal',
-                        amount: 500,
-                        description: 'Advance payment',
-                        status: 'completed'
-                    }
-                ];
+                if (bookingsError) {
+                    console.error('Error fetching bookings:', bookingsError);
+                } else {
+                    setBookings(bookingsData || []);
+                }
                 
-                setBookings(mockBookings);
-                setTransactions(mockTransactions);
+                // Fetch payments for this contractor
+                // @ts-ignore
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('contractor_id', contractorId)
+                    .order('payment_date', { ascending: false });
+                
+                if (paymentsError) {
+                    console.error('Error fetching payments:', paymentsError);
+                } else {
+                    setPayments(paymentsData || []);
+                }
                 
             } catch (err) {
                 console.error('Error loading data:', err);
@@ -127,18 +128,59 @@ const ContractorPreview = () => {
         
         fetchData();
         
+        // Refresh data when page becomes visible (user returns to tab)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && mounted) {
+                fetchData();
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
         return () => {
             mounted = false;
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [params.id]);
 
     const handleConfirmBooking = async (bookingId: string) => {
-        console.log('Confirming booking:', bookingId);
-        setBookings(bookings.map(booking => 
-            booking.id === bookingId 
-                ? { ...booking, status: 'confirmed' as const } 
-                : booking
-        ));
+        try {
+            // @ts-ignore
+            const { error } = await (supabase
+                .from('bookings') as any)
+                .update({ status: 'confirmed' })
+                .eq('id', bookingId);
+            
+            if (error) throw error;
+            
+            // Adjust contractor balance by subtracting the booking price
+            const confirmed = bookings.find(b => b.id === bookingId);
+            if (confirmed && contractor?.id) {
+                const newBalance = (contractor.balance || 0) - (confirmed.price || 0);
+                // @ts-ignore
+                const { error: contractorUpdateError } = await (supabase
+                    .from('contractors') as any)
+                    .update({ balance: newBalance, updated_at: new Date().toISOString() })
+                    .eq('id', contractor.id);
+
+                if (contractorUpdateError) throw contractorUpdateError;
+
+                // Update UI balance
+                setContractor({ ...contractor, balance: newBalance });
+            }
+
+            // Update UI
+            setBookings(bookings.map(booking => 
+                booking.id === bookingId 
+                    ? { ...booking, status: 'confirmed' } 
+                    : booking
+            ));
+            
+            alert('Booking confirmed successfully!');
+        } catch (error) {
+            console.error('Error confirming booking:', error);
+            alert('Error confirming booking');
+        }
     };
 
     const formatDate = (dateString?: string) => {
@@ -204,12 +246,24 @@ const ContractorPreview = () => {
                         <h1 className="text-2xl font-bold">Contractor Details</h1>
                         <p className="text-gray-500">{contractor.name}</p>
                     </div>
-                    {contractor && (
-                        <Link href={`/contractors/edit/${contractor.id}`} className="btn btn-primary">
-                            <IconEdit className="ltr:mr-2 rtl:ml-2" />
-                            Edit Contractor
-                        </Link>
-                    )}
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="btn btn-outline-primary"
+                            title="Refresh data to see latest balance"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Refresh
+                        </button>
+                        {contractor && (
+                            <Link href={`/contractors/edit/${contractor.id}`} className="btn btn-primary">
+                                <IconEdit className="ltr:mr-2 rtl:ml-2" />
+                                Edit Contractor
+                            </Link>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -233,7 +287,7 @@ const ContractorPreview = () => {
                                 <IconCreditCard className="h-6 w-6 text-success" />
                             </div>
                             <div>
-                                <div className="text-2xl font-bold">₪{transactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}</div>
+                                <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
                                 <div className="text-xs text-gray-500">Total Payments</div>
                             </div>
                         </div>
@@ -491,31 +545,47 @@ const ContractorPreview = () => {
                                         <table className="table-hover">
                                             <thead>
                                                 <tr>
+                                                    <th>Booking #</th>
+                                                    <th>Service</th>
                                                     <th>Date</th>
-                                                    <th>Description</th>
-                                                    <th className="text-right">Amount</th>
+                                                    <th className="text-right">Price</th>
                                                     <th className="text-center">Status</th>
+                                                    <th className="text-center">Payment</th>
                                                     <th className="text-right">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {bookings.map((booking) => (
                                                     <tr key={booking.id}>
-                                                        <td>{new Date(booking.date).toLocaleDateString()}</td>
-                                                        <td>{booking.description}</td>
-                                                        <td className="text-right">₪{booking.amount.toLocaleString()}</td>
+                                                        <td className="font-semibold text-primary">#{booking.booking_number}</td>
+                                                        <td>{booking.service_type}</td>
+                                                        <td>{new Date(booking.scheduled_date).toLocaleDateString()}</td>
+                                                        <td className="text-right font-bold">₪{booking.price.toLocaleString()}</td>
                                                         <td className="text-center">
                                                             <span className={`badge ${
                                                                 booking.status === 'confirmed' 
                                                                     ? 'badge-outline-success' 
                                                                     : booking.status === 'pending'
                                                                         ? 'badge-outline-warning'
-                                                                        : 'badge-outline-info'
+                                                                        : booking.status === 'completed'
+                                                                            ? 'badge-outline-info'
+                                                                            : 'badge-outline-danger'
                                                             }`}>
                                                                 {booking.status}
                                                             </span>
                                                         </td>
-                                                        <td className="text-right">
+                                                        <td className="text-center">
+                                                            <span className={`badge ${
+                                                                booking.payment_status === 'paid' 
+                                                                    ? 'badge-outline-success' 
+                                                                    : booking.payment_status === 'partial'
+                                                                        ? 'badge-outline-warning'
+                                                                        : 'badge-outline-danger'
+                                                            }`}>
+                                                                {booking.payment_status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="text-center">
                                                             {booking.status === 'pending' && (
                                                                 <button
                                                                     onClick={() => handleConfirmBooking(booking.id)}
@@ -523,11 +593,9 @@ const ContractorPreview = () => {
                                                                     title="Confirm Booking"
                                                                 >
                                                                     <IconCheck className="w-4 h-4" />
+                                                                    Confirm
                                                                 </button>
                                                             )}
-                                                            <button className="btn btn-sm btn-danger" title="Cancel Booking">
-                                                                <IconX className="w-4 h-4" />
-                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -541,46 +609,49 @@ const ContractorPreview = () => {
                         {/* Accounting Tab */}
                         <Tab.Panel>
                             <div className="panel">
-                                <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Transactions</h3>
+                                <div className="mb-5 flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold">Payments History</h3>
+                                    <button 
+                                        onClick={() => setShowPaymentModal(true)}
+                                        className="btn btn-primary gap-2"
+                                    >
+                                        <IconCreditCard className="w-4 h-4" />
+                                        Record Payment
+                                    </button>
                                 </div>
                                 <div className="table-responsive">
                                     <table className="table-hover">
                                         <thead>
                                             <tr>
                                                 <th>Date</th>
-                                                <th>Description</th>
+                                                <th>Booking #</th>
+                                                <th>Method</th>
                                                 <th className="text-right">Amount</th>
-                                                <th className="text-center">Status</th>
+                                                <th>Notes</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {transactions.map((transaction) => (
-                                                <tr key={transaction.id}>
-                                                    <td>{new Date(transaction.date).toLocaleDateString()}</td>
-                                                    <td>{transaction.description}</td>
-                                                    <td className={`text-right font-medium ${
-                                                        transaction.type === 'payment' ? 'text-success' : 'text-danger'
-                                                    }`}>
-                                                        {transaction.type === 'payment' ? '+' : '-'}₪{transaction.amount.toLocaleString()}
+                                            {payments.map((payment) => (
+                                                <tr key={payment.id}>
+                                                    <td>{new Date(payment.payment_date).toLocaleDateString()}</td>
+                                                    <td className="font-semibold text-primary">
+                                                        {bookings.find(b => b.id === payment.booking_id)?.booking_number || '-'}
                                                     </td>
-                                                    <td className="text-center">
-                                                        <span className={`badge ${
-                                                            transaction.status === 'completed' 
-                                                                ? 'badge-outline-success' 
-                                                                : transaction.status === 'pending'
-                                                                    ? 'badge-outline-warning'
-                                                                    : 'badge-outline-danger'
-                                                        }`}>
-                                                            {transaction.status}
+                                                    <td>
+                                                        <span className="badge badge-outline-info">
+                                                            {payment.payment_method}
                                                         </span>
                                                     </td>
+                                                    <td className="text-right font-bold text-success">
+                                                        +₪{payment.amount.toLocaleString()}
+                                                    </td>
+                                                    <td className="text-sm text-gray-600">{payment.notes || '-'}</td>
                                                 </tr>
                                             ))}
-                                            {transactions.length === 0 && (
+                                            {payments.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={4} className="text-center text-gray-500">
-                                                        No transactions found
+                                                    <td colSpan={5} className="text-center text-gray-500 py-10">
+                                                        No payments recorded yet
                                                     </td>
                                                 </tr>
                                             )}
@@ -590,23 +661,176 @@ const ContractorPreview = () => {
 
                                 <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                     <h3 className="text-lg font-semibold mb-2">Current Balance</h3>
-                                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                    <p className={`text-3xl font-bold ${(contractor.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>
                                         ₪{contractor.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                                     </p>
-                                    <div className="mt-4 flex space-x-3">
-                                        <button className="btn btn-primary">
-                                            Record Payment
-                                        </button>
-                                        <button className="btn btn-outline-primary">
-                                            Record Withdrawal
-                                        </button>
-                                    </div>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        Total Bookings: ₪{bookings.reduce((sum, b) => sum + b.price, 0).toFixed(2)} | 
+                                        Total Payments: ₪{payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                                    </p>
                                 </div>
                             </div>
                         </Tab.Panel>
                     </Tab.Panels>
                 </Tab.Group>
             </div>
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="panel w-full max-w-lg mx-4">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h5 className="text-lg font-semibold">Record New Payment</h5>
+                            <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            
+                            if (!paymentForm.booking_id) {
+                                alert('Please select a booking');
+                                return;
+                            }
+
+                            try {
+                                const paymentAmount = parseFloat(paymentForm.amount);
+                                
+                                // Create payment record
+                                // Database trigger will automatically update contractor balance
+                                // @ts-ignore
+                                const { error: paymentError } = await (supabase
+                                    .from('payments') as any)
+                                    .insert([
+                                        {
+                                            booking_id: paymentForm.booking_id,
+                                            contractor_id: contractor?.id,
+                                            amount: paymentAmount,
+                                            payment_method: paymentForm.payment_method,
+                                            transaction_id: paymentForm.transaction_id || null,
+                                            notes: paymentForm.notes || null,
+                                            payment_date: new Date().toISOString(),
+                                        },
+                                    ] as any);
+
+                                if (paymentError) {
+                                    console.error('Payment creation error:', paymentError);
+                                    throw paymentError;
+                                }
+
+                                // Deduct payment from contractor balance as requested
+                                if (contractor?.id) {
+                                    const newBalance = (contractor.balance || 0) - paymentAmount;
+                                    // @ts-ignore
+                                    const { error: contractorUpdateError } = await (supabase
+                                        .from('contractors') as any)
+                                        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+                                        .eq('id', contractor.id);
+                                    if (contractorUpdateError) throw contractorUpdateError;
+                                    setContractor({ ...contractor, balance: newBalance });
+                                }
+
+                                alert('Payment recorded successfully!');
+                                setShowPaymentModal(false);
+                                window.location.reload();
+                            } catch (error: any) {
+                                console.error('Error recording payment:', error);
+                                alert(`Error recording payment: ${error.message || 'Unknown error'}`);
+                            }
+                        }}>
+                            <div className="space-y-4">
+                                {/* Select Booking */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Select Booking *</label>
+                                    <select
+                                        value={paymentForm.booking_id}
+                                        onChange={(e) => {
+                                            const booking = bookings.find(b => b.id === e.target.value);
+                                            setPaymentForm({ 
+                                                ...paymentForm, 
+                                                booking_id: e.target.value,
+                                                amount: String(booking?.price || 0)
+                                            });
+                                        }}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="">-- Select Booking --</option>
+                                        {bookings.filter(b => b.payment_status !== 'paid').map((booking) => (
+                                            <option key={booking.id} value={booking.id}>
+                                                #{booking.booking_number} - ₪{booking.price}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Amount */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Amount (₪) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={paymentForm.amount}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                                        className="form-input"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Payment Method */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Payment Method *</label>
+                                    <select
+                                        value={paymentForm.payment_method}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="cash">Cash</option>
+                                        <option value="credit_card">Credit Card</option>
+                                        <option value="bank_transfer">Bank Transfer</option>
+                                        <option value="check">Check</option>
+                                    </select>
+                                </div>
+
+                                {/* Transaction ID */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={paymentForm.transaction_id}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
+                                        className="form-input"
+                                    />
+                                </div>
+
+                                {/* Notes */}
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
+                                    <textarea
+                                        value={paymentForm.notes}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                                        className="form-textarea"
+                                        rows={3}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-outline-danger">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary">
+                                    Record Payment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

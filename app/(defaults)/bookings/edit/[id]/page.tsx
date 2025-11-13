@@ -8,6 +8,7 @@ import CustomerSelect from '@/components/customer-select/customer-select';
 import TruckSelect from '@/components/truck-select/truck-select';
 import DriverSelect from '@/components/driver-select/driver-select';
 import ServiceSelect from '@/components/service-select/service-select';
+import ContractorSelect from '@/components/contractor-select/contractor-select';
 import StatusSelect from '@/components/status-select/status-select';
 import { getTranslation } from '@/i18n';
 import IconInfoCircle from '@/components/icon/icon-info-circle';
@@ -109,6 +110,7 @@ const EditBooking = () => {
     const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
     const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
+    const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
     
     const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
     
@@ -166,6 +168,21 @@ const EditBooking = () => {
                         driver_id: bookingData.driver_id || '',
                         notes: bookingData.notes || '',
                     });
+                    // Load contractor if assigned
+                    if (bookingData.contractor_id) {
+                        try {
+                            const { data: contractorData } = await (supabase.from('contractors') as any)
+                                .select('id, name')
+                                .eq('id', bookingData.contractor_id)
+                                .single();
+                            if (contractorData) {
+                                const cd = contractorData as any;
+                                setSelectedContractor({ id: cd.id, name: cd.name });
+                            }
+                        } catch (e) {
+                            // ignore if not found
+                        }
+                    }
                     
                     // Set selected items
                     if (customersData && bookingData.customer_id) {
@@ -277,6 +294,7 @@ const EditBooking = () => {
                 scheduled_time: form.scheduled_time,
                 status: form.status,
                 service_type: form.service_type.trim(),
+                contractor_id: selectedContractor ? selectedContractor.id : null,
             };
 
             // @ts-ignore - Supabase type inference issue
@@ -504,6 +522,20 @@ const EditBooking = () => {
                         <div className="panel ">
                             <form onSubmit={handleSubmit} className="space-y-5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Contractor Assignment */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('contractor') || 'Contractor'}
+                                    </label>
+                                    <ContractorSelect
+                                        selectedContractor={selectedContractor as any}
+                                        onContractorSelect={(c) => {
+                                            setSelectedContractor(c);
+                                        }}
+                                        onCreateNew={() => router.push('/contractors/add')}
+                                        className="form-select"
+                                    />
+                                </div>
                                 {/* Truck Assignment */}
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">

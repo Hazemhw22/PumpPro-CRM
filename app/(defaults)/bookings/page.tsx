@@ -65,17 +65,20 @@ const BookingsList = () => {
                 const truckIds = Array.from(new Set(bookingsData?.map((b: any) => b.truck_id).filter(Boolean)));
                 const driverIds = Array.from(new Set(bookingsData?.map((b: any) => b.driver_id).filter(Boolean)));
                 const serviceIds = Array.from(new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean)));
+                const contractorIds = Array.from(new Set(bookingsData?.map((b: any) => b.contractor_id).filter(Boolean)));
 
-                const [trucksRes, driversRes, servicesRes] = await Promise.all([
+                const [trucksRes, driversRes, servicesRes, contractorsRes] = await Promise.all([
                     truckIds.length > 0 ? supabase.from('trucks').select('id, truck_number').in('id', truckIds) : { data: [] },
                     driverIds.length > 0 ? supabase.from('drivers').select('id, name').in('id', driverIds) : { data: [] },
                     serviceIds.length > 0 ? supabase.from('services').select('id, name').in('id', serviceIds) : { data: [] },
+                    contractorIds.length > 0 ? supabase.from('contractors').select('id, name').in('id', contractorIds) : { data: [] },
                 ]);
 
                 // Map related data
                 const trucksMap = new Map((trucksRes.data || []).map((t: any) => [t.id, t]));
                 const driversMap = new Map((driversRes.data || []).map((d: any) => [d.id, d]));
                 const servicesMap = new Map((servicesRes.data || []).map((s: any) => [s.id, s]));
+                const contractorsMap = new Map((contractorsRes.data || []).map((c: any) => [c.id, c]));
 
                 // Combine data
                 const enrichedBookings = bookingsData?.map((booking: any) => ({
@@ -83,6 +86,7 @@ const BookingsList = () => {
                     truck: booking.truck_id ? trucksMap.get(booking.truck_id) : null,
                     driver: booking.driver_id ? driversMap.get(booking.driver_id) : null,
                     service_name: booking.service_type ? servicesMap.get(booking.service_type)?.name : null,
+                    contractor: booking.contractor_id ? contractorsMap.get(booking.contractor_id) : null,
                 }));
 
                 setItems((enrichedBookings || []) as Booking[]);
@@ -277,7 +281,7 @@ const BookingsList = () => {
                 </div>
 
                 <div className="relative px-5 pb-5">
-                    <div className="overflow-auto rounded-md">
+                    <div className="overflow-x-auto overflow-y-hidden rounded-md">
                         <table className="table-hover whitespace-nowrap rtl-table-headers">
                             <thead>
                                 <tr>
@@ -290,6 +294,7 @@ const BookingsList = () => {
                                     <th className="cursor-pointer select-none" onClick={() => setSort('customer_name')}>
                                         Customer {sortStatus.columnAccessor === 'customer_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
+                                    <th>Contractor</th>
                                     <th>Service</th>
                                     <th className="cursor-pointer select-none" onClick={() => setSort('service_address')}>
                                         Address {sortStatus.columnAccessor === 'service_address' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
@@ -320,6 +325,7 @@ const BookingsList = () => {
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
+                                        <td>{(row as any).contractor?.name || '-'}</td>
                                         <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
                                         <td className="max-w-xs truncate">{row.service_address || '-'}</td>
                                         <td>{row.scheduled_date && row.scheduled_time ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}` : '-'}</td>
