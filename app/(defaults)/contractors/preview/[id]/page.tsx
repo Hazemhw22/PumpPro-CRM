@@ -723,7 +723,7 @@ const ContractorPreview = () => {
 
                                 // Deduct payment from contractor balance as requested
                                 if (contractor?.id) {
-                                    const newBalance = (contractor.balance || 0) - paymentAmount;
+                                    const newBalance = (contractor.balance || 0) + paymentAmount;
                                     // @ts-ignore
                                     const { error: contractorUpdateError } = await (supabase
                                         .from('contractors') as any)
