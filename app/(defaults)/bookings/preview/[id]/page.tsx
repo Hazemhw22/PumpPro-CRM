@@ -12,6 +12,7 @@ import IconClock from '@/components/icon/icon-clock';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconPrinter from '@/components/icon/icon-printer';
+import ContractorSelect from '@/components/contractor-select/contractor-select';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
@@ -40,6 +41,8 @@ interface Booking {
     driver_id?: string;
     truck?: { truck_number?: string };
     driver?: { name?: string };
+    contractor_id?: string | null;
+    contractor?: { id?: string; name?: string } | null;
     notes?: string;
 }
 
@@ -83,6 +86,7 @@ const BookingPreview = () => {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
+    const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' }>({
         visible: false,
@@ -130,7 +134,13 @@ const BookingPreview = () => {
                     service_name: (serviceRes.data as any)?.name,
                 };
 
+                // attach contractor helper if contractor_id present
+                if ((enrichedBooking as any).contractor_id) {
+                    enrichedBooking.contractor = { id: (enrichedBooking as any).contractor_id, name: (enrichedBooking as any).contractor_name || '' };
+                }
+
                 setBooking(enrichedBooking as any);
+                setSelectedContractor(enrichedBooking.contractor || null);
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
                 }
@@ -228,16 +238,14 @@ const BookingPreview = () => {
             // Insert a booking track entry
             const { data: insertedTrack, error: insertTrackError } = await supabase
                 .from('booking_tracks')
-                .insert(
-                    [
-                        {
-                            booking_id: booking.id,
-                            old_status: booking.status,
-                            new_status: selectedStatus,
-                            created_at: new Date().toISOString(),
-                        },
-                    ] as any
-                )
+                .insert([
+                    {
+                        booking_id: booking.id,
+                        old_status: booking.status,
+                        new_status: selectedStatus,
+                        created_at: new Date().toISOString(),
+                    },
+                ] as any)
                 .select()
                 .maybeSingle();
 
@@ -270,6 +278,95 @@ const BookingPreview = () => {
         } catch (err) {
             console.error('Error updating status:', err);
             setAlert({ visible: true, message: 'Error updating status', type: 'danger' });
+        }
+    };
+
+    const handleContractorAssign = async (contractor: { id: string; name: string } | null) => {
+        if (!booking) return;
+        setSelectedContractor(contractor);
+        try {
+            if (contractor) {
+                // persist contractor_id on booking
+                // @ts-ignore - supabase typing
+                const { error } = await supabase.from('bookings').update({ contractor_id: contractor.id }).eq('id', booking.id);
+                if (error) throw error;
+                setBooking((prev) => (prev ? ({ ...prev, contractor_id: contractor.id, contractor: { id: contractor.id, name: contractor.name } } as any) : prev));
+                setAlert({ visible: true, message: 'Contractor assigned', type: 'success' });
+            } else {
+                // remove contractor
+                // @ts-ignore
+                const { error } = await supabase.from('bookings').update({ contractor_id: null }).eq('id', booking.id);
+                if (error) throw error;
+                setBooking((prev) => (prev ? ({ ...prev, contractor_id: null, contractor: null } as any) : prev));
+                setAlert({ visible: true, message: 'Contractor removed', type: 'success' });
+            }
+        } catch (err) {
+            console.error('Error assigning contractor:', err);
+            setAlert({ visible: true, message: 'Could not assign contractor', type: 'danger' });
+        }
+    };
+
+    const confirmBooking = async () => {
+        if (!booking) return;
+        if (booking.status === 'confirmed') return;
+
+        try {
+            // Update status to confirmed
+            // @ts-ignore
+            const { error: updateError } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', booking.id);
+            if (updateError) throw updateError;
+
+            // Insert booking track
+            // @ts-ignore
+            const { data: insertedTrack, error: insertTrackError } = await supabase
+                .from('booking_tracks')
+                .insert([
+                    {
+                        booking_id: booking.id,
+                        old_status: booking.status,
+                        new_status: 'confirmed',
+                        created_at: new Date().toISOString(),
+                    },
+                ] as any)
+                .select()
+                .maybeSingle();
+
+            if (insertTrackError) console.error('Could not insert booking track:', insertTrackError);
+
+            // Create draft invoice if none exists for this booking
+            // @ts-ignore
+            const { data: existingInvoice, error: invoiceCheckError } = await supabase.from('invoices').select('*').eq('booking_id', booking.id).maybeSingle();
+            if (invoiceCheckError) console.error('Invoice check error:', invoiceCheckError);
+
+            if (!existingInvoice) {
+                const invoiceNumber = `INV-${Date.now()}`;
+                // @ts-ignore
+                const { data: newInvoice, error: invoiceError } = await supabase
+                    .from('invoices')
+                    .insert({
+                        invoice_number: invoiceNumber,
+                        booking_id: booking.id,
+                        customer_id: booking.customer_id || null,
+                        contractor_id: (booking as any).contractor_id || null,
+                        total_amount: booking.price || 0,
+                        paid_amount: 0,
+                        remaining_amount: booking.price || 0,
+                        status: 'draft',
+                        due_date: new Date().toISOString().split('T')[0],
+                    } as any)
+                    .select()
+                    .single();
+
+                if (invoiceError) console.error('Invoice creation error:', invoiceError);
+                else console.log('Draft invoice created', (newInvoice as any)?.id);
+            }
+
+            setBooking((prev) => (prev ? ({ ...prev, status: 'confirmed' } as any) : prev));
+            await fetchBookingTracks();
+            setAlert({ visible: true, message: 'Booking confirmed', type: 'success' });
+        } catch (err) {
+            console.error('Error confirming booking:', err);
+            setAlert({ visible: true, message: 'Error confirming booking', type: 'danger' });
         }
     };
 
@@ -428,6 +525,11 @@ const BookingPreview = () => {
                                                         <button onClick={handleUpdateStatus} className="btn btn-outline-primary">
                                                             Update
                                                         </button>
+                                                        {booking.status !== 'confirmed' && (
+                                                            <button onClick={confirmBooking} className="btn btn-primary">
+                                                                Confirm Booking
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -452,6 +554,17 @@ const BookingPreview = () => {
                                                             {booking.customer_phone}
                                                         </a>
                                                     </span>
+                                                </div>
+
+                                                {/* Contractor Select */}
+                                                <div className="mt-3">
+                                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('contractor') || 'Contractor'}</label>
+                                                    <ContractorSelect
+                                                        selectedContractor={selectedContractor as any}
+                                                        onContractorSelect={(c) => handleContractorAssign(c)}
+                                                        onCreateNew={() => router.push('/contractors/add')}
+                                                        className="form-select"
+                                                    />
                                                 </div>
 
                                                 <div className="flex items-center">

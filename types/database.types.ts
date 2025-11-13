@@ -300,6 +300,7 @@ export interface Database {
                     scheduled_date: string;
                     scheduled_time: string;
                     status: BookingStatus;
+                    contractor_id: string | null;
                     truck_id: string | null;
                     driver_id: string | null;
                     service_type: string;
@@ -319,6 +320,7 @@ export interface Database {
                     scheduled_date: string;
                     scheduled_time: string;
                     status?: BookingStatus;
+                    contractor_id?: string | null;
                     truck_id?: string | null;
                     driver_id?: string | null;
                     service_type: string;
@@ -338,6 +340,7 @@ export interface Database {
                     scheduled_date?: string;
                     scheduled_time?: string;
                     status?: BookingStatus;
+                    contractor_id?: string | null;
                     truck_id?: string | null;
                     driver_id?: string | null;
                     service_type?: string;
