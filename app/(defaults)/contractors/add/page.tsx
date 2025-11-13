@@ -129,19 +129,7 @@ export default function AddContractor() {
             }
 
             // 3. Create contractor record
-            const contractorData = [{
-                id: userId || undefined,
-                contractor_number: form.contractor_number.trim() || null,
-                name: form.name.trim(),
-                phone: form.phone.trim() || null,
-                email: form.email.trim() || null,
-                balance: parseFloat(form.balance) || 0,
-                status: form.status,
-                notes: form.notes || null,
-                photo_url: null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }];
+            let photoUrl: string | null = null;
 
             // Upload photo if provided
             if (photoFile) {
@@ -162,13 +150,27 @@ export default function AddContractor() {
                         .from('contractors')
                         .getPublicUrl(path);
                     
-                    contractorData[0].photo_url = publicUrl;
+                    photoUrl = publicUrl;
                 } catch (uploadError) {
                     console.error('Upload Error:', uploadError);
                     // Don't fail the whole process if photo upload fails
-                    contractorData[0].photo_url = null;
+                    photoUrl = null;
                 }
             }
+
+            const contractorData = [{
+                id: userId || undefined,
+                contractor_number: form.contractor_number.trim() || null,
+                name: form.name.trim(),
+                phone: form.phone.trim() || null,
+                email: form.email.trim() || null,
+                balance: parseFloat(form.balance) || 0,
+                status: form.status,
+                notes: form.notes || null,
+                photo_url: photoUrl,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }];
 
             // Save contractor data
             const { error: contractorError } = await supabase
