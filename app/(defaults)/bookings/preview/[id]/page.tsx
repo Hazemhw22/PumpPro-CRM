@@ -6,7 +6,8 @@ import IconEdit from '@/components/icon/icon-edit';
 import IconUser from '@/components/icon/icon-user';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconPhone from '@/components/icon/icon-phone';
-import IconMail from '@/components/icon/icon-mail';
+import IconPdf from '@/components/icon/icon-pdf';
+import IconPlus from'@/components/icon/icon-plus';
 import IconCalendar from '@/components/icon/icon-calendar';
 import IconClock from '@/components/icon/icon-clock';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
@@ -88,6 +89,9 @@ const BookingPreview = () => {
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [creatingInvoice, setCreatingInvoice] = useState(false);
+    const [creatingInvoiceDeal, setCreatingInvoiceDeal] = useState(false);
+    const [contractorPaid, setContractorPaid] = useState<number>(0);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' }>({
         visible: false,
         message: '',
@@ -112,27 +116,61 @@ const BookingPreview = () => {
                 // Fetch related data
                 const booking = bookingData as any;
                 const [truckRes, driverRes, serviceRes] = await Promise.all([
-                    booking.truck_id ? supabase.from('trucks').select('truck_number, license_plate').eq('id', booking.truck_id).single() : { data: null },
-                    booking.driver_id ? supabase.from('drivers').select('name, driver_number').eq('id', booking.driver_id).single() : { data: null },
-                    booking.service_type ? supabase.from('services').select('name').eq('id', booking.service_type).single() : { data: null },
+                    booking.truck_id
+                        ? supabase.from('trucks').select('truck_number, license_plate').eq('id', booking.truck_id).single()
+                        : { data: null },
+                    booking.driver_id
+                        ? supabase.from('drivers').select('name, driver_number').eq('id', booking.driver_id).single()
+                        : { data: null },
+                    booking.service_type
+                        ? supabase
+                              .from('services')
+                              .select('name, price_private, price_business')
+                              .eq('id', booking.service_type)
+                              .single()
+                        : { data: null },
                 ]);
 
+                const serviceRecord = serviceRes.data as any;
+
                 // Fetch invoices for this booking
-                const { data: invoicesData, error: invoicesError } = await supabase.from('invoices').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
+                const { data: invoicesData, error: invoicesError } = await supabase
+                    .from('invoices')
+                    .select('*')
+                    .eq('booking_id', params?.id)
+                    .order('created_at', { ascending: false });
 
                 // Fetch payments for this booking
-                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('booking_id', params?.id).order('payment_date', { ascending: false });
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('booking_id', params?.id)
+                    .order('payment_date', { ascending: false });
 
                 // Fetch booking tracks (status change history) - newest first
-                const { data: tracksData, error: tracksError } = await supabase.from('booking_tracks').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
+                const { data: tracksData, error: tracksError } = await supabase
+                    .from('booking_tracks')
+                    .select('*')
+                    .eq('booking_id', params?.id)
+                    .order('created_at', { ascending: false });
 
                 // Combine data
-                const enrichedBooking = {
+                const enrichedBooking: any = {
                     ...booking,
                     truck: truckRes.data,
                     driver: driverRes.data,
-                    service_name: (serviceRes.data as any)?.name,
+                    service_name: serviceRecord?.name,
                 };
+
+                // If booking has no explicit price, derive it from service pricing
+                if (!enrichedBooking.price && serviceRecord) {
+                    const customerType = enrichedBooking.customer_type || 'private';
+                    const basePrice =
+                        customerType === 'business'
+                            ? serviceRecord.price_business
+                            : serviceRecord.price_private;
+                    enrichedBooking.price = basePrice || 0;
+                }
 
                 // attach contractor helper if contractor_id present
                 if ((enrichedBooking as any).contractor_id) {
@@ -141,6 +179,14 @@ const BookingPreview = () => {
 
                 setBooking(enrichedBooking as any);
                 setSelectedContractor(enrichedBooking.contractor || null);
+                // parse contractor_price from notes if present
+                try {
+                    const notesText = (enrichedBooking as any)?.notes || '';
+                    const m = /contractor_price:([0-9]+(?:\.[0-9]+)?)/.exec(notesText);
+                    setContractorPaid(m ? parseFloat(m[1]) : 0);
+                } catch (e) {
+                    setContractorPaid(0);
+                }
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
                 }
@@ -161,6 +207,86 @@ const BookingPreview = () => {
             fetchData();
         }
     }, [params?.id]);
+
+    const handleCreateInvoice = async () => {
+        if (!booking || creatingInvoice) return;
+        try {
+            setCreatingInvoice(true);
+            const { data: existingInvoice } = await supabase.from('invoices').select('*').eq('booking_id', booking.id).maybeSingle();
+            if (existingInvoice) {
+                setAlert({ visible: true, message: 'Invoice already exists for this booking.', type: 'info' });
+                setCreatingInvoice(false);
+                return;
+            }
+            const invoiceNumber = `INV-${Date.now()}`;
+            // @ts-ignore
+            const { data: newInvoice, error: invoiceError } = await supabase
+                .from('invoices')
+                .insert({
+                    invoice_number: invoiceNumber,
+                    booking_id: booking.id,
+                    contractor_id: (booking as any).contractor_id || null,
+                    customer_id: (booking as any).customer_id || null,
+                    total_amount: (booking as any).price || 0,
+                    paid_amount: 0,
+                    remaining_amount: (booking as any).price || 0,
+                    status: 'pending',
+                    due_date: new Date().toISOString().split('T')[0],
+                } as any)
+                .select()
+                .single();
+
+            if (invoiceError) throw invoiceError;
+            setAlert({ visible: true, message: 'Invoice DEAL created successfully', type: 'success' });
+            setInvoices((prev) => (newInvoice ? [newInvoice as any, ...prev] : prev));
+            router.push('/invoices');
+        } catch (err) {
+            console.error('Error creating invoice:', err);
+            setAlert({ visible: true, message: 'Error creating Invoice DEAL', type: 'danger' });
+        } finally {
+            setCreatingInvoice(false);
+        }
+    };
+
+    const handleCreateInvoiceDeal = async () => {
+        if (!booking || creatingInvoiceDeal) return;
+        try {
+            setCreatingInvoiceDeal(true);
+
+            const res = await fetch('/api/invoice-deals/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ booking_id: booking.id }),
+            });
+
+            const body = await res.json();
+            if (!res.ok) {
+                console.error('Invoice DEAL creation failed', body);
+                setAlert({ visible: true, message: (body && body.message) || 'Failed to create Invoice DEAL', type: 'danger' });
+                return;
+            }
+
+            const invoiceDeal = (body && body.invoice_deal) || null;
+            if (invoiceDeal) {
+                // mark booking locally as locked
+                setBooking((prev) => (prev ? ({ ...prev, invoice_deal_id: invoiceDeal.id } as any) : prev));
+                setAlert({ visible: true, message: 'Invoice DEAL created', type: 'success' });
+                // open PDF if available
+                try {
+                    if (invoiceDeal.pdf_url) window.open(invoiceDeal.pdf_url, '_blank');
+                } catch (e) {
+                    // ignore popup blockers
+                }
+            } else {
+                setAlert({ visible: true, message: 'Invoice DEAL created (no details returned)', type: 'success' });
+            }
+        } catch (err) {
+            console.error('Error creating Invoice DEAL:', err);
+            setAlert({ visible: true, message: 'Error creating Invoice DEAL', type: 'danger' });
+        } finally {
+            setCreatingInvoiceDeal(false);
+        }
+    };
 
     // dedicated fetch for booking tracks so we can re-use after inserts/updates
     const fetchBookingTracks = async () => {
@@ -351,14 +477,14 @@ const BookingPreview = () => {
                         total_amount: booking.price || 0,
                         paid_amount: 0,
                         remaining_amount: booking.price || 0,
-                        status: 'draft',
+                        status: 'pending',
                         due_date: new Date().toISOString().split('T')[0],
                     } as any)
                     .select()
                     .single();
 
                 if (invoiceError) console.error('Invoice creation error:', invoiceError);
-                else console.log('Draft invoice created', (newInvoice as any)?.id);
+                else console.log('Invoice created', (newInvoice as any)?.id);
             }
 
             setBooking((prev) => (prev ? ({ ...prev, status: 'confirmed' } as any) : prev));
@@ -442,7 +568,7 @@ const BookingPreview = () => {
                         <h1 className="text-2xl font-bold">{t('booking_details') || 'Booking Details'}</h1>
                         <p className="text-gray-500">{booking ? `#${booking.booking_number}` : t('loading')}</p>
                     </div>
-                    {booking && (
+                    {booking && invoices.length === 0 && !(booking as any)?.invoice_deal_id && (
                         <Link href={`/bookings/edit/${booking.id}`} className="btn btn-primary">
                             <IconEdit className="ltr:mr-2 rtl:ml-2" />
                             {t('edit_booking') || 'Edit Booking'}
@@ -459,7 +585,7 @@ const BookingPreview = () => {
                                 <button
                                     className={`${
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
-                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16 flex items-center justify-center`}
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconUser className="w-5 h-5" />
@@ -473,7 +599,7 @@ const BookingPreview = () => {
                                 <button
                                     className={`${
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
-                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16 flex items-center justify-center`}
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconDollarSign className="w-5 h-5" />
@@ -487,7 +613,7 @@ const BookingPreview = () => {
                                 <button
                                     className={`${
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
-                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16 flex items-center justify-center`}
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconClipboardText className="w-5 h-5" />
@@ -508,29 +634,18 @@ const BookingPreview = () => {
                                         <div className="mb-5">
                                             <h3 className="text-lg font-semibold">Basic Information</h3>
                                         </div>
-
                                         <div className="space-y-4">
                                             <div>
                                                 <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
                                                 <div className="flex items-center gap-3">
-                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="form-select">
-                                                            <option value="pending">{t('pending') || 'Pending'}</option>
-                                                            <option value="confirmed">{t('confirmed') || 'Confirmed'}</option>
-                                                            <option value="in_progress">{t('in_progress') || 'In Progress'}</option>
-                                                            <option value="completed">{t('completed') || 'Completed'}</option>
-                                                            <option value="cancelled">{t('cancelled') || 'Cancelled'}</option>
-                                                        </select>
-                                                        <button onClick={handleUpdateStatus} className="btn btn-outline-primary">
-                                                            Update
+                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>
+                                                        {t(booking.status) || booking.status}
+                                                    </span>
+                                                    {booking.status !== 'confirmed' && (
+                                                        <button onClick={confirmBooking} className="btn btn-primary">
+                                                            Confirm Booking
                                                         </button>
-                                                        {booking.status !== 'confirmed' && (
-                                                            <button onClick={confirmBooking} className="btn btn-primary">
-                                                                Confirm Booking
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="space-y-3">
@@ -690,53 +805,86 @@ const BookingPreview = () => {
 
                         {/* ACCOUNTING Tab */}
                         <Tab.Panel>
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
-                                <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/20">
-                                            <IconDollarSign className="h-6 w-6 text-success" />
+                            {(() => {
+                                const totalReceipts = (payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+                                const totalInvoiceDeal = (invoices || []).reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+                                const totalRevenue = totalReceipts - totalInvoiceDeal;
+                                return (
+                                    <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
+                                        <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/20">
+                                                    <IconDollarSign className="h-6 w-6 text-success" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-2xl font-bold text-success">₪{totalRevenue.toFixed(2)}</div>
+                                                    <div className="text-xs text-gray-500">Total Revenue (receipt - Invoice DEAL)</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="text-2xl font-bold text-success">₪{booking.price || 0}</div>
-                                            <div className="text-xs text-gray-500">Service Price</div>
+                                        <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
+                                                    <IconCreditCard className="h-6 w-6 text-primary" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-2xl font-bold">₪{totalReceipts.toFixed(2)}</div>
+                                                    <div className="text-xs text-gray-500">Total Receipt</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="panel bg-gradient-to-br from-red-500/10 to-red-600/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/20">
+                                                    <IconClipboardText className="h-6 w-6 text-danger" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-2xl font-bold text-danger">₪{totalInvoiceDeal.toFixed(2)}</div>
+                                                    <div className="text-xs text-gray-500">Total Invoice DEAL</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
-                                            <IconCreditCard className="h-6 w-6 text-primary" />
-                                        </div>
-                                        <div>
-                                            <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
-                                            <div className="text-xs text-gray-500">Total Payments</div>
-                                        </div>
+                                );
+                            })()}
+
+                            {/* Contractor & Booking Price Summary */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                                <div className="panel">
+                                    <div className="mb-2">
+                                        <h4 className="font-semibold">Contractor</h4>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Name:</span>
+                                        <span className="font-medium">{selectedContractor?.name || '—'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm mt-2">
+                                        <span className="text-gray-600">Paid to Contractor:</span>
+                                        <span className="font-medium">₪{contractorPaid.toFixed(2)}</span>
                                     </div>
                                 </div>
-                                <div className="panel bg-gradient-to-br from-red-500/10 to-red-600/10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/20">
-                                            <IconClipboardText className="h-6 w-6 text-danger" />
-                                        </div>
-                                        <div>
-                                            <div className="text-2xl font-bold text-danger">₪{invoices.reduce((sum, inv) => sum + (inv.remaining_amount || 0), 0).toFixed(2)}</div>
-                                            <div className="text-xs text-gray-500">Balance Due</div>
-                                        </div>
+                                <div className="panel">
+                                    <div className="mb-2">
+                                        <h4 className="font-semibold">Booking Price</h4>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Service Price:</span>
+                                        <span className="font-medium">₪{(booking?.price || 0).toFixed(2)}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold">Add Payment</h3>
+                                    <h3 className="text-lg font-semibold">Payment receipt</h3>
                                     <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
-                                        Record New Payment
+                                        Record New Receipt
                                     </button>
                                 </div>
 
                                 {/* Recent Payments (compact like dashboard) */}
                                 <div className="">
-                                    <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Payments</h5>
+                                    <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Receipts</h5>
                                     {payments && payments.length > 0 ? (
                                         payments.slice(0, 5).map((p, idx) => (
                                             <div key={p.id || idx} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 mb-3 last:border-b-0">
@@ -828,7 +976,7 @@ const BookingPreview = () => {
                                             payments.map((p) => (
                                                 <div key={p.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                     <div>
-                                                        <div className="font-medium">Payment</div>
+                                                        <div className="font-medium">Receipt</div>
                                                         <div className="text-xs text-gray-500">{p.payment_method ? p.payment_method.replace('_', ' ').toUpperCase() : ''}</div>
                                                     </div>
                                                     <div className="text-sm text-gray-600">
@@ -860,8 +1008,42 @@ const BookingPreview = () => {
 
                                 {/* Invoices */}
                                 <div className="panel">
-                                    <div className="mb-5">
+                                    <div className="mb-5 flex items-center justify-between">
                                         <h3 className="text-lg font-semibold">Invoices</h3>
+                                        <div className="flex items-center gap-3">
+                                            {invoices.length > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const firstInvoiceId = invoices[0]?.id;
+                                                        if (firstInvoiceId) {
+                                                            window.open(`/invoices/preview/${firstInvoiceId}`, '_blank');
+                                                        }
+                                                    }}
+                                                    className="inline-flex hover:text-primary"
+                                                    title="Download PDF"
+                                                >
+                                                    <IconPdf className="h-5 w-5" />
+                                                </button>
+                                            )}
+                                            {invoices.length === 0 && !(booking as any)?.invoice_deal_id && (
+                                                <button
+                                                    onClick={handleCreateInvoice}
+                                                    className="inline-flex hover:text-primary"
+                                                    title="Create Invoice"
+                                                    disabled={creatingInvoice}
+                                                >
+                                                    <IconPlus className="h-5 w-5" />
+                                                </button>
+                                            )}
+                                            {invoices.length === 0 && !(booking as any)?.invoice_deal_id && (
+                                                <button onClick={handleCreateInvoiceDeal} className="btn btn-primary btn-sm" disabled={creatingInvoiceDeal}>
+                                                    {creatingInvoiceDeal ? 'Creating DEAL...' : 'Create Invoice DEAL'}
+                                                </button>
+                                            )}
+                                            {(booking as any)?.invoice_deal_id && (
+                                                <span className="badge badge-outline-info">Invoice DEAL created</span>
+                                            )}
+                                        </div>
                                     </div>
                                     {invoices.length === 0 ? (
                                         <div className="text-center py-10">

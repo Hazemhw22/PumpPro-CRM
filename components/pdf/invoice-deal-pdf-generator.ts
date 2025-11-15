@@ -1,0 +1,1 @@
+export { InvoiceDealPDFGenerator } from './invoice-deal-pdf';

@@ -224,17 +224,25 @@ const AddInvoice = () => {
             setSelectedBooking(booking);
 
             // Get service price if available
-            const servicePrice = (booking as any).service_price_private || (booking as any).service_price_business || null;
+            const servicePrice =
+                (booking as any).service_price_private ??
+                (booking as any).service_price_business ??
+                (booking as any).price ??
+                null;
 
             // Auto-fill form with booking data
-            setBillForm((prev) => ({
-                ...prev,
-                customer_name: booking.customer_name || '',
-                phone: booking.customer_phone || '',
-                date: billDate || new Date().toISOString().split('T')[0],
-                // Optionally pre-fill total with service price if available
-                total: servicePrice ? servicePrice.toString() : prev.total,
-            }));
+            setBillForm((prev) => {
+                const amountString = servicePrice != null ? String(servicePrice) : prev.total || prev.bill_amount;
+                return {
+                    ...prev,
+                    customer_name: booking.customer_name || '',
+                    phone: booking.customer_phone || '',
+                    date: billDate || new Date().toISOString().split('T')[0],
+                    // Optionally pre-fill total with service price if available
+                    total: amountString,
+                    bill_amount: amountString,
+                };
+            });
         }
     };
 
@@ -271,7 +279,11 @@ const AddInvoice = () => {
         }
 
         // For tax_invoice and receipt_only, validate total amount
-        if (billForm.bill_type === 'tax_invoice' || billForm.bill_type === 'receipt_only') {
+        if (
+            billForm.bill_type === 'tax_invoice' ||
+            billForm.bill_type === 'receipt_only' ||
+            billForm.bill_type === 'tax_invoice_receipt'
+        ) {
             if (!billForm.total || parseFloat(billForm.total) <= 0) {
                 setAlert({ message: t('total_amount_required') || 'Total amount is required', type: 'danger' });
                 return false;
@@ -539,7 +551,7 @@ const AddInvoice = () => {
             if (billForm.bill_type === 'general') {
                 totalAmount = parseFloat(billForm.bill_amount) || 0;
                 totalWithTax = totalAmount;
-            } else if (billForm.bill_type === 'tax_invoice') {
+            } else if (billForm.bill_type === 'tax_invoice' || billForm.bill_type === 'tax_invoice_receipt') {
                 totalAmount = parseFloat(billForm.total) || 0;
                 taxAmount = parseFloat(billForm.tax_amount) || (totalAmount * 0.18);
                 totalWithTax = parseFloat(billForm.total_with_tax) || (totalAmount + taxAmount);
@@ -569,6 +581,7 @@ const AddInvoice = () => {
 
             // Calculate remaining amount
             const remainingAmount = totalWithTax - paidAmount;
+
 
             // Prepare invoice data matching the database schema
             const invoiceData = {

@@ -301,6 +301,7 @@ export interface Database {
                     scheduled_time: string;
                     status: BookingStatus;
                     contractor_id: string | null;
+                    invoice_deal_id: string | null;
                     truck_id: string | null;
                     driver_id: string | null;
                     service_type: string;
@@ -321,6 +322,7 @@ export interface Database {
                     scheduled_time: string;
                     status?: BookingStatus;
                     contractor_id?: string | null;
+                    invoice_deal_id?: string | null;
                     truck_id?: string | null;
                     driver_id?: string | null;
                     service_type: string;
@@ -341,6 +343,7 @@ export interface Database {
                     scheduled_time?: string;
                     status?: BookingStatus;
                     contractor_id?: string | null;
+                    invoice_deal_id?: string | null;
                     truck_id?: string | null;
                     driver_id?: string | null;
                     service_type?: string;
@@ -388,6 +391,53 @@ export interface Database {
                     remaining_amount?: number;
                     status?: InvoiceStatus;
                     due_date?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            invoice_deals: {
+                Row: {
+                    id: string;
+                    invoice_number: string;
+                    booking_id: string | null;
+                    booking_snapshot: Json | null;
+                    contractor_id: string | null;
+                    contractor_snapshot: Json | null;
+                    total_amount: number;
+                    paid_amount: number;
+                    remaining_amount: number;
+                    status: string;
+                    pdf_url: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    invoice_number: string;
+                    booking_id?: string | null;
+                    booking_snapshot?: Json | null;
+                    contractor_id?: string | null;
+                    contractor_snapshot?: Json | null;
+                    total_amount?: number;
+                    paid_amount?: number;
+                    remaining_amount?: number;
+                    status?: string;
+                    pdf_url?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    invoice_number?: string;
+                    booking_id?: string | null;
+                    booking_snapshot?: Json | null;
+                    contractor_id?: string | null;
+                    contractor_snapshot?: Json | null;
+                    total_amount?: number;
+                    paid_amount?: number;
+                    remaining_amount?: number;
+                    status?: string;
+                    pdf_url?: string | null;
                     created_at?: string;
                     updated_at?: string;
                 };

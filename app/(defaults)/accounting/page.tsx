@@ -7,6 +7,10 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconTrendingUp from '@/components/icon/icon-trending-up';
 import IconBox from '@/components/icon/icon-box';
+import IconPdf from '@/components/icon/icon-pdf';
+import IconPlus from '@/components/icon/icon-plus';
+import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf-generator';
+import { Tables } from '@/types/database.types';
 
 interface Invoice {
     id: string;
@@ -48,6 +52,7 @@ interface Booking {
     id: string;
     booking_number: string;
     service_type: string;
+    status?: string;
 }
 
 interface Service {
@@ -62,6 +67,8 @@ const AccountingPage = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
+    const [dealsByBookingId, setDealsByBookingId] = useState<Record<string, string | null>>({});
+    const [creatingDeal, setCreatingDeal] = useState<string | null>(null); // To track which deal is being created
 
     // Statistics
     const [invoiceStats, setInvoiceStats] = useState({
@@ -83,8 +90,54 @@ const AccountingPage = () => {
         totalBookings: 0,
     });
 
-    useEffect(() => {
-        const fetchData = async () => {
+    const handleGenerateDealPdf = async (invoiceId: string) => {
+        try {
+            // Fetch minimal invoice fields
+            const invRes: any = await supabase
+                .from('invoices')
+                .select('id, invoice_number, booking_id')
+                .eq('id', invoiceId)
+                .maybeSingle();
+            const inv: any = invRes?.data;
+            const invErr: any = invRes?.error;
+            if (invErr || !inv) throw invErr || new Error('Invoice not found');
+
+            if (!(inv as any).booking_id) {
+                alert('No booking linked to this invoice');
+                return;
+            }
+
+            // Create invoice DEAL once via API
+            const resp = await fetch('/api/invoice-deals/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ booking_id: inv.booking_id }),
+            });
+
+            if (!resp.ok) {
+                const msg = await resp.json().catch(() => ({ message: 'Failed to create invoice deal' }));
+                alert(msg.message || 'Failed to create invoice deal');
+                return;
+            }
+
+            const payload = await resp.json();
+            const created = (payload as any)?.invoice_deal;
+            const pdfUrl: string | null = created?.pdf_url || null;
+
+            // Update local map so the Generate button disappears
+            setDealsByBookingId((prev) => ({ ...prev, [inv.booking_id as string]: created?.id || 'created' }));
+
+            // Open the generated PDF if available
+            if (pdfUrl) {
+                window.open(pdfUrl, '_blank');
+            }
+        } catch (e) {
+            console.error('Failed to generate DEAL PDF', e);
+            alert('Failed to generate DEAL PDF');
+        }
+    };
+
+    const fetchAll = async () => {
             try {
                 // Determine role and contractor id
                 let r: string | null = null;
@@ -194,13 +247,20 @@ const AccountingPage = () => {
                 // @ts-ignore
                 let bookingsQuery: any = supabase
                     .from('bookings')
-                    .select('id, booking_number, service_type');
+                    .select('id, booking_number, service_type, status, invoice_deal_id');
                 if (r === 'contractor') bookingsQuery = bookingsQuery.eq('contractor_id', contractorId);
                 const { data: bookingsData, error: bookingsError } = await bookingsQuery;
 
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);
-                    
+
+                    // Map booking_id to existing invoice_deal_id
+                    const map: Record<string, string | null> = {};
+                    (bookingsData as any[]).forEach((b: any) => {
+                        map[b.id] = b.invoice_deal_id || null;
+                    });
+                    setDealsByBookingId(map);
+
                     // Calculate booking statistics
                     const totalBookings = bookingsData.length;
                     setBookingStats({ totalBookings });
@@ -221,15 +281,130 @@ const AccountingPage = () => {
             } finally {
                 setLoading(false);
             }
-        };
+    };
 
-        fetchData();
+    useEffect(() => {
+        fetchAll();
+    }, []);
+
+    useEffect(() => {
+        let channel: any;
+        try {
+            channel = supabase
+                .channel('accounting_realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+                    fetchAll();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+                    fetchAll();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
+                    fetchAll();
+                })
+                .subscribe();
+        } catch (e) {
+            console.warn('Realtime not available for accounting:', e);
+        }
+
+        const onFocus = () => {
+            fetchAll();
+        };
+        try {
+            window.addEventListener('focus', onFocus);
+        } catch (e) { /* ignore */ }
+
+        return () => {
+            try {
+                if (channel) supabase.removeChannel(channel);
+            } catch (e) { /* ignore */ }
+            try {
+                window.removeEventListener('focus', onFocus);
+            } catch (e) { /* ignore */ }
+        };
     }, []);
 
     // Helper function to get service name
     const getServiceName = (serviceType: string) => {
         const service = services.find(s => s.id === serviceType);
         return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
+
+    // Helper: check if invoice already has a DEAL via booking_id
+    const hasDealForInvoice = (invoiceId: string) => {
+        const inv = invoices.find((i) => i.id === invoiceId);
+        if (!inv || !inv.booking_id) return false;
+        const bookingId = inv.booking_id as string;
+        return Boolean(dealsByBookingId[bookingId]);
+    };
+
+    // Download existing DEAL PDF via public URL
+    const handleCreateInvoiceDeal = async (invoiceId: string) => {
+        const inv = invoices.find((i) => i.id === invoiceId);
+        if (!inv || !inv.booking_id) {
+            alert('No booking linked to this invoice');
+            return;
+        }
+
+        setCreatingDeal(invoiceId);
+        try {
+            const resp = await fetch('/api/invoice-deals/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ booking_id: inv.booking_id }),
+            });
+
+            if (!resp.ok) {
+                const msg = await resp.json().catch(() => ({ message: 'Failed to create invoice deal' }));
+                throw new Error(msg.message || 'Failed to create invoice deal');
+            }
+
+            const payload = await resp.json();
+            const created = (payload as any)?.invoice_deal;
+
+            // Update local map so the button disappears
+            setDealsByBookingId((prev) => ({ ...prev, [inv.booking_id as string]: created?.id || 'created' }));
+
+            // Redirect to the invoices page
+            window.location.href = '/accounting';
+
+        } catch (e: any) {
+            console.error('Failed to create invoice deal', e);
+            alert(`Failed to create invoice deal: ${e.message}`);
+        } finally {
+            setCreatingDeal(null);
+        }
+    };
+
+    const handleDownloadInvoicePdf = async (invoiceId: string) => {
+        try {
+            const { data: inv, error: invErr } = await supabase
+                .from('invoices')
+                .select('id, booking_id, invoice_number')
+                .eq('id', invoiceId)
+                .maybeSingle<Pick<Tables<'invoices'>, 'id' | 'booking_id' | 'invoice_number'>>();
+            if (invErr || !inv) throw invErr || new Error('Invoice not found');
+            if (!inv.booking_id) {
+                alert('No booking linked to this invoice');
+                return;
+            }
+
+            const { data: deal, error: dealErr } = await supabase
+                .from('invoice_deals')
+                .select('id, pdf_url')
+                .eq('booking_id', inv.booking_id)
+                .maybeSingle();
+            if (dealErr) throw dealErr;
+
+            const pdfUrl = (deal as any)?.pdf_url as string | null | undefined;
+            if (pdfUrl) {
+                window.open(pdfUrl, '_blank');
+            } else {
+                alert('DEAL PDF not found for this invoice. An existing invoice deal PDF was not found for this booking.');
+            }
+        } catch (e) {
+            console.error('Failed to download DEAL PDF', e);
+            alert('Failed to download DEAL PDF');
+        }
     };
 
     if (loading) {
@@ -240,7 +415,8 @@ const AccountingPage = () => {
         );
     }
 
-    const totalRevenue = invoiceStats.paidRevenue;
+    const totalInvoiceDeal = invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+    const totalRevenue = paymentStats.totalReceived - totalInvoiceDeal;
     const pendingRevenue = invoiceStats.pendingRevenue;
 
     return (
@@ -260,7 +436,7 @@ const AccountingPage = () => {
                         <IconTrendingUp className="h-8 w-8 text-success" />
                     </div>
                     <div className="text-4xl font-bold text-success">₪{totalRevenue.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500 mt-2">From paid invoices</div>
+                    <div className="text-xs text-gray-500 mt-2">Receipts minus Invoice DEAL</div>
                 </div>
                 <div className="panel">
                     <div className="flex items-center justify-between mb-3">
@@ -300,7 +476,7 @@ const AccountingPage = () => {
                         </div>
                         <div>
                             <div className="text-2xl font-bold">{paymentStats.totalPayments}</div>
-                            <div className="text-xs text-gray-500">Total Payments</div>
+                            <div className="text-xs text-gray-500">Total Receipts</div>
                         </div>
                     </div>
                 </div>
@@ -364,8 +540,8 @@ const AccountingPage = () => {
                 <Link href="/payments" className="panel hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-semibold mb-2">View All Payments</h3>
-                            <p className="text-sm text-gray-500">Track payment history</p>
+                            <h3 className="text-lg font-semibold mb-2">View All Receipts</h3>
+                            <p className="text-sm text-gray-500">Track receipts history</p>
                         </div>
                         <IconDollarSign className="h-10 w-10 text-success" />
                     </div>
@@ -396,28 +572,33 @@ const AccountingPage = () => {
                             </thead>
                             <tbody>
                                 {[
-                                    ...invoices.slice(0, 5).map(inv => ({
-                                        id: inv.id,
-                                        date: inv.created_at,
-                                        type: 'Invoice',
-                                        customer: inv.customers?.name || 'N/A',
-                                        reference: `#${inv.invoice_number}`,
-                                        amount: inv.total_amount,
-                                        status: inv.status,
-                                        isInvoice: true
-                                    })),
+                                    ...invoices.slice(0, 5).map(inv => {
+                                        const booking = bookings.find(b => b.id === (inv.booking_id as any));
+                                        return {
+                                            id: inv.id,
+                                            date: inv.created_at,
+                                            type: 'Invoice',
+                                            customer: inv.customers?.name || 'N/A',
+                                            reference: `#${inv.invoice_number}`,
+                                            amount: inv.total_amount,
+                                            status: inv.status,
+                                            isInvoice: true,
+                                            bookingStatus: booking?.status || null,
+                                        };
+                                    }),
                                     ...payments.slice(0, 5).map(pay => {
                                         const invoice = invoices.find(inv => inv.id === pay.invoice_id);
                                         const customerName = pay.invoices?.customers?.name || invoice?.customers?.name;
                                         return {
                                             id: pay.id,
                                             date: pay.payment_date,
-                                            type: 'Payment',
+                                            type: 'Receipt',
                                             customer: customerName || 'N/A',
                                             reference: pay.payment_method?.replace('_', ' '),
                                             amount: pay.amount,
                                             status: 'completed',
-                                            isInvoice: false
+                                            isInvoice: false,
+                                            bookingStatus: null,
                                         };
                                     })
                                 ]
@@ -444,7 +625,37 @@ const AccountingPage = () => {
                                                 {transaction.status}
                                             </span>
                                         </td>
-                                        <td>{new Date(transaction.date).toLocaleDateString('en-GB')}</td>
+                                        <td>
+                                            <div className="flex items-center gap-2">
+                                                <span>{new Date(transaction.date).toLocaleDateString('en-GB')}</span>
+                                                {transaction.isInvoice && transaction.bookingStatus === 'confirmed' && (
+                                                    <>
+                                                        {hasDealForInvoice(transaction.id) ? (
+                                                            <button
+                                                                onClick={() => handleDownloadInvoicePdf(transaction.id)}
+                                                                className="inline-flex hover:text-primary"
+                                                                title="Download PDF"
+                                                            >
+                                                                <IconPdf className="h-5 w-5" />
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleCreateInvoiceDeal(transaction.id)}
+                                                                disabled={creatingDeal === transaction.id}
+                                                                className="inline-flex hover:text-primary disabled:opacity-50"
+                                                                title="Create Invoice Deal"
+                                                            >
+                                                                {creatingDeal === transaction.id ? (
+                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                                                ) : (
+                                                                    <IconPlus className="h-5 w-5" />
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

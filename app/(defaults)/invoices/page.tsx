@@ -5,6 +5,8 @@ import Link from 'next/link';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import IconPrinter from '@/components/icon/icon-printer';
+import IconPdf from '@/components/icon/icon-pdf';
+import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 
 interface Invoice {
     id: string;
@@ -21,9 +23,19 @@ interface Invoice {
     updated_at: string;
     customers?: {
         name: string;
+        phone?: string | null;
+        address?: string | null;
+        tax_id?: string | null;
     } | null;
     bookings?: {
         service_type: string;
+        booking_number?: string;
+        service_address?: string | null;
+        scheduled_date?: string | null;
+        scheduled_time?: string | null;
+        notes?: string | null;
+        contractor_id?: string | null;
+        driver_id?: string | null;
     } | null;
 }
 
@@ -31,6 +43,12 @@ interface Booking {
     id: string;
     booking_number: string;
     service_type: string;
+    service_address?: string | null;
+    scheduled_date?: string | null;
+    scheduled_time?: string | null;
+    notes?: string | null;
+    contractor_id?: string | null;
+    driver_id?: string | null;
 }
 
 interface Service {
@@ -46,6 +64,10 @@ const InvoicesPage = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
+
+    // Provider maps
+    const [contractorsMap, setContractorsMap] = useState<Map<string, { id: string; name: string; phone?: string }>>(new Map());
+    const [driversMap, setDriversMap] = useState<Map<string, { id: string; name: string; phone?: string }>>(new Map());
 
     // Statistics
     const [stats, setStats] = useState({
@@ -89,8 +111,8 @@ const InvoicesPage = () => {
                     .from('invoices')
                     .select(`
                         *,
-                        customers ( name ),
-                        bookings ( service_type, contractor_id )
+                        customers ( name, phone, address, tax_id ),
+                        bookings ( service_type, booking_number, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id )
                     `);
                 if (r === 'contractor') invoicesQuery = invoicesQuery.eq('contractor_id', contractorId);
 
@@ -114,23 +136,45 @@ const InvoicesPage = () => {
                     setStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
                 }
 
-                // Fetch bookings (for service name mapping)
+                // Fetch bookings (with provider ids and scheduling fields)
                 // @ts-ignore
-                let { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('id, booking_number, service_type, contractor_id');
+                let { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id');
                 if (r === 'contractor' && contractorId) {
                     // @ts-ignore
-                    const res = await supabase.from('bookings').select('id, booking_number, service_type, contractor_id').eq('contractor_id', contractorId);
+                    const res = await supabase.from('bookings').select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id').eq('contractor_id', contractorId);
                     bookingsData = res.data as any;
                 }
-
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);
+
+                    // Build provider id sets
+                    const contractorIds = Array.from(new Set((bookingsData as any[]).map((b: any) => b.contractor_id).filter(Boolean)));
+                    const driverIds = Array.from(new Set((bookingsData as any[]).map((b: any) => b.driver_id).filter(Boolean)));
+
+                    // Fetch contractors
+                    if (contractorIds.length > 0) {
+                        // @ts-ignore
+                        const { data: cdata } = await supabase.from('contractors').select('id, name, phone').in('id', contractorIds);
+                        if (cdata) {
+                            const cmap = new Map<string, { id: string; name: string; phone?: string }>((cdata as any[]).map((c: any) => [c.id, { id: c.id, name: c.name, phone: c.phone }]));
+                            setContractorsMap(cmap);
+                        }
+                    }
+
+                    // Fetch drivers
+                    if (driverIds.length > 0) {
+                        // @ts-ignore
+                        const { data: ddata } = await supabase.from('drivers').select('id, name, phone').in('id', driverIds);
+                        if (ddata) {
+                            const dmap = new Map<string, { id: string; name: string; phone?: string }>((ddata as any[]).map((d: any) => [d.id, { id: d.id, name: d.name, phone: d.phone }]));
+                            setDriversMap(dmap);
+                        }
+                    }
                 }
 
                 // Fetch services
                 // @ts-ignore
                 const { data: servicesData, error: servicesError } = await supabase.from('services').select('id, name').eq('active', true);
-
                 if (!servicesError && servicesData) {
                     setServices(servicesData as any);
                 }
@@ -154,20 +198,16 @@ const InvoicesPage = () => {
     const renderInvoiceTypeBadge = (type?: string | null) => {
         if (!type) return <span className="text-sm text-gray-500">-</span>;
         const key = String(type).toLowerCase();
-        let label = type.replace(/_/g, ' ');
+        let label = 'receipt only';
         let classes = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium';
-
+    
         if (key.includes('tax')) {
-            // blue for Tax Invoice Only
             classes += ' bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
-        } else if (key.includes('receipt')) {
-            // green for Receipt Only
-            classes += ' bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200';
+            label = type.replace(/_/g, ' ');
         } else {
-            // orange for General Bill and fallbacks
-            classes += ' bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200';
+            classes += ' bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200';
         }
-
+    
         return <span className={classes}>{label}</span>;
     };
 
@@ -188,6 +228,54 @@ const InvoicesPage = () => {
             </div>
         );
     }
+
+    const handleDownloadInvoicePdf = async (invoice: Invoice) => {
+        try {
+            const booking = invoice.bookings || bookings.find((b) => b.id === invoice.booking_id);
+            const provider = booking?.contractor_id ? contractorsMap.get(booking.contractor_id as string) : booking?.driver_id ? driversMap.get(booking.driver_id as string) : undefined;
+            const data: any = {
+                company: {
+                    name: 'PumpPro CRM',
+                    phone: '',
+                    address: '',
+                    tax_id: '',
+                    logo_url: '/assets/images/logo.png',
+                },
+                invoice: {
+                    id: invoice.id,
+                    invoice_number: invoice.invoice_number,
+                    total_amount: invoice.total_amount,
+                    paid_amount: invoice.paid_amount,
+                    remaining_amount: invoice.remaining_amount,
+                    status: invoice.status,
+                    created_at: invoice.created_at,
+                    due_date: invoice.due_date,
+                },
+                booking: booking ? {
+                    booking_number: (booking as any).booking_number,
+                    service_type: (booking as any).service_type,
+                    service_address: (booking as any).service_address,
+                    scheduled_date: (booking as any).scheduled_date,
+                    scheduled_time: (booking as any).scheduled_time,
+                    notes: (booking as any).notes,
+                    contractor_id: (booking as any).contractor_id,
+                    driver_id: (booking as any).driver_id,
+                } : undefined,
+                contractor: provider ? { name: provider.name, phone: provider.phone || undefined } : undefined,
+                customer: invoice.customers ? {
+                    name: invoice.customers.name,
+                    phone: (invoice.customers as any).phone,
+                    address: (invoice.customers as any).address,
+                    tax_id: (invoice.customers as any).tax_id,
+                } : undefined,
+                service: booking ? { name: getServiceName((booking as any).service_type) } : undefined,
+            };
+    
+            await InvoiceDealPDFGenerator.generatePDF(data, `invoice-${invoice.invoice_number}.pdf`, 'invoice');
+        } catch (e: any) {
+            alert(e?.message || 'Error generating PDF');
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -218,7 +306,7 @@ const InvoicesPage = () => {
                         <div className="flex items-center gap-3">
                             <Link href="/invoices/add" className="btn btn-primary gap-2">
                                 <IconPlus />
-                                Add New Invoice
+                                Add New Invoice receipt only
                             </Link>
                         </div>
                         <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
@@ -282,15 +370,8 @@ const InvoicesPage = () => {
                                                             <Link href={`/invoices/preview/${invoice.id}`} className="inline-flex hover:text-primary" title="View Invoice">
                                                                 <IconEye className="h-5 w-5" />
                                                             </Link>
-                                                            <button
-                                                                onClick={() => {
-                                                                    window.open(`/invoices/preview/${invoice.id}?print=true`, '_blank');
-                                                                }}
-                                                                className="inline-flex hover:text-info"
-                                                                title="Print Invoice"
-                                                            >
-                                                                <IconPrinter className="h-5 w-5" />
-                                                            </button>
+                                                         
+                                                         
                                                         </div>
                                                     </td>
                                                 </tr>

@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import AssignmentModeSelectAdd from '@/components/assignment-mode-select/assignment-mode-select-add';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -113,6 +114,9 @@ const EditBooking = () => {
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
     
     const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
+    const [assignMode, setAssignMode] = useState<'contractor' | 'driver'>('driver');
+    const [contractorPrice, setContractorPrice] = useState<string>('');
+    const [hasInvoice, setHasInvoice] = useState<boolean>(false);
     
     const addAlert = (type: 'success' | 'danger' | 'warning' | 'info', message: string, title?: string) => {
         const id = Date.now().toString();
@@ -179,6 +183,16 @@ const EditBooking = () => {
                                 const cd = contractorData as any;
                                 setSelectedContractor({ id: cd.id, name: cd.name });
                             }
+                // Check if invoice exists for this booking to block edits
+                try {
+                    const { data: inv } = await supabase.from('invoices').select('id').eq('booking_id', bookingId).maybeSingle();
+                    setHasInvoice(!!inv);
+                    if (inv) {
+                        addAlert('info', t('invoice_exists_no_edit') || 'An invoice exists for this booking. Editing is disabled.', 'Info');
+                    }
+                } catch (e) {
+                    // ignore
+                }
                         } catch (e) {
                             // ignore if not found
                         }
@@ -280,6 +294,11 @@ const EditBooking = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (hasInvoice) {
+            addAlert('danger', t('cannot_edit_with_invoice') || 'Cannot edit a booking after an invoice is created.', 'Error');
+            return;
+        }
+
         if (!validateForm()) return;
 
         setSaving(true);
@@ -295,6 +314,10 @@ const EditBooking = () => {
                 status: form.status,
                 service_type: form.service_type.trim(),
                 contractor_id: selectedContractor ? selectedContractor.id : null,
+                notes: (
+                    (form.notes || '') +
+                    (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')
+                ).trim() || null,
             };
 
             // @ts-ignore - Supabase type inference issue
@@ -374,9 +397,7 @@ const EditBooking = () => {
                         {({ selected }) => (
                             <button
                                 type="button"
-                                className={`${
-                                    selected ? 'text-primary !outline-none before:!w-full' : ''
-                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                             >
                                 <IconInfoCircle className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
                                 {t('basic_information') || 'Basic Information'}
@@ -387,9 +408,7 @@ const EditBooking = () => {
                         {({ selected }) => (
                             <button
                                 type="button"
-                                className={`${
-                                    selected ? 'text-primary !outline-none before:!w-full' : ''
-                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                             >
                                 <IconBox className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
                                 {t('assignment') || 'Assignment'}
@@ -400,9 +419,7 @@ const EditBooking = () => {
                         {({ selected }) => (
                             <button
                                 type="button"
-                                className={`${
-                                    selected ? 'text-primary !outline-none before:!w-full' : ''
-                                } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                             >
                                 <IconClock className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
                                 {t('schedule_information') || 'Schedule Information'}
@@ -522,7 +539,75 @@ const EditBooking = () => {
                         <div className="panel ">
                             <form onSubmit={handleSubmit} className="space-y-5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Assignment Mode */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assignment Mode</label>
+                                    <AssignmentModeSelectAdd
+                                        value={assignMode}
+                                        onChange={(val) => {
+                                            setAssignMode(val);
+                                            if (val === 'contractor') {
+                                                setSelectedDriver(null);
+                                                setForm(prev => ({ ...prev, driver_id: '' }));
+                                            } else if (val === 'driver') {
+            										setSelectedContractor(null);
+                                                setContractorPrice('');
+                                            }
+                                        }}
+                                        className="form-select"
+                                    />
+                                </div>
+                                {/* Assign Truck (Always visible) */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('assign_truck') || 'Assign Truck'}
+                                    </label>
+                                    <TruckSelect
+                                        selectedTruck={selectedTruck}
+                                        onTruckSelect={(truck) => {
+                                            setSelectedTruck(truck);
+                                            if (truck) {
+                                                setForm(prev => ({ ...prev, truck_id: (truck as any).id, driver_id: assignMode === 'driver' && (truck as any).driver_id ? (truck as any).driver_id : prev.driver_id }));
+                                                if (assignMode === 'driver' && (truck as any).driver_id) {
+                                                    const driver = drivers.find(d => d.id === (truck as any).driver_id);
+                                                    if (driver) setSelectedDriver(driver);
+                                                }
+                                            } else {
+                                                setForm(prev => ({ ...prev, truck_id: '' }));
+                                            }
+                                        }}
+                                        onCreateNew={() => router.push('/fleet/add')}
+                                        className="form-select"
+                                    />
+                                </div>
+                                {/* Driver Assignment */}
+                                {assignMode === 'driver' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('assign_driver') || 'Assign Driver'}
+                                        </label>
+                                        <DriverSelect
+                                            selectedDriver={selectedDriver}
+                                            onDriverSelect={(driver) => {
+                                                setSelectedDriver(driver);
+                                                if (driver) {
+                                                    setForm(prev => ({ ...prev, driver_id: driver.id }));
+                                                    const truck = trucks.find(t => (t as any).driver_id === driver.id);
+                                                    if (truck) {
+                                                        setSelectedTruck(truck);
+                                                        setForm(prev => ({ ...prev, truck_id: (truck as any).id }));
+                                                    }
+                                                } else {
+                                                    setForm(prev => ({ ...prev, driver_id: '' }));
+                                                }
+                                            }}
+                                            onCreateNew={() => router.push('/drivers/add')}
+                                            className="form-select"
+                                        />
+                                    </div>
+                                )}
                                 {/* Contractor Assignment */}
+                                {assignMode === 'contractor' && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                         {t('contractor') || 'Contractor'}
@@ -535,46 +620,14 @@ const EditBooking = () => {
                                         onCreateNew={() => router.push('/contractors/add')}
                                         className="form-select"
                                     />
+                                    {selectedContractor && (
+                                        <div className="mt-3">
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor Price You Pay</label>
+                                            <input type="number" className="form-input" placeholder="0" value={contractorPrice} onChange={(e) => setContractorPrice(e.target.value)} />
+                                        </div>
+                                    )}
                                 </div>
-                                {/* Truck Assignment */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('assign_truck') || 'Assign Truck'}
-                                    </label>
-                                    <TruckSelect
-                                        selectedTruck={selectedTruck}
-                                        onTruckSelect={(truck) => {
-                                            setSelectedTruck(truck);
-                                            if (truck) {
-                                                setForm(prev => ({ ...prev, truck_id: truck.id }));
-                                                if (truck.driver_id) {
-                                                    const driver = drivers.find(d => d.id === truck.driver_id);
-                                                    if (driver) setSelectedDriver(driver);
-                                                }
-                                            }
-                                        }}
-                                        onCreateNew={() => router.push('/fleet/add')}
-                                        className="form-select"
-                                    />
-                                </div>
-
-                                {/* Driver Assignment */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('assign_driver') || 'Assign Driver'}
-                                    </label>
-                                    <DriverSelect
-                                        selectedDriver={selectedDriver}
-                                        onDriverSelect={(driver) => {
-                                            setSelectedDriver(driver);
-                                            if (driver) {
-                                                setForm(prev => ({ ...prev, driver_id: driver.id }));
-                                            }
-                                        }}
-                                        onCreateNew={() => router.push('/drivers/add')}
-                                        className="form-select"
-                                    />
-                                </div>
+                                )}
 
                             </div>
 
@@ -582,8 +635,8 @@ const EditBooking = () => {
                                     <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
                                         {t('cancel')}
                                     </button>
-                                    <button type="submit" className="btn btn-primary" disabled={saving}>
-                                        {saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
+                                    <button type="submit" className="btn btn-primary" disabled={saving || hasInvoice}>
+                                        {hasInvoice ? (t('disabled') || 'Disabled') : (saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking')}
                                     </button>
                                 </div>
                             </form>

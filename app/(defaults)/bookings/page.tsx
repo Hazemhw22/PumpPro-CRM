@@ -6,6 +6,7 @@ import IconTrashLines from '@/components/icon/icon-trash-lines';
 import { sortBy } from 'lodash';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps */
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
@@ -54,6 +55,7 @@ const BookingsList = () => {
         type: 'success',
     });
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const fetchBookings = async () => {
             try {
@@ -62,7 +64,9 @@ const BookingsList = () => {
                 let contractorId: string | null = null;
                 let driverId: string | null = null;
                 try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    const {
+                        data: { user },
+                    } = await supabase.auth.getUser();
                     if (user) {
                         // @ts-ignore
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
@@ -75,7 +79,11 @@ const BookingsList = () => {
                             // Fallback by email if user_id not linked
                             if (!contractorId && (user as any).email) {
                                 // @ts-ignore
-                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                const { data: c2 } = await supabase
+                                    .from('contractors')
+                                    .select('id')
+                                    .eq('email', (user as any).email)
+                                    .maybeSingle();
                                 contractorId = (c2 as any)?.id || null;
                             }
                         } else if (role === 'driver') {
@@ -84,7 +92,11 @@ const BookingsList = () => {
                             driverId = (d as any)?.id || null;
                             if (!driverId && (user as any).email) {
                                 // @ts-ignore
-                                const { data: d2 } = await supabase.from('drivers').select('id').eq('email', (user as any).email).maybeSingle();
+                                const { data: d2 } = await supabase
+                                    .from('drivers')
+                                    .select('id')
+                                    .eq('email', (user as any).email)
+                                    .maybeSingle();
                                 driverId = (d2 as any)?.id || null;
                             }
                         }
@@ -262,6 +274,55 @@ const BookingsList = () => {
         }
     };
 
+    const createInvoiceFromBooking = async (bookingId: string) => {
+        try {
+            // Check if invoice already exists
+            const { data: existingInvoice } = await supabase.from('invoices').select('id').eq('booking_id', bookingId).maybeSingle();
+
+            if (existingInvoice) {
+                setAlert({ visible: true, message: t('invoice_already_exists'), type: 'danger' });
+                return;
+            }
+
+            // Get booking details
+            const booking = items.find((b) => b.id === bookingId);
+            if (!booking) {
+                setAlert({ visible: true, message: t('booking_not_found'), type: 'danger' });
+                return;
+            }
+
+            // Create invoice
+            const invoiceData = {
+                booking_id: bookingId,
+                customer_id: (booking as any).customer_id || null,
+                customer_name: booking.customer_name,
+                customer_phone: booking.customer_phone,
+                service_name: (booking as any).service_name || booking.service_type,
+                total_amount: (booking as any).price || 0,
+                paid_amount: 0,
+                remaining_amount: (booking as any).price || 0,
+                status: 'pending',
+                invoice_type: 'tax_invoice',
+                invoice_date: new Date().toISOString().split('T')[0],
+                due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+            };
+
+            // @ts-ignore - supabase types are loose in this project
+            const { data: newInvoice, error } = await supabase.from('invoices').insert([invoiceData]).select().single();
+
+            if (error) throw error;
+
+            setAlert({ visible: true, message: t('invoice_created_successfully'), type: 'success' });
+
+            // Refresh the bookings list
+            const updatedItems = items.map((item) => (item.id === bookingId ? { ...item, has_invoice: true } : item));
+            setItems(updatedItems as any);
+        } catch (error) {
+            console.error('Error creating invoice:', error);
+            setAlert({ visible: true, message: t('error_creating_invoice'), type: 'danger' });
+        }
+    };
+
     const confirmDeletion = async () => {
         if (!bookingToDelete) return;
         try {
@@ -308,7 +369,7 @@ const BookingsList = () => {
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
                     <div className="flex items-center gap-2">
-                        {role !== 'driver' && (
+                        {role === 'admin' && (
                             <>
                                 <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
                                     <IconTrashLines />

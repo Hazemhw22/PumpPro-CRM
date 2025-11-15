@@ -13,6 +13,7 @@ import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconCamera from '@/components/icon/icon-camera';
 import IconPrinter from '@/components/icon/icon-printer';
+import IconPdf from '@/components/icon/icon-pdf';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -57,6 +58,18 @@ interface Invoice {
     created_at: string;
 }
 
+interface InvoiceDeal {
+    id: string;
+    invoice_number: string;
+    booking_id: string | null;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    status: string;
+    pdf_url?: string | null;
+    created_at: string;
+}
+
 interface Payment {
     id: string;
     invoice_id: string;
@@ -86,6 +99,7 @@ const CustomerPreview = () => {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [services, setServices] = useState<Service[]>([]);
+    const [invoiceDeals, setInvoiceDeals] = useState<InvoiceDeal[]>([]);
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -156,6 +170,18 @@ const CustomerPreview = () => {
 
                 if (!servicesError && servicesData) {
                     setServices(servicesData as any);
+                }
+
+                const bookingIds = (bookingsData || []).map((b: any) => b.id).filter(Boolean);
+                if (bookingIds.length > 0) {
+                    const { data: dealsData, error: dealsError } = await (supabase as any)
+                        .from('invoice_deals')
+                        .select('*')
+                        .in('booking_id', bookingIds);
+
+                    if (!dealsError && dealsData) {
+                        setInvoiceDeals(dealsData as any);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -302,7 +328,7 @@ const CustomerPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconUser className="ltr:mr-2 rtl:ml-2" />
-                                    Details
+                                    Basic Info
                                 </button>
                             )}
                         </Tab>
@@ -326,7 +352,7 @@ const CustomerPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                    <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
-                                    Invoices
+                                    Accounting
                                 </button>
                             )}
                         </Tab>
@@ -338,7 +364,7 @@ const CustomerPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                    <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
-                                    Payments
+                                    Balance
                                 </button>
                             )}
                         </Tab>
@@ -634,80 +660,69 @@ const CustomerPreview = () => {
                             </div>
                         </Tab.Panel>
 
-                        {/* Invoices Tab */}
+                        {/* Accounting Tab */}
                         <Tab.Panel>
-                            <div className="panel">
+                            <div className="panel">                         
                                 <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Customer Invoices</h3>
+                                    <h3 className="text-lg font-semibold mb-3">Invoice Deals</h3>
+                                    {invoiceDeals.length === 0 ? (
+                                        <p className="text-gray-500 text-sm">No invoice deals found for this customer's bookings.</p>
+                                    ) : (
+                                        <div className="table-responsive">
+                                            <table className="table-bordered">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Deal #</th>
+                                                        <th>Booking #</th>
+                                                        <th>Amount</th>
+                                                        <th>Remaining</th>
+                                                        <th>Status</th>
+                                                        <th>PDF</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {invoiceDeals.map((deal) => {
+                                                        const booking = bookings.find((b) => b.id === deal.booking_id);
+                                                        return (
+                                                            <tr key={deal.id}>
+                                                                <td>
+                                                                    <strong className="text-primary">#{deal.invoice_number}</strong>
+                                                                </td>
+                                                                <td>
+                                                                    {booking ? (
+                                                                        <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
+                                                                            #{booking.booking_number}
+                                                                        </Link>
+                                                                    ) : (
+                                                                        'N/A'
+                                                                    )}
+                                                                </td>
+                                                                <td>₪{deal.total_amount?.toFixed(2) || 0}</td>
+                                                                <td className="text-danger">₪{deal.remaining_amount?.toFixed(2) || 0}</td>
+                                                                <td>
+                                                                    <span className="badge badge-outline-info">{deal.status?.toUpperCase()}</span>
+                                                                </td>
+                                                                <td className="text-center">
+                                                                    {deal.pdf_url ? (
+                                                                        <button
+                                                                            onClick={() => window.open(deal.pdf_url as string, '_blank')}
+                                                                            className="inline-flex hover:text-primary"
+                                                                            title="Open Deal PDF"
+                                                                        >
+                                                                            <IconPdf className="h-5 w-5" />
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-500">No PDF</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                 </div>
-                                {invoices.length === 0 ? (
-                                    <div className="text-center py-10">
-                                        <p className="text-gray-500">No invoices found for this customer</p>
-                                    </div>
-                                ) : (
-                                    <div className="table-responsive">
-                                        <table className="table-bordered">
-                                            <thead>
-                                                <tr>
-                                                    <th>Invoice #</th>
-                                                    <th>Booking #</th>
-                                                    <th>Service</th>
-                                                    <th>Total Amount</th>
-                                                    <th>Paid Amount</th>
-                                                    <th>Remaining</th>
-                                                    <th>Status</th>
-                                                    <th>Due Date</th>
-                                                    <th>Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {invoices.map((invoice) => {
-                                                    const booking = bookings.find(b => b.id === invoice.booking_id);
-                                                    return (
-                                                        <tr key={invoice.id}>
-                                                            <td>
-                                                                <strong className="text-primary">#{invoice.invoice_number}</strong>
-                                                            </td>
-                                                            <td>
-                                                                {booking ? (
-                                                                    <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
-                                                                        #{booking.booking_number}
-                                                                    </Link>
-                                                                ) : '-'}
-                                                            </td>
-                                                            <td>{booking ? getServiceName(booking.service_type) : '-'}</td>
-                                                            <td>₪{invoice.total_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-success">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-danger">₪{invoice.remaining_amount?.toFixed(2) || 0}</td>
-                                                            <td>
-                                                                <span className={`badge ${
-                                                                    invoice.status === 'paid' ? 'badge-outline-success' :
-                                                                    invoice.status === 'partial' ? 'badge-outline-warning' :
-                                                                    invoice.status === 'overdue' ? 'badge-outline-danger' :
-                                                                    'badge-outline-info'
-                                                                }`}>
-                                                                    {invoice.status?.toUpperCase()}
-                                                                </span>
-                                                            </td>
-                                                            <td>{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-GB') : '-'}</td>
-                                                            <td className="text-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        window.open(`/invoices/preview/${invoice.id}?print=true`, '_blank');
-                                                                    }}
-                                                                    className="inline-flex hover:text-primary"
-                                                                    title="Print Invoice"
-                                                                >
-                                                                    <IconPrinter className="h-5 w-5" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
                             </div>
                         </Tab.Panel>
 
