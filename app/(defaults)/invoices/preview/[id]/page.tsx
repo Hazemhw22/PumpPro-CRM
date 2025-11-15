@@ -73,9 +73,17 @@ interface Customer {
 
 // Helper function to convert Invoice to BillData format for PDF generation
 const convertInvoiceToBillData = (invoice: Invoice, booking?: Booking | null, service?: Service | null): BillData => {
+    const billType: BillData['bill_type'] =
+        invoice.invoice_type === 'tax_invoice' ||
+        invoice.invoice_type === 'receipt_only' ||
+        invoice.invoice_type === 'tax_invoice_receipt' ||
+        invoice.invoice_type === 'general'
+            ? invoice.invoice_type
+            : 'tax_invoice';
+
     return {
         id: invoice.id,
-        bill_type: invoice.invoice_type || 'tax_invoice',
+        bill_type: billType,
         customer_name: invoice.customer_name || booking?.customer_name || 'Customer',
         customer_phone: invoice.customer_phone || booking?.customer_phone || '',
         created_at: invoice.invoice_date || invoice.created_at,

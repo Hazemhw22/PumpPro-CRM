@@ -55,11 +55,13 @@ export class PDFService {
                 const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar');
                 console.log('Chromium executable path:', executablePath);
 
+                const chromiumAny = chromium as any;
+
                 this.browser = await puppeteerCore.launch({
                     executablePath,
                     args: [...chromium.args, '--disable-web-security', '--disable-features=VizDisplayCompositor', '--font-render-hinting=none'],
-                    headless: chromium.headless,
-                    defaultViewport: chromium.defaultViewport,
+                    headless: chromiumAny.headless,
+                    defaultViewport: chromiumAny.defaultViewport,
                 });
                 console.log('Browser launched successfully with chromium-min');
             } else {
