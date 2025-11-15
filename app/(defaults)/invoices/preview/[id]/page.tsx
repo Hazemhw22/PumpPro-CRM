@@ -350,10 +350,7 @@ const InvoicePreview = () => {
                         <p className="text-gray-500">{t('view_invoice_details') || 'View invoice details'}</p>
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={handlePrint} className="btn btn-outline-primary gap-2">
-                            <IconPrinter className="w-4 h-4" />
-                            {t('print') || 'Print'}
-                        </button>
+ 
                         <button
                             type="button"
                             className="btn btn-primary gap-2"
