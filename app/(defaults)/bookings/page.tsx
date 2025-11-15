@@ -3,6 +3,8 @@ import IconEdit from '@/components/icon/icon-edit';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconPdf from '@/components/icon/icon-pdf';
+import IconCheck from '@/components/icon/icon-check';
 import { sortBy } from 'lodash';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -12,6 +14,7 @@ import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import BookingsFilters, { BookingFilters as BookingFiltersType } from '@/components/bookings-filters/bookings-filters';
+import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 
 interface Booking {
     id: string;
@@ -341,6 +344,90 @@ const BookingsList = () => {
         }
     };
 
+    const handleDownloadBookingPdf = async (row: Booking) => {
+        try {
+            const language: 'en' | 'he' | 'ar' = 'en';
+
+            const provider: any = (row as any).contractor || (row as any).driver || null;
+
+            const data: any = {
+                company: {
+                    name: 'PumpPro CRM',
+                    phone: '',
+                    address: '',
+                    tax_id: '',
+                    logo_url: '/assets/images/logo.png',
+                },
+                invoice: null,
+                booking: {
+                    booking_number: (row as any).booking_number,
+                    service_type: (row as any).service_type,
+                    service_address: (row as any).service_address,
+                    scheduled_date: (row as any).scheduled_date,
+                    scheduled_time: (row as any).scheduled_time,
+                    notes: (row as any).notes,
+                    contractor_id: (row as any).contractor_id,
+                    driver_id: (row as any).driver_id,
+                },
+                contractor: provider
+                    ? {
+                          name: provider.name,
+                          phone: provider.phone || undefined,
+                      }
+                    : undefined,
+                customer: {
+                    name: (row as any).customer_name,
+                    phone: (row as any).customer_phone,
+                    address: (row as any).service_address,
+                },
+                service: {
+                    name: (row as any).service_name || (row as any).service_type,
+                },
+                lang: language,
+                no_price: true,
+            };
+
+            await InvoiceDealPDFGenerator.generatePDF(data, `booking-${(row as any).booking_number || row.id}.pdf`, 'invoice');
+        } catch (error) {
+            console.error('Error generating booking PDF:', error);
+            setAlert({ visible: true, message: t('error_generating_pdf') || 'Error generating PDF', type: 'danger' });
+        }
+    };
+
+    const handleConfirmBooking = async (row: Booking) => {
+        if (row.status === 'confirmed') return;
+        try {
+            // @ts-ignore - relax supabase typing for bookings update
+            const { error: updateError } = await (supabase as any)
+                .from('bookings')
+                .update({ status: 'confirmed' })
+                .eq('id', row.id);
+            if (updateError) throw updateError;
+
+            // @ts-ignore
+            const { error: trackError } = await supabase
+                .from('booking_tracks')
+                .insert([
+                    {
+                        booking_id: row.id,
+                        old_status: (row as any).status,
+                        new_status: 'confirmed',
+                        created_at: new Date().toISOString(),
+                    },
+                ] as any);
+
+            if (trackError) {
+                console.error('Could not insert booking track:', trackError);
+            }
+
+            setItems((prev) => prev.map((b) => (b.id === row.id ? ({ ...b, status: 'confirmed' } as any) : b)) as any);
+            setAlert({ visible: true, message: t('booking_confirmed') || 'Booking confirmed', type: 'success' });
+        } catch (error) {
+            console.error('Error confirming booking:', error);
+            setAlert({ visible: true, message: t('error_confirming_booking') || 'Error confirming booking', type: 'danger' });
+        }
+    };
+
     const setSort = (columnAccessor: 'created_at' | 'booking_number' | 'customer_name' | 'service_address' | 'customer_phone') => {
         setSortStatus((curr) => {
             if (curr.columnAccessor === columnAccessor) {
@@ -439,9 +526,11 @@ const BookingsList = () => {
                                         <td>
                                             <div className="flex items-center gap-2">
                                                 <strong className="text-info">#{row.booking_number || row.id}</strong>
-                                                <Link href={`/bookings/preview/${row.id}`} className="flex hover:text-info" title={t('view')}>
-                                                    <IconEye className="h-4 w-4" />
-                                                </Link>
+                                                {role !== 'contractor' && role !== 'driver' && (
+                                                    <Link href={`/bookings/preview/${row.id}`} className="flex hover:text-info" title={t('view')}>
+                                                        <IconEye className="h-4 w-4" />
+                                                    </Link>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
@@ -461,12 +550,28 @@ const BookingsList = () => {
                                         </td>
                                         <td>
                                             <div className="mx-auto flex w-max items-center gap-2">
-                                                <Link href={`/bookings/edit/${row.id}`} className="flex hover:text-info">
-                                                    <IconEdit className="h-4.5 w-4.5" />
-                                                </Link>
-                                                <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
-                                                    <IconTrashLines />
-                                                </button>
+                                                {role === 'admin' && (
+                                                    <>
+                                                        <Link href={`/bookings/edit/${row.id}`} className="flex hover:text-info">
+                                                            <IconEdit className="h-4.5 w-4.5" />
+                                                        </Link>
+                                                        <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
+                                                            <IconTrashLines />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {(role === 'contractor' || role === 'driver') && (
+                                                    <>
+                                                        <button type="button" className="flex hover:text-info" onClick={() => handleDownloadBookingPdf(row)}>
+                                                            <IconPdf className="h-4.5 w-4.5" />
+                                                        </button>
+                                                        {row.status !== 'confirmed' && (
+                                                            <button type="button" className="flex hover:text-success" onClick={() => handleConfirmBooking(row)}>
+                                                                <IconCheck className="h-4.5 w-4.5" />
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

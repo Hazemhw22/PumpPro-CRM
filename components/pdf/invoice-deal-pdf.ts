@@ -45,6 +45,7 @@ export type InvoiceDealPdfData = {
   lang?: 'en' | 'he' | 'ar';
   payment_method?: 'cash' | 'credit_card' | 'bank_transfer' | 'check' | null;
   payment_type?: 'cash' | 'visa' | 'bank_transfer' | 'check' | null;
+  no_price?: boolean;
 };
 
 export class InvoiceDealPDFGenerator {
@@ -209,6 +210,7 @@ export class InvoiceDealPDFGenerator {
     const customerAddress = (data.customer as any)?.address || '-';
 
     const includeAmount = data.doc_type === 'receipt';
+    const noPrice = (data as any).no_price === true;
     const amount = inv ? this.formatCurrency(inv.total_amount as any) : this.formatCurrency(0);
     const price = this.formatCurrency(this.calculatePrice(data));
     const paymentMethod = this.formatPaymentMethod(data);
@@ -280,12 +282,14 @@ export class InvoiceDealPDFGenerator {
     </div>
   </div>
 
+  ${!noPrice ? `
   <div class="panel" style="margin-bottom:12px;">
     <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💲 ${t.price}</div>
     <div class="purchase-amount">${price}</div>
   </div>
+  ` : ''}
 
-  ${includeAmount ? `
+  ${includeAmount && !noPrice ? `
   <div class="panel" style="margin-bottom:12px;">
     <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💳 ${t.purchase_details}</div>
     <div class="kv">
@@ -348,6 +352,7 @@ export class InvoiceDealPDFGenerator {
         lang: data?.lang || 'en',
         payment_method: data?.payment_method || null,
         payment_type: data?.payment_type || null,
+        no_price: data?.no_price || false,
       };
 
       const res = await fetch('/api/generate-contract-pdf', {
