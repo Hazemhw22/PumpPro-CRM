@@ -15,6 +15,7 @@ interface Invoice {
     customer_id: string | null;
     invoice_type?: string | null;
     total_amount: number;
+    subtotal_amount?: number;
     paid_amount: number;
     remaining_amount: number;
     status: string;
@@ -354,12 +355,16 @@ const InvoicesPage = () => {
                                                     <td>{booking ? getServiceName(booking.service_type) : 'N/A'}</td>
                                                     <td>{invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-GB') : 'N/A'}</td>
                                                     <td>{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-GB') : 'N/A'}</td>
-                                                    <td className="font-semibold">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
+                                                    <td className="font-semibold">₪{Number(invoice.subtotal_amount ?? invoice.total_amount).toFixed(2)}</td>
                                                     <td className="font-bold text-danger">₪{invoice.remaining_amount?.toFixed(2) || '0.00'}</td>
                                                     <td>
                                                         <span
                                                             className={`badge ${
-                                                                invoice.status === 'paid' ? 'badge-outline-success' : invoice.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'
+                                                                invoice.status === 'paid'
+                                                                    ? 'badge-outline-success'
+                                                                    : invoice.status === 'overdue'
+                                                                    ? 'badge-outline-danger'
+                                                                    : 'badge-outline-warning'
                                                             }`}
                                                         >
                                                             {invoice.status?.toUpperCase()}
@@ -370,8 +375,6 @@ const InvoicesPage = () => {
                                                             <Link href={`/invoices/preview/${invoice.id}`} className="inline-flex hover:text-primary" title="View Invoice">
                                                                 <IconEye className="h-5 w-5" />
                                                             </Link>
-                                                         
-                                                         
                                                         </div>
                                                     </td>
                                                 </tr>

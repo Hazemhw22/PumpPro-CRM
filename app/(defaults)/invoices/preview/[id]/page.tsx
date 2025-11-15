@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
-import IconDownload from '@/components/icon/icon-download';
+import IconPdf from '@/components/icon/icon-pdf';
 import IconPrinter from '@/components/icon/icon-printer';
+import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 import { generateBillPDF, BillData } from '@/utils/pdf-generator';
 import { BillPayment } from '@/types/payment';
 
@@ -222,29 +223,63 @@ const InvoicePreview = () => {
 
         setDownloadingPDF(true);
         try {
-            // Check if invoice has Tranzila retrieval key
-            const tranzilaRetrievalKey = invoice.tranzila_retrieval_key;
+            const currentLang = typeof window !== 'undefined'
+                ? (localStorage.getItem('i18nextLng') || 'he')
+                : 'he';
+            const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
 
-            if (tranzilaRetrievalKey) {
-                // Open Tranzila PDF in new tab via our proxy API
-                const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
-                window.open(proxyUrl, '_blank');
-            } else {
-                // Fallback to local PDF generation
-                // Get language from localStorage or default to Hebrew
-                const currentLang = typeof window !== 'undefined' 
-                    ? (localStorage.getItem('i18nextLng') || 'he')
-                    : 'he';
-                const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
+            const pdfData: any = {
+                company: {
+                    name: 'PumpPro CRM',
+                    phone: '',
+                    address: '',
+                    tax_id: '',
+                    logo_url: '/assets/images/logo.png',
+                },
+                invoice: {
+                    id: invoice.id,
+                    invoice_number: invoice.invoice_number,
+                    total_amount: invoice.total_amount,
+                    paid_amount: invoice.paid_amount,
+                    remaining_amount: invoice.remaining_amount,
+                    status: invoice.status,
+                    created_at: invoice.invoice_date || invoice.created_at,
+                },
+                booking: booking
+                    ? {
+                          booking_number: booking.booking_number,
+                          service_type: booking.service_type,
+                          service_address: booking.service_address,
+                          scheduled_date: booking.scheduled_date,
+                          scheduled_time: (booking as any).scheduled_time,
+                          notes: (booking as any).notes,
+                          contractor_id: (booking as any).contractor_id,
+                          driver_id: (booking as any).driver_id,
+                      }
+                    : undefined,
+                customer: customer
+                    ? {
+                          name: customer.name,
+                          phone: customer.phone,
+                          address: customer.address,
+                          business_name: customer.business_name,
+                      }
+                    : undefined,
+                service: service
+                    ? {
+                          name: service.name,
+                      }
+                    : undefined,
+                lang: language as any,
+            };
 
-                await generateBillPDF(convertInvoiceToBillData(invoice, booking, service), {
-                    filename: `invoice-${invoice.id}-${(invoice.customer_name || booking?.customer_name || 'customer').replace(/\s+/g, '-').toLowerCase()}.pdf`,
-                    language,
-                });
-            }
+            await InvoiceDealPDFGenerator.generatePDF(
+                pdfData,
+                `invoice-${invoice.invoice_number}.pdf`,
+                'invoice'
+            );
         } catch (error) {
             console.error('Error generating PDF:', error);
-            // You might want to show an error notification here
         } finally {
             setDownloadingPDF(false);
         }
@@ -319,9 +354,14 @@ const InvoicePreview = () => {
                             <IconPrinter className="w-4 h-4" />
                             {t('print') || 'Print'}
                         </button>
-                        <button onClick={handleDownloadPDF} disabled={downloadingPDF} className="btn btn-outline-primary gap-2">
-                            <IconDownload className="w-4 h-4" />
-                            {downloadingPDF ? t('generating_pdf') || 'Generating PDF...' : t('download_pdf') || 'Download PDF'}
+                        <button
+                            type="button"
+                            className="btn btn-primary gap-2"
+                            onClick={handleDownloadPDF}
+                            disabled={downloadingPDF}
+                        >
+                            <IconPdf className="h-5 w-5" />
+                            {downloadingPDF ? (t('downloading') || 'Downloading...') : (t('download_pdf') || 'Download PDF')}
                         </button>
                     </div>
                 </div>
@@ -437,26 +477,12 @@ const InvoicePreview = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div className="text-center">-</div>
-                                <div className="text-center">-</div>
-                                <div className="text-center">-</div>
-                            </div>
-
-                            {/* Row 2: Service Price */}
-                            {servicePrice && (
-                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('service_price') || 'Service Price'}</div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
-                                    </div>
+                                <div className="text-center">
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span>
                                 </div>
-                            )}
+                                <div className="text-center"><span className="text-sm text-gray-700 dark:text-gray-300">1</span></div>
+                                <div className="text-center"><span className="text-sm text-gray-700 dark:text-gray-300">₪{servicePrice.toFixed(2)}</span></div>
+                            </div>
 
                             {/* Separator */}
                             <div className="border-t border-gray-300 dark:border-gray-600 my-4"></div>

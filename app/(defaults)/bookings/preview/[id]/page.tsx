@@ -59,6 +59,18 @@ interface Invoice {
     created_at: string;
 }
 
+interface InvoiceDeal {
+    id: string;
+    invoice_number: string;
+    booking_id: string | null;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    status: string;
+    pdf_url?: string | null;
+    created_at: string;
+}
+
 interface Payment {
     id: string;
     invoice_id: string;
@@ -85,6 +97,7 @@ const BookingPreview = () => {
     const router = useRouter();
     const [booking, setBooking] = useState<Booking | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [invoiceDeals, setInvoiceDeals] = useState<InvoiceDeal[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
@@ -147,6 +160,13 @@ const BookingPreview = () => {
                     .eq('booking_id', params?.id)
                     .order('payment_date', { ascending: false });
 
+                // Fetch invoice deals for this booking
+                const { data: invoiceDealsData, error: invoiceDealsError } = await supabase
+                    .from('invoice_deals')
+                    .select('*')
+                    .eq('booking_id', params?.id)
+                    .order('created_at', { ascending: false });
+
                 // Fetch booking tracks (status change history) - newest first
                 const { data: tracksData, error: tracksError } = await supabase
                     .from('booking_tracks')
@@ -193,6 +213,9 @@ const BookingPreview = () => {
                 if (!paymentsError && paymentsData) {
                     setPayments(paymentsData as any);
                 }
+                if (!invoiceDealsError && invoiceDealsData) {
+                    setInvoiceDeals(invoiceDealsData as any);
+                }
                 if (!tracksError && tracksData) {
                     setBookingTracks(tracksData as any);
                 }
@@ -218,25 +241,41 @@ const BookingPreview = () => {
                 setCreatingInvoice(false);
                 return;
             }
-            const invoiceNumber = `INV-${Date.now()}`;
+            const invoiceData = await createInvoiceForBooking(booking as any);
+
+            // Try full insert with extended fields first
             // @ts-ignore
-            const { data: newInvoice, error: invoiceError } = await supabase
+            const fullResult = await supabase
                 .from('invoices')
-                .insert({
-                    invoice_number: invoiceNumber,
-                    booking_id: booking.id,
-                    contractor_id: (booking as any).contractor_id || null,
-                    customer_id: (booking as any).customer_id || null,
-                    total_amount: (booking as any).price || 0,
-                    paid_amount: 0,
-                    remaining_amount: (booking as any).price || 0,
-                    status: 'pending',
-                    due_date: new Date().toISOString().split('T')[0],
-                } as any)
+                .insert([invoiceData] as any)
                 .select()
                 .single();
 
-            if (invoiceError) throw invoiceError;
+            let newInvoice: any = fullResult.data;
+            if (fullResult.error) {
+                console.warn('Full invoice insert failed from booking preview, trying basic fields only:', fullResult.error);
+
+                const basicInvoiceData = {
+                    invoice_number: invoiceData.invoice_number,
+                    booking_id: invoiceData.booking_id,
+                    customer_id: invoiceData.customer_id,
+                    total_amount: invoiceData.total_amount,
+                    paid_amount: invoiceData.paid_amount,
+                    remaining_amount: invoiceData.remaining_amount,
+                    status: invoiceData.status,
+                    due_date: invoiceData.due_date,
+                };
+
+                const basicResult = await supabase
+                    .from('invoices')
+                    .insert([basicInvoiceData] as any)
+                    .select()
+                    .single();
+
+                if (basicResult.error) throw basicResult.error;
+                newInvoice = basicResult.data;
+            }
+
             setAlert({ visible: true, message: 'Invoice DEAL created successfully', type: 'success' });
             setInvoices((prev) => (newInvoice ? [newInvoice as any, ...prev] : prev));
             router.push('/invoices');
@@ -432,6 +471,56 @@ const BookingPreview = () => {
         }
     };
 
+    const createInvoiceForBooking = async (currentBooking: Booking) => {
+        const generateInvoiceNumber = async () => {
+            try {
+                const { data, error } = await supabase.rpc('generate_invoice_number');
+                if (error) throw error;
+                return (data as any) || `INV-${Date.now()}`;
+            } catch (error) {
+                console.error('Error generating invoice number:', error);
+                return `INV-${Date.now()}`;
+            }
+        };
+
+        const rawInvoiceNumber = await generateInvoiceNumber();
+        const randomSuffix = Math.random().toString(36).substring(2, 7);
+        const invoiceNumber = `${rawInvoiceNumber}-${randomSuffix}`;
+
+        const basePrice = currentBooking.price || 0;
+        const subtotalAmount = basePrice;
+        const taxAmount = +(subtotalAmount * 0.18);
+        const totalWithTax = subtotalAmount + taxAmount;
+
+        const today = new Date();
+        const invoiceDate = today.toISOString().split('T')[0];
+        const dueDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        return {
+            invoice_number: invoiceNumber,
+            booking_id: currentBooking.id,
+            customer_id: currentBooking.customer_id || null,
+            contractor_id: currentBooking.contractor_id || null,
+            total_amount: totalWithTax,
+            paid_amount: 0,
+            remaining_amount: totalWithTax,
+            status: 'pending',
+            due_date: dueDate,
+            invoice_type: 'tax_invoice',
+            invoice_direction: 'negative',
+            invoice_date: invoiceDate,
+            customer_name: currentBooking.customer_name,
+            customer_phone: currentBooking.customer_phone,
+            service_name: (currentBooking as any).service_name || currentBooking.service_type,
+            service_description: null,
+            tax_amount: taxAmount,
+            subtotal_amount: subtotalAmount,
+            notes: currentBooking.notes || null,
+            commission: currentBooking.profit ?? null,
+            bill_description: (currentBooking as any).service_name || currentBooking.service_type || null,
+        };
+    };
+
     const confirmBooking = async () => {
         if (!booking) return;
         if (booking.status === 'confirmed') return;
@@ -459,32 +548,90 @@ const BookingPreview = () => {
 
             if (insertTrackError) console.error('Could not insert booking track:', insertTrackError);
 
-            // Create draft invoice if none exists for this booking
+            // Create or enrich invoice with full details for this booking
             // @ts-ignore
             const { data: existingInvoice, error: invoiceCheckError } = await supabase.from('invoices').select('*').eq('booking_id', booking.id).maybeSingle();
             if (invoiceCheckError) console.error('Invoice check error:', invoiceCheckError);
 
             if (!existingInvoice) {
-                const invoiceNumber = `INV-${Date.now()}`;
+                // No invoice yet -> insert one with full details
+                const invoiceData = await createInvoiceForBooking(booking);
+
+                // Try full insert with extended fields first
                 // @ts-ignore
-                const { data: newInvoice, error: invoiceError } = await supabase
+                const fullResult = await supabase
                     .from('invoices')
-                    .insert({
-                        invoice_number: invoiceNumber,
-                        booking_id: booking.id,
-                        customer_id: booking.customer_id || null,
-                        contractor_id: (booking as any).contractor_id || null,
-                        total_amount: booking.price || 0,
-                        paid_amount: 0,
-                        remaining_amount: booking.price || 0,
-                        status: 'pending',
-                        due_date: new Date().toISOString().split('T')[0],
-                    } as any)
+                    .insert([invoiceData] as any)
                     .select()
                     .single();
 
-                if (invoiceError) console.error('Invoice creation error:', invoiceError);
-                else console.log('Invoice created', (newInvoice as any)?.id);
+                let newInvoice: any = fullResult.data;
+                if (fullResult.error) {
+                    console.warn('Full invoice insert failed on confirm booking, trying basic fields only:', fullResult.error);
+
+                    const basicInvoiceData = {
+                        invoice_number: invoiceData.invoice_number,
+                        booking_id: invoiceData.booking_id,
+                        customer_id: invoiceData.customer_id,
+                        total_amount: invoiceData.total_amount,
+                        paid_amount: invoiceData.paid_amount,
+                        remaining_amount: invoiceData.remaining_amount,
+                        status: invoiceData.status,
+                        due_date: invoiceData.due_date,
+                    };
+
+                    const basicResult = await supabase
+                        .from('invoices')
+                        .insert([basicInvoiceData] as any)
+                        .select()
+                        .single();
+
+                    if (basicResult.error) {
+                        console.error('Basic invoice insert also failed:', basicResult.error);
+                        throw basicResult.error;
+                    }
+                    newInvoice = basicResult.data;
+                }
+
+                if (newInvoice) {
+                    console.log('Invoice created', newInvoice.id);
+                    setInvoices((prev) => (newInvoice ? [newInvoice as any, ...prev] : prev));
+                }
+            } else {
+                // Invoice already exists -> enrich it with extended fields from the booking
+                const invoiceData = await createInvoiceForBooking(booking);
+
+                const updatePayload: any = {
+                    invoice_type: invoiceData.invoice_type,
+                    invoice_direction: invoiceData.invoice_direction,
+                    invoice_date: invoiceData.invoice_date,
+                    customer_name: invoiceData.customer_name,
+                    customer_phone: invoiceData.customer_phone,
+                    service_name: invoiceData.service_name,
+                    service_description: invoiceData.service_description,
+                    tax_amount: invoiceData.tax_amount,
+                    subtotal_amount: invoiceData.subtotal_amount,
+                    notes: invoiceData.notes,
+                    commission: invoiceData.commission,
+                    bill_description: invoiceData.bill_description,
+                };
+
+                // Only set contractor_id if it was missing and booking has one
+                if (!(existingInvoice as any).contractor_id && invoiceData.contractor_id) {
+                    updatePayload.contractor_id = invoiceData.contractor_id;
+                }
+
+                // @ts-ignore
+                const { error: updateInvoiceError } = await supabase
+                    .from('invoices')
+                    .update(updatePayload as any)
+                    .eq('id', (existingInvoice as any).id);
+
+                if (updateInvoiceError) {
+                    console.error('Invoice update error on confirm booking:', updateInvoiceError);
+                } else {
+                    console.log('Invoice updated with booking details', (existingInvoice as any).id);
+                }
             }
 
             setBooking((prev) => (prev ? ({ ...prev, status: 'confirmed' } as any) : prev));
@@ -604,6 +751,20 @@ const BookingPreview = () => {
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconDollarSign className="w-5 h-5" />
                                         <span className="text-sm font-medium">Accounting</span>
+                                    </div>
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
+                                >
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <IconCreditCard className="w-5 h-5" />
+                                        <span className="text-sm font-medium">Tax & Rec Invoices</span>
                                     </div>
                                 </button>
                             )}
@@ -803,11 +964,11 @@ const BookingPreview = () => {
                             </div>
                         </Tab.Panel>
 
-                        {/* ACCOUNTING Tab */}
+                        {/* ACCOUNTING Tab (summary + Invoice DEAL) */}
                         <Tab.Panel>
                             {(() => {
                                 const totalReceipts = (payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
-                                const totalInvoiceDeal = (invoices || []).reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+                                const totalInvoiceDeal = (invoiceDeals || []).reduce((sum, deal) => sum + (deal.total_amount || 0), 0);
                                 const totalRevenue = totalReceipts - totalInvoiceDeal;
                                 return (
                                     <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
@@ -874,42 +1035,96 @@ const BookingPreview = () => {
                                 </div>
                             </div>
 
-                            <div className="panel">
-                                <div className="mb-5 flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold">Payment receipt</h3>
-                                    <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
-                                        Record New Receipt
-                                    </button>
+                            {/* Invoice DEAL details for this booking */}
+                            <div className="panel mt-6">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Invoice DEAL</h3>
                                 </div>
-
-                                {/* Recent Payments (compact like dashboard) */}
-                                <div className="">
-                                    <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Receipts</h5>
-                                    {payments && payments.length > 0 ? (
-                                        payments.slice(0, 5).map((p, idx) => (
-                                            <div key={p.id || idx} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 mb-3 last:border-b-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
-                                                        <IconDollarSign className="h-5 w-5" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold text-sm">{booking?.customer_name || 'N/A'}</p>
-                                                        <p className="text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-GB')}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="font-bold text-success">₪{p.amount?.toFixed(2) || '0.00'}</p>
-                                                    <p className="text-xs text-gray-500">{p.payment_method}</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center text-gray-500 py-4">No recent payments</div>
-                                    )}
-                                </div>
+                                {invoiceDeals.length === 0 ? (
+                                    <div className="text-center py-4 text-gray-500 text-sm">No invoice deals for this booking</div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Deal #</th>
+                                                    <th>Amount</th>
+                                                    <th>Remaining</th>
+                                                    <th>Status</th>
+                                                    <th>PDF</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {invoiceDeals.map((deal) => (
+                                                    <tr key={deal.id}>
+                                                        <td>
+                                                            <strong className="text-primary">#{deal.invoice_number}</strong>
+                                                        </td>
+                                                        <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
+                                                        <td className="text-danger">₪{(deal.remaining_amount || 0).toFixed(2)}</td>
+                                                        <td>
+                                                            <span className="badge badge-outline-info">{deal.status?.toUpperCase()}</span>
+                                                        </td>
+                                                        <td className="text-blue-500">
+                                                            {deal.pdf_url ? (
+                                                                <button
+                                                                    onClick={() => window.open(deal.pdf_url as string, '_blank')}
+                                                                    className="inline-flex hover:text-primary"
+                                                                    title="Open Deal PDF"
+                                                                >
+                                                                    <IconPdf className="h-5 w-5" />
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-500">No PDF</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
+
+                            
                         </Tab.Panel>
 
+                                <Tab.Panel>
+                                    <div className="panel ">
+                                <div className="mb-5 flex items-center justify-between">
+                                            <h3 className="text-lg font-semibold">Tax & Receipt Invoices</h3>
+                                            <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
+                                        Record New Receipt
+                                    </button>
+
+                                        </div>
+                                          {/* Recent Payments (compact like dashboard) */}
+                                        <div className="">
+                                            <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Receipts</h5>
+                                            {payments && payments.length > 0 ? (
+                                                payments.slice(0, 5).map((p, idx) => (
+                                                    <div key={p.id || idx} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 mb-3 last:border-b-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
+                                                                <IconDollarSign className="h-5 w-5" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-semibold text-sm">{booking?.customer_name || 'N/A'}</p>
+                                                                <p className="text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-GB')}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="font-bold text-success">₪{p.amount?.toFixed(2) || '0.00'}</p>
+                                                            <p className="text-xs text-gray-500">{p.payment_method}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center text-gray-500 py-4">No recent payments</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </Tab.Panel>
                         {/* السجل Tab */}
                         <Tab.Panel>
                             <div className="space-y-6">
@@ -917,6 +1132,7 @@ const BookingPreview = () => {
                                 <div className="panel">
                                     <div className="mb-5">
                                         <h3 className="text-lg font-semibold">Booking History</h3>
+                                        
                                     </div>
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -1004,110 +1220,7 @@ const BookingPreview = () => {
                                             <div className="text-center text-gray-500 py-2">No status changes recorded for this booking.</div>
                                         )}
                                     </div>
-                                </div>
-
-                                {/* Invoices */}
-                                <div className="panel">
-                                    <div className="mb-5 flex items-center justify-between">
-                                        <h3 className="text-lg font-semibold">Invoices</h3>
-                                        <div className="flex items-center gap-3">
-                                            {invoices.length > 0 && (
-                                                <button
-                                                    onClick={() => {
-                                                        const firstInvoiceId = invoices[0]?.id;
-                                                        if (firstInvoiceId) {
-                                                            window.open(`/invoices/preview/${firstInvoiceId}`, '_blank');
-                                                        }
-                                                    }}
-                                                    className="inline-flex hover:text-primary"
-                                                    title="Download PDF"
-                                                >
-                                                    <IconPdf className="h-5 w-5" />
-                                                </button>
-                                            )}
-                                            {invoices.length === 0 && !(booking as any)?.invoice_deal_id && (
-                                                <button
-                                                    onClick={handleCreateInvoice}
-                                                    className="inline-flex hover:text-primary"
-                                                    title="Create Invoice"
-                                                    disabled={creatingInvoice}
-                                                >
-                                                    <IconPlus className="h-5 w-5" />
-                                                </button>
-                                            )}
-                                            {invoices.length === 0 && !(booking as any)?.invoice_deal_id && (
-                                                <button onClick={handleCreateInvoiceDeal} className="btn btn-primary btn-sm" disabled={creatingInvoiceDeal}>
-                                                    {creatingInvoiceDeal ? 'Creating DEAL...' : 'Create Invoice DEAL'}
-                                                </button>
-                                            )}
-                                            {(booking as any)?.invoice_deal_id && (
-                                                <span className="badge badge-outline-info">Invoice DEAL created</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {invoices.length === 0 ? (
-                                        <div className="text-center py-10">
-                                            <p className="text-gray-500">No invoices found for this booking</p>
-                                        </div>
-                                    ) : (
-                                        <div className="table-responsive">
-                                            <table className="table-bordered">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Invoice #</th>
-                                                        <th>Created At</th>
-                                                        <th>Total Amount</th>
-                                                        <th>Paid Amount</th>
-                                                        <th>Remaining</th>
-                                                        <th>Status</th>
-                                                        <th>Due Date</th>
-                                                        <th>Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {invoices.map((invoice) => (
-                                                        <tr key={invoice.id}>
-                                                            <td>
-                                                                <strong className="text-primary">#{invoice.invoice_number}</strong>
-                                                            </td>
-                                                            <td>{invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-GB') : '-'}</td>
-                                                            <td>₪{invoice.total_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-success">₪{invoice.paid_amount?.toFixed(2) || 0}</td>
-                                                            <td className="text-danger">₪{invoice.remaining_amount?.toFixed(2) || 0}</td>
-                                                            <td>
-                                                                <span
-                                                                    className={`badge ${
-                                                                        invoice.status === 'paid'
-                                                                            ? 'badge-outline-success'
-                                                                            : invoice.status === 'partial'
-                                                                              ? 'badge-outline-warning'
-                                                                              : invoice.status === 'overdue'
-                                                                                ? 'badge-outline-danger'
-                                                                                : 'badge-outline-info'
-                                                                    }`}
-                                                                >
-                                                                    {invoice.status?.toUpperCase()}
-                                                                </span>
-                                                            </td>
-                                                            <td>{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-GB') : '-'}</td>
-                                                            <td className="text-center">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        window.open(`/invoices/preview/${invoice.id}?print=true`, '_blank');
-                                                                    }}
-                                                                    className="inline-flex hover:text-primary"
-                                                                    title="Print Invoice"
-                                                                >
-                                                                    <IconPrinter className="h-5 w-5" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
+                                </div>  
                             </div>
                         </Tab.Panel>
                     </Tab.Panels>

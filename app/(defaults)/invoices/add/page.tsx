@@ -560,15 +560,19 @@ const AddInvoice = () => {
                 totalWithTax = totalAmount; // Receipt only doesn't include tax calculations
             }
 
-            // Generate invoice number if not exists
+            // Generate invoice number if not exists (aligned with booking preview logic)
             const generateInvoiceNumber = async () => {
                 try {
                     const { data, error } = await supabase.rpc('generate_invoice_number');
                     if (error) throw error;
-                    return data || `INV-${Date.now()}`;
+                    const raw = (data as any) || `INV-${Date.now()}`;
+                    const randomSuffix = Math.random().toString(36).substring(2, 7);
+                    return `${raw}-${randomSuffix}`;
                 } catch (error) {
                     console.error('Error generating invoice number:', error);
-                    return `INV-${Date.now()}`;
+                    const fallbackRaw = `INV-${Date.now()}`;
+                    const randomSuffix = Math.random().toString(36).substring(2, 7);
+                    return `${fallbackRaw}-${randomSuffix}`;
                 }
             };
 
@@ -588,6 +592,7 @@ const AddInvoice = () => {
                 invoice_number: invoiceNumber,
                 booking_id: selectedBooking?.id || null,
                 customer_id: customerId,
+                contractor_id: (selectedBooking as any)?.contractor_id || null,
                 total_amount: totalWithTax,
                 paid_amount: paidAmount,
                 remaining_amount: remainingAmount,
@@ -625,6 +630,7 @@ const AddInvoice = () => {
                             invoice_number: invoiceNumber,
                             booking_id: selectedBooking?.id || null,
                             customer_id: customerId,
+                            contractor_id: (selectedBooking as any)?.contractor_id || null,
                             total_amount: totalWithTax,
                             paid_amount: paidAmount,
                             remaining_amount: remainingAmount,
@@ -660,6 +666,7 @@ const AddInvoice = () => {
                     invoice_id: invoiceResult.id,
                     booking_id: selectedBooking?.id || null,
                     customer_id: customerId,
+                    contractor_id: (selectedBooking as any)?.contractor_id || null,
                     amount: Number(payment.amount) || 0,
                     payment_method: payment.payment_type || null,
                     transaction_id: null,
@@ -1075,26 +1082,16 @@ const AddInvoice = () => {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="text-center">-</div>
-                                    <div className="text-center">-</div>
-                                    <div className="text-center">-</div>
-                                </div>
-
-                                {/* Row 2: Service Price - Show only if total is set */}
-                                {billForm.total && (
-                                    <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('service_price') || 'Service Price'}</div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(billForm.total).toFixed(2)}</span>
-                                        </div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                        </div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(billForm.total).toFixed(2)}</span>
-                                        </div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(billForm.total).toFixed(2)}</span>
                                     </div>
-                                )}
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(billForm.total).toFixed(2)}</span>
+                                    </div>
+                                </div>
 
                                 {/* Separator */}
                                 <div className="border-t border-gray-300 dark:border-gray-600 my-4"></div>
@@ -1120,39 +1117,7 @@ const AddInvoice = () => {
                                             <span className="text-lg font-bold text-primary">₪{billForm.total_with_tax || ((parseFloat(billForm.total) || 0) * 1.18).toFixed(2)}</span>
                                         </div>
                                     </div>
-                                )}
-
-                                {/* Amount Input Section */}
-                                <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-600">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            {t('total_amount') || 'Total Amount'} <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="flex">
-                                            <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
-                                                ₪
-                                            </span>
-                                            <input
-                                                type="number"
-                                                name="total"
-                                                step="0.01"
-                                                min="0"
-                                                value={billForm.total}
-                                                onChange={handleFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                                placeholder={t('enter_total_amount') || 'Enter total amount'}
-                                                required
-                                            />
-                                        </div>
-                                        {/* Show service price hint if available */}
-                                        {(selectedBooking as any).service_price_private && !billForm.total && (
-                                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                                {t('suggested_price') || 'Suggested price'}: ₪{(selectedBooking as any).service_price_private} 
-                                                {(selectedBooking as any).service_price_business && ` / ₪${(selectedBooking as any).service_price_business}`}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
+                                )}                               
                             </div>
                         </div>
 
@@ -1182,50 +1147,6 @@ const AddInvoice = () => {
                             <IconDollarSign className="w-5 h-5 text-primary" />
                             <h5 className="text-lg font-semibold dark:text-white-light">{t('receipt_details') || 'Receipt Details'}</h5>
                         </div>
-                        
-                        {/* Service Information */}
-                        <div className="space-y-4 mb-6">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('service_type') || 'Service Type'}:</label>
-                                <p className="text-lg text-gray-900 dark:text-white font-semibold">{selectedBooking.service_type}</p>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('service_address') || 'Service Address'}:</label>
-                                <p className="text-gray-900 dark:text-white">{selectedBooking.service_address}</p>
-                            </div>
-                        </div>
-
-                        {/* Total Amount Input */}
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                {t('total_amount') || 'Total Amount'} <span className="text-red-500">*</span>
-                            </label>
-                            <div className="flex">
-                                <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
-                                    ₪
-                                </span>
-                                <input
-                                    type="number"
-                                    name="total"
-                                    step="0.01"
-                                    min="0"
-                                    value={billForm.total}
-                                    onChange={handleFormChange}
-                                    className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                    placeholder={t('enter_total_amount') || 'Enter total amount'}
-                                    required
-                                />
-                            </div>
-                            {billForm.total && (
-                                <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('total_amount') || 'Total Amount'}:</span>
-                                        <span className="text-lg font-bold text-primary">₪{parseFloat(billForm.total) || 0}</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
                         {/* Payment Form */}
                         <MultiplePaymentForm payments={payments} onPaymentsChange={setPayments} totalAmount={parseFloat(billForm.total) || 0} />
                     </div>

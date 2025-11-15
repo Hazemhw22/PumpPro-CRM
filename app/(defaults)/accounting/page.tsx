@@ -18,6 +18,7 @@ interface Invoice {
     booking_id: string | null;
     customer_id: string | null;
     total_amount: number;
+    subtotal_amount?: number;
     paid_amount: number;
     remaining_amount: number;
     status: string;
@@ -581,7 +582,7 @@ const AccountingPage = () => {
                                             type: 'Invoice',
                                             customer: inv.customers?.name || 'N/A',
                                             reference: `#${inv.invoice_number}`,
-                                            amount: inv.total_amount,
+                                            amount: inv.subtotal_amount || inv.total_amount,
                                             status: inv.status,
                                             isInvoice: true,
                                             bookingStatus: booking?.status || null,

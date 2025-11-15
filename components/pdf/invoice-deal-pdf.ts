@@ -215,6 +215,7 @@ export class InvoiceDealPDFGenerator {
 
     const serviceTypeName = (data.service as any)?.name || (bk as any).service_type || '-';
     const todayStr = this.formatDate(inv?.created_at);
+    const logoSrc = (company as any).logo_url || '/favicon.png';
 
     return `<!DOCTYPE html>
 <html>
@@ -230,14 +231,15 @@ export class InvoiceDealPDFGenerator {
     .kv { display: grid; grid-template-columns: 1fr 2fr; gap: 6px 12px; }
     .muted { color: #4b5563; }
     .purchase-amount { font-weight: 700; text-align: center; border: 2px solid #34d399; border-radius: 8px; padding: 8px; }
-    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .sign .line { border-bottom: 2px solid #d1d5db; height: 32px; margin-bottom: 6px; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+    .sign .label { font-weight: 600; margin-bottom: 4px; }
+    .sign .line { border-bottom: 2px solid #d1d5db; height: 28px; }
   </style>
 </head>
 <body>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;background:#1D4ED8;color:#ffffff;border-radius:8px;padding:12px;">
     <div style="display:flex;gap:12px;align-items:center;">
-      <img src="/favicon.png" alt="Logo" style="width:48px;height:48px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;padding:4px;background:#ffffff;" />
+      <img src="${logoSrc}" alt="Logo" style="width:48px;height:48px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;padding:4px;background:#ffffff;" />
       <div>
         <h1 style="margin:0 0 4px 0;">PumpPro</h1>
         ${company?.address ? `<div>${company.address}</div>` : ''}
@@ -253,12 +255,12 @@ export class InvoiceDealPDFGenerator {
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-    <div class="panel">
+    <div class="panel" style="background:#DBEAFE;">
       <div style="font-weight:700;margin-bottom:6px;">${providerTitle}</div>
       <div><span class="muted">Name:</span> ${sellerName}</div>
       <div><span class="muted">${t.phone}:</span> ${sellerPhone}</div>
     </div>
-    <div class="panel">
+    <div class="panel" style="background:#DCFCE7;">
       <div style="font-weight:700;margin-bottom:6px;">${t.customer}</div>
       <div><span class="muted">${t.company}:</span> ${customerCompany}</div>
       <div><span class="muted">${t.phone}:</span> ${customerPhone}</div>
@@ -266,7 +268,7 @@ export class InvoiceDealPDFGenerator {
     </div>
   </div>
 
-  <div class="panel" style="margin-bottom:12px;">
+  <div class="panel" style="margin-bottom:12px;background:#FCE7F3;">
     <div style="font-weight:700;margin-bottom:6px;">🚗 ${t.service_info}</div>
     <div class="kv">
       <div class="muted">${t.service_type}</div><div>${serviceTypeName}</div>
@@ -308,12 +310,10 @@ export class InvoiceDealPDFGenerator {
     <div class="sign">
       <div class="label">${t.provider_signature}</div>
       <div class="line"></div>
-      <div>${t.provider_signature}</div>
     </div>
     <div class="sign">
       <div class="label">${t.buyer_signature}</div>
       <div class="line"></div>
-      <div>${t.buyer_signature}</div>
     </div>
   </div>
 </body>
