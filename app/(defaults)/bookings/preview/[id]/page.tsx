@@ -621,10 +621,10 @@ const BookingPreview = () => {
                     updatePayload.contractor_id = invoiceData.contractor_id;
                 }
 
-                // @ts-ignore
-                const { error: updateInvoiceError } = await supabase
+                // @ts-ignore - relax supabase typing for invoices update
+                const { error: updateInvoiceError } = await (supabase as any)
                     .from('invoices')
-                    .update(updatePayload as any)
+                    .update(updatePayload)
                     .eq('id', (existingInvoice as any).id);
 
                 if (updateInvoiceError) {
