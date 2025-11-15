@@ -568,6 +568,7 @@ const AccountingPage = () => {
                                     <th>Amount</th>
                                     <th>Status</th>
                                     <th>Date</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -625,36 +626,32 @@ const AccountingPage = () => {
                                                 {transaction.status}
                                             </span>
                                         </td>
-                                        <td>
-                                            <div className="flex items-center gap-2">
-                                                <span>{new Date(transaction.date).toLocaleDateString('en-GB')}</span>
-                                                {transaction.isInvoice && transaction.bookingStatus === 'confirmed' && (
-                                                    <>
-                                                        {hasDealForInvoice(transaction.id) ? (
-                                                            <button
-                                                                onClick={() => handleDownloadInvoicePdf(transaction.id)}
-                                                                className="inline-flex hover:text-primary"
-                                                                title="Download PDF"
-                                                            >
-                                                                <IconPdf className="h-5 w-5" />
-                                                            </button>
+                                        <td className="flex items-center gap-2">
+                                            <span>{new Date(transaction.date).toLocaleDateString('en-GB')}</span> </td>
+                                        <td> {transaction.isInvoice && transaction.bookingStatus === 'confirmed' && (
+                                                hasDealForInvoice(transaction.id) ? (
+                                                    <button
+                                                        onClick={() => handleDownloadInvoicePdf(transaction.id)}
+                                                        className="inline-flex hover:text-primary"
+                                                        title="Download PDF"
+                                                    >
+                                                        <IconPdf className="h-5 w-5" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleCreateInvoiceDeal(transaction.id)}
+                                                        disabled={creatingDeal === transaction.id}
+                                                        className="inline-flex hover:text-primary disabled:opacity-50"
+                                                        title="Create Invoice Deal"
+                                                    >
+                                                        {creatingDeal === transaction.id ? (
+                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                                                         ) : (
-                                                            <button
-                                                                onClick={() => handleCreateInvoiceDeal(transaction.id)}
-                                                                disabled={creatingDeal === transaction.id}
-                                                                className="inline-flex hover:text-primary disabled:opacity-50"
-                                                                title="Create Invoice Deal"
-                                                            >
-                                                                {creatingDeal === transaction.id ? (
-                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                                                                ) : (
-                                                                    <IconPlus className="h-5 w-5" />
-                                                                )}
-                                                            </button>
+                                                            <IconPlus className="h-5 w-5" />
                                                         )}
-                                                    </>
-                                                )}
-                                            </div>
+                                                    </button>
+                                                )
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

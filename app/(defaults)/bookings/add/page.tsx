@@ -584,7 +584,16 @@ const AddBooking = () => {
                                     <ContractorSelect
                                         selectedContractor={selectedContractor as any}
                                         onContractorSelect={(c) => {
-                                            setSelectedContractor(c);
+                                            if (c) {
+                                                setSelectedContractor({
+                                                    id: c.id,
+                                                    name: c.name,
+                                                    phone: c.phone,
+                                                    email: c.email || undefined,
+                                                });
+                                            } else {
+                                                setSelectedContractor(null);
+                                            }
                                         }}
                                         onCreateNew={() => router.push('/contractors/add')}
                                         className="form-select"
