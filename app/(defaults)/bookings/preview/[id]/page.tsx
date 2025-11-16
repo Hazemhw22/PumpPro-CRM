@@ -7,13 +7,11 @@ import IconUser from '@/components/icon/icon-user';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconPhone from '@/components/icon/icon-phone';
 import IconPdf from '@/components/icon/icon-pdf';
-import IconPlus from'@/components/icon/icon-plus';
 import IconCalendar from '@/components/icon/icon-calendar';
 import IconClock from '@/components/icon/icon-clock';
 import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
-import IconPrinter from '@/components/icon/icon-printer';
-import ContractorSelect from '@/components/contractor-select/contractor-select';
+import IconEye from '@/components/icon/icon-eye';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
@@ -832,16 +830,7 @@ const BookingPreview = () => {
                                                     </span>
                                                 </div>
 
-                                                {/* Contractor Select */}
-                                                <div className="mt-3">
-                                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('contractor') || 'Contractor'}</label>
-                                                    <ContractorSelect
-                                                        selectedContractor={selectedContractor as any}
-                                                        onContractorSelect={(c) => handleContractorAssign(c)}
-                                                        onCreateNew={() => router.push('/contractors/add')}
-                                                        className="form-select"
-                                                    />
-                                                </div>
+                                               
 
                                                 <div className="flex items-center">
                                                     <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
@@ -908,6 +897,10 @@ const BookingPreview = () => {
                                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                 <span className="text-sm text-gray-600">Driver:</span>
                                                 <span className="font-medium">{booking.driver?.name || 'Not Assigned'}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <span className="text-sm text-gray-600">Contractor:</span>
+                                                <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -979,7 +972,7 @@ const BookingPreview = () => {
                                                 </div>
                                                 <div>
                                                     <div className="text-2xl font-bold text-success">₪{totalRevenue.toFixed(2)}</div>
-                                                    <div className="text-xs text-gray-500">Total Revenue (receipt - Invoice DEAL)</div>
+                                                    <div className="text-xs text-gray-500">Balance</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1009,32 +1002,6 @@ const BookingPreview = () => {
                                 );
                             })()}
 
-                            {/* Contractor & Booking Price Summary */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                                <div className="panel">
-                                    <div className="mb-2">
-                                        <h4 className="font-semibold">Contractor</h4>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Name:</span>
-                                        <span className="font-medium">{selectedContractor?.name || '—'}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm mt-2">
-                                        <span className="text-gray-600">Paid to Contractor:</span>
-                                        <span className="font-medium">₪{contractorPaid.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                                <div className="panel">
-                                    <div className="mb-2">
-                                        <h4 className="font-semibold">Booking Price</h4>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Service Price:</span>
-                                        <span className="font-medium">₪{(booking?.price || 0).toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            </div>
-
                             {/* Invoice DEAL details for this booking */}
                             <div className="panel mt-6">
                                 <div className="mb-5">
@@ -1047,39 +1014,59 @@ const BookingPreview = () => {
                                         <table className="table-bordered">
                                             <thead>
                                                 <tr>
-                                                    <th>Deal #</th>
+                                                    <th>ID</th>
+                                                    <th>Customer</th>
+                                                    <th>Service</th>
                                                     <th>Amount</th>
                                                     <th>Remaining</th>
                                                     <th>Status</th>
-                                                    <th>PDF</th>
+                                                    <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {invoiceDeals.map((deal) => (
-                                                    <tr key={deal.id}>
-                                                        <td>
-                                                            <strong className="text-primary">#{deal.invoice_number}</strong>
-                                                        </td>
-                                                        <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
-                                                        <td className="text-danger">₪{(deal.remaining_amount || 0).toFixed(2)}</td>
-                                                        <td>
-                                                            <span className="badge badge-outline-info">{deal.status?.toUpperCase()}</span>
-                                                        </td>
-                                                        <td className="text-blue-500">
-                                                            {deal.pdf_url ? (
-                                                                <button
-                                                                    onClick={() => window.open(deal.pdf_url as string, '_blank')}
-                                                                    className="inline-flex hover:text-primary"
-                                                                    title="Open Deal PDF"
-                                                                >
-                                                                    <IconPdf className="h-5 w-5" />
-                                                                </button>
-                                                            ) : (
-                                                                <span className="text-xs text-gray-500">No PDF</span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {invoiceDeals.map((deal) => {
+                                                    const relatedInvoice = invoices.find((inv) => inv.booking_id === booking.id);
+                                                    return (
+                                                        <tr key={deal.id}>
+                                                            <td>
+                                                                <strong className="text-primary">{deal.invoice_number}</strong>
+                                                            </td>
+                                                            <td>{booking.customer_name || 'N/A'}</td>
+                                                            <td>{(booking as any).service_name || booking.service_type || '-'}</td>
+                                                            <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
+                                                            <td className="text-danger">₪{(deal.remaining_amount || 0).toFixed(2)}</td>
+                                                            <td>
+                                                                <span className="badge badge-outline-info">{deal.status?.toUpperCase()}</span>
+                                                            </td>
+                                                            <td className="text-blue-500">
+                                                                <div className="flex items-center gap-3">
+                                                                    {relatedInvoice ? (
+                                                                        <Link
+                                                                            href={`/invoices/preview/${relatedInvoice.id}`}
+                                                                            className="inline-flex hover:text-primary"
+                                                                            title="View Invoice"
+                                                                        >
+                                                                            <IconEye className="h-5 w-5" />
+                                                                        </Link>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-500">No Invoice</span>
+                                                                    )}
+                                                                    {deal.pdf_url ? (
+                                                                        <button
+                                                                            onClick={() => window.open(deal.pdf_url as string, '_blank')}
+                                                                            className="inline-flex hover:text-primary"
+                                                                            title="Open Deal PDF"
+                                                                        >
+                                                                            <IconPdf className="h-5 w-5" />
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-500">No PDF</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1091,38 +1078,116 @@ const BookingPreview = () => {
 
                                 <Tab.Panel>
                                     <div className="panel ">
-                                <div className="mb-5 flex items-center justify-between">
+                                        <div className="mb-5 flex items-center justify-between">
                                             <h3 className="text-lg font-semibold">Tax & Receipt Invoices</h3>
-                                            <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
-                                        Record New Receipt
-                                    </button>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={handleCreateInvoice}
+                                                    className="btn btn-outline-primary"
+                                                    disabled={creatingInvoice}
+                                                >
+                                                    {creatingInvoice ? 'Creating Invoice...' : 'Add New Invoice'}
+                                                </button>
+                                                <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
+                                                    Record New Receipt
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {(() => {
+                                            const transactions = [
+                                                ...invoices.map((inv) => ({
+                                                    id: inv.id,
+                                                    date: inv.created_at,
+                                                    type: 'Invoice' as const,
+                                                    reference: `#${inv.invoice_number}`,
+                                                    amount: (inv as any).subtotal_amount || inv.total_amount || 0,
+                                                    status: inv.status,
+                                                    isInvoice: true as const,
+                                                })),
+                                                ...payments.map((pay) => ({
+                                                    id: pay.id,
+                                                    date: pay.payment_date,
+                                                    type: 'Receipt' as const,
+                                                    reference: (pay.payment_method || '').replace('_', ' '),
+                                                    amount: pay.amount,
+                                                    status: 'completed' as const,
+                                                    isInvoice: false as const,
+                                                })),
+                                            ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-                                        </div>
-                                          {/* Recent Payments (compact like dashboard) */}
-                                        <div className="">
-                                            <h5 className="text-sm font-semibold text-gray-600 mb-3">Recent Receipts</h5>
-                                            {payments && payments.length > 0 ? (
-                                                payments.slice(0, 5).map((p, idx) => (
-                                                    <div key={p.id || idx} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 mb-3 last:border-b-0">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
-                                                                <IconDollarSign className="h-5 w-5" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-semibold text-sm">{booking?.customer_name || 'N/A'}</p>
-                                                                <p className="text-xs text-gray-500">{new Date(p.payment_date).toLocaleDateString('en-GB')}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="font-bold text-success">₪{p.amount?.toFixed(2) || '0.00'}</p>
-                                                            <p className="text-xs text-gray-500">{p.payment_method}</p>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center text-gray-500 py-4">No recent payments</div>
-                                            )}
-                                        </div>
+                                            if (transactions.length === 0) {
+                                                return (
+                                                    <div className="text-center text-gray-500 py-4">No invoices or receipts for this booking</div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="table-responsive">
+                                                    <table className="table-bordered">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Reference</th>
+                                                                <th>Type</th>
+                                                                <th>Amount</th>
+                                                                <th>Status</th>
+                                                                <th>Date</th>
+                                                                <th>Action</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {transactions.map((tx) => (
+                                                                <tr key={tx.id}>
+                                                                    <td className="font-semibold">{tx.reference}</td>
+                                                                    <td>
+                                                                        <span
+                                                                            className={`badge ${
+                                                                                tx.isInvoice
+                                                                                    ? 'badge-outline-primary'
+                                                                                    : 'badge-outline-success'
+                                                                            }`}
+                                                                        >
+                                                                            {tx.type}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className={tx.isInvoice ? 'font-bold' : 'font-bold text-success'}>
+                                                                        ₪{tx.amount?.toFixed(2) || 0}
+                                                                    </td>
+                                                                    <td>
+                                                                        <span
+                                                                            className={`badge badge-sm ${
+                                                                                tx.status === 'paid' || tx.status === 'completed'
+                                                                                    ? 'badge-outline-success'
+                                                                                    : tx.status === 'overdue'
+                                                                                    ? 'badge-outline-danger'
+                                                                                    : 'badge-outline-warning'
+                                                                            }`}
+                                                                        >
+                                                                            {tx.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>
+                                                                        {new Date(tx.date).toLocaleDateString('en-GB')}
+                                                                    </td>
+                                                                    <td>
+                                                                        {tx.isInvoice ? (
+                                                                            <Link
+                                                                                href={`/invoices/preview/${tx.id}`}
+                                                                                className="inline-flex hover:text-primary"
+                                                                                title="View Invoice"
+                                                                            >
+                                                                                <IconEye className="h-5 w-5" />
+                                                                            </Link>
+                                                                        ) : (
+                                                                            <span className="text-xs text-gray-400">-</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </Tab.Panel>
                         {/* السجل Tab */}

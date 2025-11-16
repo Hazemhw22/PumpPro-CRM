@@ -27,6 +27,7 @@ import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import IconCash from '@/components/icon/icon-cash-banknotes';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
+import IconPdf from '@/components/icon/icon-pdf';
 
 
 interface DashboardStats {
@@ -97,6 +98,7 @@ const HomePage = () => {
         recentPayments: [],
         recentInvoices: [],
     });
+    const [role, setRole] = useState<string | null>(null);
 
     // Set is mounted for client-side rendering of charts
     useEffect(() => {
@@ -185,6 +187,7 @@ const HomePage = () => {
                         // @ts-ignore
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
                         role = (profile as any)?.role || null;
+                        setRole(role);
                         if (role === 'contractor') {
                             // @ts-ignore
                             let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
@@ -226,7 +229,8 @@ const HomePage = () => {
 
                     const invs: any[] = (invRes.data as any[]) || [];
                     const pays: any[] = (payRes.data as any[]) || [];
-                    const totalRevenue = invs.reduce((s, x) => s + (x.total_amount || 0), 0);
+                    const totalPaid = pays.reduce((s, p) => s + (p.amount || 0), 0);
+                    const totalRevenue = totalPaid;
                     const remainingAmount = invs.reduce((s, x) => s + (x.remaining_amount || 0), 0);
                     const paidInvoices = invs.filter((x) => x.status === 'paid').length;
                     const totalInvoices = invs.length;
@@ -552,6 +556,8 @@ const HomePage = () => {
 
                 // Process recent payments
                 const recentPayments = (recentPaymentsData || []).map((payment: any) => ({
+                    id: payment.id,
+                    invoice_id: payment.invoice_id,
                     customer_name: payment.invoices?.customers?.name || 'Unknown',
                     amount: payment.amount || 0,
                     payment_date: payment.payment_date,
@@ -561,10 +567,12 @@ const HomePage = () => {
 
                 // Process recent invoices
                 const recentInvoices = (recentInvoicesData || []).map((invoice: any) => ({
+                    id: invoice.id,
                     invoice_number: invoice.invoice_number,
                     customer_name: invoice.customers?.name || 'Unknown',
                     total_amount: invoice.total_amount || 0,
                     status: invoice.status,
+                    created_at: invoice.created_at,
                 }));
 
                 // Update state with all the processed data
@@ -605,6 +613,40 @@ const HomePage = () => {
 
         fetchDashboardStats();
     }, [timeFilter]);
+
+    const handleDownloadInvoicePdf = async (invoiceId: string) => {
+        try {
+            const { data: inv, error: invErr } = await supabase
+                .from('invoices')
+                .select('id, booking_id, invoice_number')
+                .eq('id', invoiceId)
+                .maybeSingle<any>();
+
+            if (invErr || !inv) throw invErr || new Error('Invoice not found');
+            if (!inv.booking_id) {
+                alert('No booking linked to this invoice');
+                return;
+            }
+
+            const { data: deal, error: dealErr } = await supabase
+                .from('invoice_deals')
+                .select('id, pdf_url')
+                .eq('booking_id', inv.booking_id as any)
+                .maybeSingle();
+
+            if (dealErr) throw dealErr;
+
+            const pdfUrl = (deal as any)?.pdf_url as string | null | undefined;
+            if (pdfUrl) {
+                window.open(pdfUrl, '_blank');
+            } else {
+                alert('DEAL PDF not found for this invoice. An existing invoice deal PDF was not found for this booking.');
+            }
+        } catch (e) {
+            console.error('Failed to download DEAL PDF from dashboard', e);
+            alert('Failed to download DEAL PDF');
+        }
+    };
 
     // Format currency
     const formatCurrency = (value: number) => {
@@ -993,7 +1035,9 @@ const HomePage = () => {
                     {/* Total Revenue */}
                     <div className="panel">
                         <div className="flex items-center justify-between dark:text-white-light">
-                            <div className="text-md font-semibold ltr:mr-1 rtl:ml-1">{t('total_revenue')}</div>
+                            <div className="text-md font-semibold ltr:mr-1 rtl:ml-1">
+                                {role === 'contractor' || role === 'driver' ? (t('your_balance') || 'Your Balance') : t('total_revenue')}
+                            </div>
                             <div className="dropdown">
                                 <span className={`badge ${stats.revenueGrowth >= 0 ? 'badge-outline-success' : 'badge-outline-danger'}`}>
                                     {stats.revenueGrowth >= 0 ? '+' : ''}
@@ -1263,81 +1307,145 @@ const HomePage = () => {
                     <div className="panel">
                         <div className="mb-5 flex items-center justify-between">
                             <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_payments') || 'Recent Payments'}</h5>
-                            <Link href="/invoices" className="text-primary hover:underline text-sm">
+                            <Link href="/payments" className="text-primary hover:underline text-sm">
                                 {t('view_all') || 'View All'}
                             </Link>
                         </div>
-                        <div className="space-y-4">
-                            {stats.recentPayments && stats.recentPayments.length > 0 ? (
-                                stats.recentPayments.slice(0, 5).map((payment: any, index: number) => (
-                                    <div key={index} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 last:border-b-0">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
-                                                <IconCash className="h-5 w-5" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-sm">{payment.customer_name || 'N/A'}</p>
-                                                <p className="text-xs text-gray-500">{new Date(payment.payment_date).toLocaleDateString('en-GB')}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-success">{formatCurrency(payment.amount)}</p>
-                                            <p className="text-xs text-gray-500">{payment.payment_method}</p>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-500 py-8">
-                                    {t('no_recent_payments') || 'No recent payments'}
-                                </div>
-                            )}
-                        </div>
+                        {stats.recentPayments && stats.recentPayments.length > 0 ? (
+                            <div className="table-responsive">
+                                <table className="table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>{t('customer') || 'Customer'}</th>
+                                            <th>{t('invoice') || 'Invoice'}</th>
+                                            <th>{t('amount') || 'Amount'}</th>
+                                            <th>{t('payment_method') || 'Method'}</th>
+                                            <th>{t('date') || 'Date'}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stats.recentPayments.slice(0, 5).map((payment: any, index: number) => (
+                                            <tr key={payment.id || index}>
+                                                <td>{payment.customer_name || 'N/A'}</td>
+                                                <td>{payment.invoice_number || 'N/A'}</td>
+                                                <td className="font-bold text-success">{formatCurrency(payment.amount)}</td>
+                                                <td className="text-xs uppercase">{payment.payment_method}</td>
+                                                <td>{new Date(payment.payment_date).toLocaleDateString('en-GB')}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="text-center text-gray-500 py-8">
+                                {t('no_recent_payments') || 'No recent payments'}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Recent Invoices */}
-                    <div className="panel">
-                        <div className="mb-5 flex items-center justify-between">
-                            <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_invoices') || 'Recent Invoices'}</h5>
-                            <Link href="/invoices" className="text-primary hover:underline text-sm">
-                                {t('view_all') || 'View All'}
-                            </Link>
-                        </div>
-                        <div className="space-y-4">
-                            {stats.recentInvoices && stats.recentInvoices.length > 0 ? (
-                                stats.recentInvoices.slice(0, 5).map((invoice: any, index: number) => (
-                                    <div key={index} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 last:border-b-0">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                                                invoice.status === 'paid' ? 'bg-success/10 text-success' :
-                                                invoice.status === 'overdue' ? 'bg-danger/10 text-danger' :
-                                                'bg-warning/10 text-warning'
-                                            }`}>
-                                                <IconMenuInvoice className="h-5 w-5" />
+                    {/* Recent Invoices (admin) or Recent Bookings (contractor/driver) */}
+                    {role === 'contractor' || role === 'driver' ? (
+                        <div className="panel">
+                            <div className="mb-5 flex items-center justify-between">
+                                <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_bookings') || 'Recent Bookings'}</h5>
+                                <Link href="/bookings" className="text-primary hover:underline text-sm">
+                                    {t('view_all') || 'View All'}
+                                </Link>
+                            </div>
+                            <div className="space-y-4">
+                                {stats.recentActivity && (stats.recentActivity as any[]).length > 0 ? (
+                                    (stats.recentActivity as any[]).slice(0, 5).map((booking: any, index: number) => (
+                                        <div key={index} className="flex items-center justify-between border-b border-gray-200 dark:border-[#191e3a] pb-3 last:border-b-0">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 text-warning">
+                                                    <IconMenuInvoice className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-sm">#{booking.booking_number || booking.id}</p>
+                                                    <p className="text-xs text-gray-500">{booking.customer_name || booking.service_address || 'N/A'}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="font-semibold text-sm">{invoice.invoice_number || 'N/A'}</p>
-                                                <p className="text-xs text-gray-500">{invoice.customer_name || 'N/A'}</p>
+                                            <div className="text-right">
+                                                <p className="font-bold text-sm">
+                                                    {booking.scheduled_date
+                                                        ? new Date(booking.scheduled_date).toLocaleDateString('en-GB')
+                                                        : new Date(booking.created_at).toLocaleDateString('en-GB')}
+                                                </p>
+                                                <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
+                                                    {booking.status || 'pending'}
+                                                </span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-bold">{formatCurrency(invoice.total_amount)}</p>
-                                            <span className={`text-xs px-2 py-1 rounded ${
-                                                invoice.status === 'paid' ? 'bg-success/10 text-success' :
-                                                invoice.status === 'overdue' ? 'bg-danger/10 text-danger' :
-                                                'bg-warning/10 text-warning'
-                                            }`}>
-                                                {invoice.status}
-                                            </span>
-                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500 py-8">
+                                        {t('no_recent_bookings') || 'No recent bookings'}
                                     </div>
-                                ))
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="panel">
+                            <div className="mb-5 flex items-center justify-between">
+                                <h5 className="text-lg font-semibold dark:text-white-light">{t('recent_invoices') || 'Recent Invoices'}</h5>
+                                <Link href="/invoices" className="text-primary hover:underline text-sm">
+                                    {t('view_all') || 'View All'}
+                                </Link>
+                            </div>
+                            {stats.recentInvoices && stats.recentInvoices.length > 0 ? (
+                                <div className="table-responsive">
+                                    <table className="table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>{t('invoice') || 'Invoice'}</th>
+                                                <th>{t('customer') || 'Customer'}</th>
+                                                <th>{t('amount') || 'Amount'}</th>
+                                                <th>{t('status') || 'Status'}</th>
+                                                <th>{t('date') || 'Date'}</th>
+                                                <th>{t('actions') || 'Actions'}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {stats.recentInvoices.slice(0, 5).map((invoice: any, index: number) => (
+                                                <tr key={invoice.id || index}>
+                                                    <td>#{invoice.invoice_number}</td>
+                                                    <td>{invoice.customer_name || 'N/A'}</td>
+                                                    <td className="font-bold">{formatCurrency(invoice.total_amount)}</td>
+                                                    <td>
+                                                        <span
+                                                            className={`badge badge-sm ${
+                                                                invoice.status === 'paid'
+                                                                    ? 'badge-outline-success'
+                                                                    : invoice.status === 'overdue'
+                                                                    ? 'badge-outline-danger'
+                                                                    : 'badge-outline-warning'
+                                                            }`}
+                                                        >
+                                                            {invoice.status}
+                                                        </span>
+                                                    </td>
+                                                    <td>{invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                                                    <td>
+                                                        <button
+                                                            onClick={() => handleDownloadInvoicePdf(invoice.id)}
+                                                            className="inline-flex hover:text-primary"
+                                                            title={t('print') || 'Print'}
+                                                        >
+                                                            <IconPdf className="h-5 w-5" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             ) : (
                                 <div className="text-center text-gray-500 py-8">
                                     {t('no_recent_invoices') || 'No recent invoices'}
                                 </div>
                             )}
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Charts Section */}
