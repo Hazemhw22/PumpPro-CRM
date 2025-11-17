@@ -250,6 +250,25 @@ export class InvoiceDealPDFGenerator {
         const serviceTypeName = (data.service as any)?.name || (bk as any).service_type || '-';
         const todayStr = this.formatDate(inv?.created_at);
         const logoSrc = (company as any).logo_url || '/favicon.png';
+
+        // Compute base href so that relative asset paths (like '/favicon.png')
+        // resolve correctly when rendering server-side (e.g. in Vercel serverless).
+        // - In browser env we leave it empty (browser resolves relative paths normally).
+        // - On server, prefer `NEXT_PUBLIC_SITE_URL`, then `VERCEL_URL`, then localhost.
+        let baseHref = '';
+        try {
+            if (typeof window === 'undefined') {
+                if (process.env.NEXT_PUBLIC_SITE_URL) {
+                    baseHref = String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '') + '/';
+                } else if (process.env.VERCEL_URL) {
+                    baseHref = `https://${String(process.env.VERCEL_URL).replace(/\/$/, '')}/`;
+                } else {
+                    baseHref = 'http://localhost:3000/';
+                }
+            }
+        } catch (e) {
+            baseHref = '';
+        }
         const servicesList =
             data.services && data.services.length > 0
                 ? data.services
@@ -266,6 +285,7 @@ export class InvoiceDealPDFGenerator {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${t.title}</title>
+        ${baseHref ? `<base href="${baseHref}">` : ''}
   <style>
     @page { size: A4; margin: 8mm; }
     body { font-family: Arial, sans-serif; font-size: 11px; }
