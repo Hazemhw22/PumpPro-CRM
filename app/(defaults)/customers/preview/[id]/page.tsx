@@ -17,6 +17,7 @@ import IconPdf from '@/components/icon/icon-pdf';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Tab } from '@headlessui/react';
 import MethodsSelect from '@/components/selectors/MethodsSelect';
 
@@ -563,11 +564,11 @@ const CustomerPreview = () => {
                                     <div className="flex flex-col items-center">
                                         <div className="mb-5">
                                             <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                                                {customer.photo_url ? (
-                                                    <img src={customer.photo_url} alt={displayName} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <IconUser className="w-16 h-16 text-gray-400" />
+                                                {customer.photo_url && (
+                                                    // @ts-ignore
+                                                    <Image src={customer.photo_url} alt={displayName} width={128} height={128} className="w-full h-full object-cover" unoptimized />
                                                 )}
+                                                {!customer.photo_url && <IconUser className="w-16 h-16 text-gray-400" />}
                                             </div>
                                         </div>
                                         <button className="btn btn-primary gap-2">
@@ -637,7 +638,7 @@ const CustomerPreview = () => {
                                 <div className="mb-5">
                                     <h3 className="text-lg font-semibold mb-3">Invoice Deals</h3>
                                     {invoiceDeals.length === 0 ? (
-                                        <p className="text-gray-500 text-sm">No invoice deals found for this customer's bookings.</p>
+                                        <p className="text-gray-500 text-sm">No invoice deals found for this customer&apos;s bookings.</p>
                                     ) : (
                                         <div className="table-responsive">
                                             <table className="table-bordered">
@@ -900,7 +901,14 @@ const CustomerPreview = () => {
                                 {/* Payment Method */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Payment Method *</label>
-                                    <MethodsSelect value={paymentForm.payment_method} onChange={(val) => setPaymentForm({ ...paymentForm, payment_method: val || 'cash' })} className="form-select" />
+                                    <MethodsSelect
+                                        value={paymentForm.payment_method}
+                                        onChange={(val) => {
+                                            const newMethod = (val || 'cash') as 'cash' | 'credit_card' | 'bank_transfer' | 'check';
+                                            setPaymentForm({ ...paymentForm, payment_method: newMethod });
+                                        }}
+                                        className="form-select"
+                                    />
                                 </div>
 
                                 {/* Transaction ID */}
