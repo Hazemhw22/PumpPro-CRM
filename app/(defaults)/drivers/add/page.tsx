@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
@@ -152,7 +153,10 @@ export default function AddDriver() {
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
                             <StatusSelect
                                 value={form.status}
-                                onChange={(val) => setForm({ ...form, status: val || 'active' })}
+                                onChange={(val) => {
+                                    const newStatus = (val || 'active') as 'active' | 'inactive' | 'on_leave';
+                                    setForm({ ...form, status: newStatus });
+                                }}
                                 options={[
                                     { label: 'Active', value: 'active' },
                                     { label: 'Inactive', value: 'inactive' },
@@ -166,9 +170,11 @@ export default function AddDriver() {
                             <div className="flex items-center gap-4">
                                 <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                                     {photoPreview ? (
-                                        <img src={photoPreview} alt="preview" className="h-full w-full object-cover" />
+                                        <Image src={photoPreview} alt="preview" width={64} height={64} className="h-full w-full object-cover" />
+                                    ) : form.photo_url ? (
+                                        <Image src={form.photo_url} alt="placeholder" width={64} height={64} className="h-full w-full object-cover" />
                                     ) : (
-                                        <img src={form.photo_url || '/assets/images/auth/user.png'} alt="placeholder" className="h-full w-full object-cover" />
+                                        <Image src="/assets/images/auth/user.png" alt="placeholder" width={64} height={64} className="h-full w-full object-cover" />
                                     )}
                                 </div>
                                 <input
