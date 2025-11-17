@@ -5,6 +5,7 @@ import IconPlus from '@/components/icon/icon-plus';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconPdf from '@/components/icon/icon-pdf';
 import IconCheck from '@/components/icon/icon-check';
+import IconPackage from '@/components/icon/icon-box';
 import { sortBy } from 'lodash';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -52,6 +53,11 @@ const BookingsList = () => {
     // Modal and alert states
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+    const [showServiceModal, setShowServiceModal] = useState(false);
+    const [bookingForService, setBookingForService] = useState<Booking | null>(null);
+    const [services, setServices] = useState<any[]>([]);
+    const [selectedServiceId, setSelectedServiceId] = useState<string>('');
+    const [serviceQuantity, setServiceQuantity] = useState<number>(1);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
         message: '',
@@ -62,6 +68,11 @@ const BookingsList = () => {
     useEffect(() => {
         const fetchBookings = async () => {
             try {
+                // Fetch services for service modal
+                // @ts-ignore
+                const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business, active').eq('active', true);
+                if (servicesData) setServices(servicesData);
+
                 // Determine role and related ids
                 let role: string | null = null;
                 let contractorId: string | null = null;
@@ -137,6 +148,21 @@ const BookingsList = () => {
                 const serviceIds = Array.from(new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean)));
                 const contractorIds = Array.from(new Set(bookingsData?.map((b: any) => b.contractor_id).filter(Boolean)));
 
+                // Fetch invoices for these bookings to know which ones already have an invoice
+                const bookingIds = Array.from(new Set(bookingsData?.map((b: any) => b.id).filter(Boolean)));
+                let invoiceBookingSet = new Set<string>();
+                if (bookingIds.length > 0) {
+                    try {
+                        const { data: invoicesForBookings } = await supabase
+                            .from('invoices')
+                            .select('booking_id')
+                            .in('booking_id', bookingIds as any);
+                        if (invoicesForBookings) invoiceBookingSet = new Set((invoicesForBookings as any[]).map((i) => i.booking_id).filter(Boolean));
+                    } catch (err) {
+                        console.warn('Could not fetch invoices for bookings:', err);
+                    }
+                }
+
                 const [trucksRes, driversRes, servicesRes, contractorsRes] = await Promise.all([
                     truckIds.length > 0 ? supabase.from('trucks').select('id, truck_number').in('id', truckIds) : { data: [] },
                     driverIds.length > 0 ? supabase.from('drivers').select('id, name').in('id', driverIds) : { data: [] },
@@ -157,6 +183,7 @@ const BookingsList = () => {
                     driver: booking.driver_id ? driversMap.get(booking.driver_id) : null,
                     service_name: booking.service_type ? servicesMap.get(booking.service_type)?.name : null,
                     contractor: booking.contractor_id ? contractorsMap.get(booking.contractor_id) : null,
+                    has_invoice: invoiceBookingSet.has(booking.id),
                 }));
 
                 setItems((enrichedBookings || []) as Booking[]);
@@ -344,6 +371,60 @@ const BookingsList = () => {
         }
     };
 
+    const openServiceModal = (booking: Booking) => {
+        setBookingForService(booking);
+        setSelectedServiceId('');
+        setServiceQuantity(1);
+        setShowServiceModal(true);
+    };
+
+    const closeServiceModal = () => {
+        setShowServiceModal(false);
+        setBookingForService(null);
+        setSelectedServiceId('');
+        setServiceQuantity(1);
+    };
+
+    const handleAddService = async () => {
+        if (!bookingForService || !selectedServiceId) {
+            setAlert({ visible: true, message: t('select_service') || 'Please select a service', type: 'danger' });
+            return;
+        }
+
+        try {
+            const selectedService = services.find((s) => s.id === selectedServiceId);
+            if (!selectedService) {
+                setAlert({ visible: true, message: t('service_not_found'), type: 'danger' });
+                return;
+            }
+
+            // Get the customer type to determine the price
+            const customer = items.find((b) => b.id === bookingForService.id);
+            const customerType = (customer as any)?.customer_type || 'private';
+
+            const unitPrice = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
+
+            // Insert into booking_services
+            // @ts-ignore
+            const { error } = await supabase.from('booking_services').insert([
+                {
+                    booking_id: bookingForService.id,
+                    service_id: selectedServiceId,
+                    quantity: serviceQuantity,
+                    unit_price: unitPrice || 0,
+                },
+            ]);
+
+            if (error) throw error;
+
+            setAlert({ visible: true, message: t('service_added_successfully') || 'Service added successfully', type: 'success' });
+            closeServiceModal();
+        } catch (error) {
+            console.error('Error adding service:', error);
+            setAlert({ visible: true, message: t('error_adding_service') || 'Error adding service', type: 'danger' });
+        }
+    };
+
     const handleDownloadBookingPdf = async (row: Booking) => {
         try {
             const language: 'en' | 'he' | 'ar' = 'en';
@@ -398,23 +479,18 @@ const BookingsList = () => {
         if (row.status === 'confirmed') return;
         try {
             // @ts-ignore - relax supabase typing for bookings update
-            const { error: updateError } = await (supabase as any)
-                .from('bookings')
-                .update({ status: 'confirmed' })
-                .eq('id', row.id);
+            const { error: updateError } = await (supabase as any).from('bookings').update({ status: 'confirmed' }).eq('id', row.id);
             if (updateError) throw updateError;
 
             // @ts-ignore
-            const { error: trackError } = await supabase
-                .from('booking_tracks')
-                .insert([
-                    {
-                        booking_id: row.id,
-                        old_status: (row as any).status,
-                        new_status: 'confirmed',
-                        created_at: new Date().toISOString(),
-                    },
-                ] as any);
+            const { error: trackError } = await supabase.from('booking_tracks').insert([
+                {
+                    booking_id: row.id,
+                    old_status: (row as any).status,
+                    new_status: 'confirmed',
+                    created_at: new Date().toISOString(),
+                },
+            ] as any);
 
             if (trackError) {
                 console.error('Could not insert booking track:', trackError);
@@ -501,16 +577,21 @@ const BookingsList = () => {
                                     <th className="cursor-pointer select-none" onClick={() => setSort('customer_name')}>
                                         Customer {sortStatus.columnAccessor === 'customer_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th>Contractor</th>
-                                    <th>Service</th>
+
                                     <th className="cursor-pointer select-none" onClick={() => setSort('service_address')}>
                                         Address {sortStatus.columnAccessor === 'service_address' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th>Date & Time</th>
+                                    <th className="cursor-pointer select-none">{t('service') || 'Service'}</th>
+                                    <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
+                                        Date & Time {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
+                                    </th>
                                     <th>Price</th>
                                     <th>Profit</th>
                                     <th>Payment</th>
                                     <th>Truck</th>
+                                    <th>Service</th>
+                                    <th>Handler</th>
+                                    <th>Contractor</th>
                                     <th>Driver</th>
                                     <th>Status</th>
                                     <th className="text-center">Actions</th>
@@ -534,9 +615,8 @@ const BookingsList = () => {
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
-                                        <td>{(row as any).contractor?.name || '-'}</td>
-                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
                                         <td className="max-w-xs truncate">{row.service_address || '-'}</td>
+                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
                                         <td>{row.scheduled_date && row.scheduled_time ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}` : '-'}</td>
                                         <td>${(row as any).price || 0}</td>
                                         <td>${(row as any).profit || 0}</td>
@@ -544,6 +624,9 @@ const BookingsList = () => {
                                             <span className="badge badge-outline-info">{(row as any).payment_status || 'Pending'}</span>
                                         </td>
                                         <td>{(row as any).truck?.truck_number || '-'}</td>
+                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
+                                        <td>{(row as any).contractor ? 'Contractor' : (row as any).driver ? 'Driver' : '-'}</td>
+                                        <td>{(row as any).contractor?.name || '-'}</td>
                                         <td>{(row as any).driver?.name || '-'}</td>
                                         <td>
                                             <span className={`badge ${statusBadge(row.status)}`}>{row.status?.replace('_', ' ') || 'pending'}</span>
@@ -552,9 +635,12 @@ const BookingsList = () => {
                                             <div className="mx-auto flex w-max items-center gap-2">
                                                 {role === 'admin' && (
                                                     <>
-                                                        <Link href={`/bookings/edit/${row.id}`} className="flex hover:text-info">
-                                                            <IconEdit className="h-4.5 w-4.5" />
-                                                        </Link>
+                                                        {!(row as any).has_invoice && (
+                                                            <Link href={`/bookings/edit/${row.id}`} className="flex hover:text-info">
+                                                                <IconEdit className="h-4.5 w-4.5" />
+                                                            </Link>
+                                                        )}
+
                                                         <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
                                                             <IconTrashLines />
                                                         </button>
@@ -642,6 +728,44 @@ const BookingsList = () => {
                 cancelLabel={t('cancel')}
                 size="sm"
             />
+
+            {/* Add Service Modal */}
+            {showServiceModal && bookingForService && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-slate-800">
+                        <h3 className="mb-4 text-lg font-semibold">{t('add_service') || 'Add Service'}</h3>
+                        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                            Booking: <strong>#{bookingForService.booking_number || bookingForService.id}</strong>
+                        </p>
+
+                        <div className="mb-4">
+                            <label className="mb-2 block font-semibold">{t('select_service') || 'Select Service'}</label>
+                            <select value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)} className="form-select w-full">
+                                <option value="">{t('choose_service') || 'Choose a service...'}</option>
+                                {services.map((svc) => (
+                                    <option key={svc.id} value={svc.id}>
+                                        {svc.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="mb-2 block font-semibold">{t('quantity') || 'Quantity'}</label>
+                            <input type="number" min="1" value={serviceQuantity} onChange={(e) => setServiceQuantity(Math.max(1, Number(e.target.value)))} className="form-input w-full" />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button type="button" className="btn btn-primary flex-1" onClick={handleAddService}>
+                                {t('add') || 'Add'}
+                            </button>
+                            <button type="button" className="btn btn-outline-secondary flex-1" onClick={closeServiceModal}>
+                                {t('cancel') || 'Cancel'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

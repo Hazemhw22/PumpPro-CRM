@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import IconPdf from '@/components/icon/icon-pdf';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
+import MethodsSelect from '@/components/selectors/MethodsSelect';
 
 interface Payment {
     id: string;
@@ -149,21 +150,23 @@ const PaymentsPage = () => {
                         const contractorIds = Array.from(new Set((paymentsData as any[]).map((p) => p.contractor_id).filter(Boolean)));
                         if (contractorIds.length > 0) {
                             // @ts-ignore
-                             const { data: consData } = await supabase.from('contractors').select('id, name, phone').in('id', contractorIds);
-                             if (consData) {
-                                 const map = new Map<string, { id: string; name: string; phone?: string }>((consData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name, phone: c.phone }]));
-                                 setContractorsMap(map);
-                             }
+                            const { data: consData } = await supabase.from('contractors').select('id, name, phone').in('id', contractorIds);
+                            if (consData) {
+                                const map = new Map<string, { id: string; name: string; phone?: string }>((consData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name, phone: c.phone }]));
+                                setContractorsMap(map);
+                            }
                         }
                         // Fallback: fetch customers by direct customer_id if invoice relation missing
                         const customerIds = Array.from(new Set((paymentsData as any[]).filter((p) => p.customer_id).map((p) => p.customer_id)));
                         if (customerIds.length > 0) {
                             // @ts-ignore
-                             const { data: custData } = await supabase.from('customers').select('id, name, phone, address, tax_id').in('id', customerIds);
-                             if (custData) {
-                                 const cmap = new Map<string, { id: string; name: string; phone?: string; address?: string; tax_id?: string }>((custData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name, phone: c.phone, address: c.address, tax_id: c.tax_id }]));
-                                 setCustomersMap(cmap);
-                             }
+                            const { data: custData } = await supabase.from('customers').select('id, name, phone, address, tax_id').in('id', customerIds);
+                            if (custData) {
+                                const cmap = new Map<string, { id: string; name: string; phone?: string; address?: string; tax_id?: string }>(
+                                    (custData as any[]).map((c: any) => [c.id, { id: c.id, name: c.name, phone: c.phone, address: c.address, tax_id: c.tax_id }]),
+                                );
+                                setCustomersMap(cmap);
+                            }
                         }
                     } catch (e) {
                         // silent
@@ -196,27 +199,27 @@ const PaymentsPage = () => {
 
                 // Fetch bookings
                 // @ts-ignore
-                 const { data: bookingsData, error: bookingsError } = await supabase
-                     .from('bookings')
-                     .select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id');
- 
-                 if (!bookingsError && bookingsData) {
-                     setBookings(bookingsData as any);
-                     // Fetch drivers for bookings that have driver_id
-                     try {
-                         const driverIds = Array.from(new Set((bookingsData as any[]).map((b: any) => b.driver_id).filter(Boolean)));
-                         if (driverIds.length > 0) {
-                             // @ts-ignore
-                             const { data: drvData } = await supabase.from('drivers').select('id, name, phone').in('id', driverIds);
-                             if (drvData) {
-                                 const dmap = new Map<string, { id: string; name: string; phone?: string }>((drvData as any[]).map((d: any) => [d.id, { id: d.id, name: d.name, phone: d.phone }]));
-                                 setDriversMap(dmap);
-                             }
-                         }
-                     } catch (e) {
-                         // silent
-                     }
-                 }
+                const { data: bookingsData, error: bookingsError } = await supabase
+                    .from('bookings')
+                    .select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id');
+
+                if (!bookingsError && bookingsData) {
+                    setBookings(bookingsData as any);
+                    // Fetch drivers for bookings that have driver_id
+                    try {
+                        const driverIds = Array.from(new Set((bookingsData as any[]).map((b: any) => b.driver_id).filter(Boolean)));
+                        if (driverIds.length > 0) {
+                            // @ts-ignore
+                            const { data: drvData } = await supabase.from('drivers').select('id, name, phone').in('id', driverIds);
+                            if (drvData) {
+                                const dmap = new Map<string, { id: string; name: string; phone?: string }>((drvData as any[]).map((d: any) => [d.id, { id: d.id, name: d.name, phone: d.phone }]));
+                                setDriversMap(dmap);
+                            }
+                        }
+                    } catch (e) {
+                        // silent
+                    }
+                }
 
                 // Fetch services
                 // @ts-ignore
@@ -366,13 +369,7 @@ const PaymentsPage = () => {
                             <h2 className="text-xl font-semibold">Payment History</h2>
                         </div>
                         <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                            <select className="form-select w-36 py-1 text-sm" value={methodFilter} onChange={(e) => setMethodFilter(e.target.value as any)}>
-                                <option value="all">All Methods</option>
-                                <option value="cash">Cash</option>
-                                <option value="credit_card">Credit Card</option>
-                                <option value="bank_transfer">Bank Transfer</option>
-                                <option value="check">Check</option>
-                            </select>
+                            <MethodsSelect value={methodFilter} onChange={(val) => setMethodFilter(val as any)} placeholder="All Methods" className="form-select w-36 py-1 text-sm" />
                             <input type="text" className="form-input w-auto" placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} />
                         </div>
                     </div>
@@ -435,7 +432,6 @@ const PaymentsPage = () => {
                                                         <span className="badge badge-outline-info">{payment.payment_method?.replace('_', ' ').toUpperCase()}</span>
                                                     </td>
                                                     <td>{payment.transaction_id || '-'}</td>
-                                                  
                                                 </tr>
                                             );
                                         })}

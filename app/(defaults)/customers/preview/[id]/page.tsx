@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { Tab } from '@headlessui/react';
+import MethodsSelect from '@/components/selectors/MethodsSelect';
 
 interface Customer {
     id: string;
@@ -116,22 +117,14 @@ const CustomerPreview = () => {
             try {
                 // Fetch customer
                 // @ts-ignore
-                const { data: customerData, error: customerError } = await supabase
-                    .from('customers')
-                    .select('*')
-                    .eq('id', params?.id)
-                    .single();
+                const { data: customerData, error: customerError } = await supabase.from('customers').select('*').eq('id', params?.id).single();
 
                 if (customerError) throw customerError;
                 setCustomer(customerData as any);
 
                 // Fetch customer bookings
                 // @ts-ignore
-                const { data: bookingsData, error: bookingsError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('customer_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('*').eq('customer_id', params?.id).order('created_at', { ascending: false });
 
                 if (!bookingsError && bookingsData) {
                     setBookings(bookingsData as any);
@@ -139,11 +132,7 @@ const CustomerPreview = () => {
 
                 // Fetch customer invoices
                 // @ts-ignore
-                const { data: invoicesData, error: invoicesError } = await supabase
-                    .from('invoices')
-                    .select('*')
-                    .eq('customer_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: invoicesData, error: invoicesError } = await supabase.from('invoices').select('*').eq('customer_id', params?.id).order('created_at', { ascending: false });
 
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
@@ -151,11 +140,7 @@ const CustomerPreview = () => {
 
                 // Fetch customer payments
                 // @ts-ignore
-                const { data: paymentsData, error: paymentsError } = await supabase
-                    .from('payments')
-                    .select('*')
-                    .eq('customer_id', params?.id)
-                    .order('payment_date', { ascending: false });
+                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('customer_id', params?.id).order('payment_date', { ascending: false });
 
                 if (!paymentsError && paymentsData) {
                     setPayments(paymentsData as any);
@@ -163,10 +148,7 @@ const CustomerPreview = () => {
 
                 // Fetch services
                 // @ts-ignore
-                const { data: servicesData, error: servicesError } = await supabase
-                    .from('services')
-                    .select('*')
-                    .eq('active', true);
+                const { data: servicesData, error: servicesError } = await supabase.from('services').select('*').eq('active', true);
 
                 if (!servicesError && servicesData) {
                     setServices(servicesData as any);
@@ -174,10 +156,7 @@ const CustomerPreview = () => {
 
                 const bookingIds = (bookingsData || []).map((b: any) => b.id).filter(Boolean);
                 if (bookingIds.length > 0) {
-                    const { data: dealsData, error: dealsError } = await (supabase as any)
-                        .from('invoice_deals')
-                        .select('*')
-                        .in('booking_id', bookingIds);
+                    const { data: dealsData, error: dealsError } = await (supabase as any).from('invoice_deals').select('*').in('booking_id', bookingIds);
 
                     if (!dealsError && dealsData) {
                         setInvoiceDeals(dealsData as any);
@@ -222,8 +201,8 @@ const CustomerPreview = () => {
 
     // Helper function to get service name
     const getServiceName = (serviceType: string) => {
-        const service = services.find(s => s.id === serviceType);
-        return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const service = services.find((s) => s.id === serviceType);
+        return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
     return (
@@ -298,9 +277,7 @@ const CustomerPreview = () => {
                                 <IconDollarSign className="h-6 w-6 text-purple-500" />
                             </div>
                             <div>
-                                <div className={`text-2xl font-bold ${(customer?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>
-                                    ₪{(customer?.balance || 0).toFixed(2)}
-                                </div>
+                                <div className={`text-2xl font-bold ${(customer?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>₪{(customer?.balance || 0).toFixed(2)}</div>
                                 <div className="text-xs text-gray-500">Current Balance</div>
                             </div>
                         </div>
@@ -351,7 +328,7 @@ const CustomerPreview = () => {
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
-                                   <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
+                                    <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
                                     Accounting
                                 </button>
                             )}
@@ -363,7 +340,7 @@ const CustomerPreview = () => {
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
-                                   <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
+                                    <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
                                     Balance
                                 </button>
                             )}
@@ -373,238 +350,234 @@ const CustomerPreview = () => {
                         {/* Details Tab */}
                         <Tab.Panel>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Customer Information */}
-                    <div className="space-y-6">
-                        {/* Basic Info */}
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Basic Information</h3>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-primary mb-2">{displayName}</h2>
-                                    <span className={`badge ${customerTypeBadge}`}>
-                                        {customer.type === 'private' ? 'Private Customer' : 'Business Customer'}
-                                    </span>
-                                </div>
-                                <div className="space-y-3">
-                                    {customer.type === 'private' ? (
-                                        <div className="flex items-center">
-                                            <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Name:</span>
-                                            <span className="font-medium">{customer.name}</span>
+                                {/* Customer Information */}
+                                <div className="space-y-6">
+                                    {/* Basic Info */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Basic Information</h3>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex items-center">
-                                                <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                                <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Business Name:</span>
-                                                <span className="font-medium">{customer.business_name}</span>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <h2 className="text-2xl font-bold text-primary mb-2">{displayName}</h2>
+                                                <span className={`badge ${customerTypeBadge}`}>{customer.type === 'private' ? 'Private Customer' : 'Business Customer'}</span>
                                             </div>
-                                            {customer.tax_id && (
+                                            <div className="space-y-3">
+                                                {customer.type === 'private' ? (
+                                                    <div className="flex items-center">
+                                                        <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Name:</span>
+                                                        <span className="font-medium">{customer.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex items-center">
+                                                            <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Business Name:</span>
+                                                            <span className="font-medium">{customer.business_name}</span>
+                                                        </div>
+                                                        {customer.tax_id && (
+                                                            <div className="flex items-center">
+                                                                <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                                <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Tax ID:</span>
+                                                                <span className="font-medium">{customer.tax_id}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
                                                 <div className="flex items-center">
-                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Tax ID:</span>
-                                                    <span className="font-medium">{customer.tax_id}</span>
+                                                    <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
+                                                    <span className="font-medium">
+                                                        <a href={`tel:${customer.phone}`} className="text-primary hover:underline">
+                                                            {customer.phone}
+                                                        </a>
+                                                    </span>
+                                                </div>
+
+                                                {customer.email && (
+                                                    <div className="flex items-center">
+                                                        <IconMail className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Email:</span>
+                                                        <span className="font-medium">
+                                                            <a href={`mailto:${customer.email}`} className="text-primary hover:underline">
+                                                                {customer.email}
+                                                            </a>
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {customer.address && (
+                                                    <div className="flex items-center">
+                                                        <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Address:</span>
+                                                        <span className="font-medium">{customer.address}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Contact Information */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Contact Information</h3>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                    <span className="text-sm text-gray-600">Phone:</span>
+                                                </div>
+                                                <a href={`tel:${customer.phone}`} className="font-semibold text-primary hover:underline">
+                                                    {customer.phone}
+                                                </a>
+                                            </div>
+
+                                            {customer.email && (
+                                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                    <div className="flex items-center">
+                                                        <IconMail className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                        <span className="text-sm text-gray-600">Email:</span>
+                                                    </div>
+                                                    <a href={`mailto:${customer.email}`} className="font-semibold text-primary hover:underline">
+                                                        {customer.email}
+                                                    </a>
                                                 </div>
                                             )}
-                                        </>
+
+                                            {customer.address && (
+                                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                    <div className="flex items-center">
+                                                        <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                        <span className="text-sm text-gray-600">Address:</span>
+                                                    </div>
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">{customer.address}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Additional Information */}
+                                <div className="space-y-6">
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Additional Information</h3>
+                                        </div>
+
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Customer Number:</span>
+                                                <span className="font-medium">#{customer.customer_number || customer.id.slice(0, 8)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Customer ID:</span>
+                                                <span className="font-medium font-mono text-xs">{customer.id}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Customer Type:</span>
+                                                <span className={`badge ${customerTypeBadge}`}>{customer.type === 'private' ? 'Private' : 'Business'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Created At:</span>
+                                                <span className="font-medium">
+                                                    {new Date(customer.created_at).toLocaleDateString('en-GB', {
+                                                        year: 'numeric',
+                                                        month: '2-digit',
+                                                        day: '2-digit',
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    {customer.notes && (
+                                        <div className="panel">
+                                            <div className="mb-5">
+                                                <h3 className="text-lg font-semibold">Notes</h3>
+                                            </div>
+                                            <p className="text-gray-600 whitespace-pre-wrap">{customer.notes}</p>
+                                        </div>
                                     )}
 
-                                    <div className="flex items-center">
-                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
-                                        <span className="font-medium">
-                                            <a href={`tel:${customer.phone}`} className="text-primary hover:underline">
-                                                {customer.phone}
+                                    {/* Customer Summary */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Customer Summary</h3>
+                                        </div>
+
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Name:</span>
+                                                <span className="font-medium">{displayName}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Contact:</span>
+                                                <span className="font-medium">{customer.phone}</span>
+                                            </div>
+                                            {customer.email && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Email:</span>
+                                                    <span className="font-medium">{customer.email}</span>
+                                                </div>
+                                            )}
+                                            {customer.address && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Location:</span>
+                                                    <span className="font-medium">{customer.address}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Contact Card */}
+                                    <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                                        <div className="mb-3">
+                                            <h3 className="text-lg font-semibold">Quick Contact</h3>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <a href={`tel:${customer.phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                                <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                                <span className="font-medium">Call Customer</span>
                                             </a>
-                                        </span>
-                                    </div>
-
-                                    {customer.email && (
-                                        <div className="flex items-center">
-                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Email:</span>
-                                            <span className="font-medium">
-                                                <a href={`mailto:${customer.email}`} className="text-primary hover:underline">
-                                                    {customer.email}
+                                            {customer.email && (
+                                                <a href={`mailto:${customer.email}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                                    <IconMail className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="font-medium">Send Email</span>
                                                 </a>
-                                            </span>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
+                                </div>
 
-                                    {customer.address && (
-                                        <div className="flex items-center">
-                                            <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Address:</span>
-                                            <span className="font-medium">{customer.address}</span>
+                                {/* Customer Photo Upload */}
+                                <div className="panel">
+                                    <div className="mb-5">
+                                        <h3 className="text-lg font-semibold">Customer Photo</h3>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <div className="mb-5">
+                                            <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                {customer.photo_url ? (
+                                                    <img src={customer.photo_url} alt={displayName} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <IconUser className="w-16 h-16 text-gray-400" />
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Contact Information */}
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Contact Information</h3>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                    <div className="flex items-center">
-                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                        <span className="text-sm text-gray-600">Phone:</span>
+                                        <button className="btn btn-primary gap-2">
+                                            <IconCamera />
+                                            Upload a photo
+                                        </button>
+                                        <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
                                     </div>
-                                    <a href={`tel:${customer.phone}`} className="font-semibold text-primary hover:underline">
-                                        {customer.phone}
-                                    </a>
-                                </div>
-
-                                {customer.email && (
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div className="flex items-center">
-                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                            <span className="text-sm text-gray-600">Email:</span>
-                                        </div>
-                                        <a href={`mailto:${customer.email}`} className="font-semibold text-primary hover:underline">
-                                            {customer.email}
-                                        </a>
-                                    </div>
-                                )}
-
-                                {customer.address && (
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div className="flex items-center">
-                                            <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                            <span className="text-sm text-gray-600">Address:</span>
-                                        </div>
-                                        <span className="font-semibold text-gray-700 dark:text-gray-300">{customer.address}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Additional Information */}
-                    <div className="space-y-6">
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Additional Information</h3>
-                            </div>
-
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Customer Number:</span>
-                                    <span className="font-medium">#{customer.customer_number || customer.id.slice(0, 8)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Customer ID:</span>
-                                    <span className="font-medium font-mono text-xs">{customer.id}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Customer Type:</span>
-                                    <span className={`badge ${customerTypeBadge}`}>
-                                        {customer.type === 'private' ? 'Private' : 'Business'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Created At:</span>
-                                    <span className="font-medium">
-                                        {new Date(customer.created_at).toLocaleDateString('en-GB', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                        })}
-                                    </span>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Notes */}
-                        {customer.notes && (
-                            <div className="panel">
-                                <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Notes</h3>
-                                </div>
-                                <p className="text-gray-600 whitespace-pre-wrap">{customer.notes}</p>
-                            </div>
-                        )}
-
-                        {/* Customer Summary */}
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Customer Summary</h3>
-                            </div>
-
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Name:</span>
-                                    <span className="font-medium">{displayName}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Contact:</span>
-                                    <span className="font-medium">{customer.phone}</span>
-                                </div>
-                                {customer.email && (
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Email:</span>
-                                        <span className="font-medium">{customer.email}</span>
-                                    </div>
-                                )}
-                                {customer.address && (
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Location:</span>
-                                        <span className="font-medium">{customer.address}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Contact Card */}
-                        <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                            <div className="mb-3">
-                                <h3 className="text-lg font-semibold">Quick Contact</h3>
-                            </div>
-                            <div className="space-y-2">
-                                <a href={`tel:${customer.phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                    <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
-                                    <span className="font-medium">Call Customer</span>
-                                </a>
-                                {customer.email && (
-                                    <a href={`mailto:${customer.email}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                        <IconMail className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
-                                        <span className="font-medium">Send Email</span>
-                                    </a>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Customer Photo Upload */}
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h3 className="text-lg font-semibold">Customer Photo</h3>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <div className="mb-5">
-                                <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                                    {customer.photo_url ? (
-                                        <img src={customer.photo_url} alt={displayName} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <IconUser className="w-16 h-16 text-gray-400" />
-                                    )}
-                                </div>
-                            </div>
-                            <button className="btn btn-primary gap-2">
-                                <IconCamera />
-                                Upload a photo
-                            </button>
-                            <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
-                        </div>
-                    </div>
-                </div>
                         </Tab.Panel>
 
                         {/* Bookings Tab */}
@@ -647,9 +620,7 @@ const CustomerPreview = () => {
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <span className={`badge badge-outline-info`}>
-                                                                {booking.status}
-                                                            </span>
+                                                            <span className={`badge badge-outline-info`}>{booking.status}</span>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -662,7 +633,7 @@ const CustomerPreview = () => {
 
                         {/* Accounting Tab */}
                         <Tab.Panel>
-                            <div className="panel">                         
+                            <div className="panel">
                                 <div className="mb-5">
                                     <h3 className="text-lg font-semibold mb-3">Invoice Deals</h3>
                                     {invoiceDeals.length === 0 ? (
@@ -731,10 +702,7 @@ const CustomerPreview = () => {
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Customer Payments</h3>
-                                    <button
-                                        onClick={() => setShowPaymentModal(true)}
-                                        className="btn btn-primary"
-                                    >
+                                    <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
                                         Record New Payment
                                     </button>
                                 </div>
@@ -758,8 +726,8 @@ const CustomerPreview = () => {
                                             </thead>
                                             <tbody>
                                                 {payments.map((payment) => {
-                                                    const booking = bookings.find(b => b.id === payment.booking_id);
-                                                    const invoice = invoices.find(inv => inv.id === payment.invoice_id);
+                                                    const booking = bookings.find((b) => b.id === payment.booking_id);
+                                                    const invoice = invoices.find((inv) => inv.id === payment.invoice_id);
                                                     return (
                                                         <tr key={payment.id}>
                                                             <td>{new Date(payment.payment_date).toLocaleDateString('en-GB')}</td>
@@ -768,18 +736,14 @@ const CustomerPreview = () => {
                                                                     <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
                                                                         #{booking.booking_number}
                                                                     </Link>
-                                                                ) : '-'}
+                                                                ) : (
+                                                                    '-'
+                                                                )}
                                                             </td>
-                                                            <td>
-                                                                {invoice ? (
-                                                                    <strong className="text-primary">#{invoice.invoice_number}</strong>
-                                                                ) : '-'}
-                                                            </td>
+                                                            <td>{invoice ? <strong className="text-primary">#{invoice.invoice_number}</strong> : '-'}</td>
                                                             <td className="text-success font-bold">₪{payment.amount?.toFixed(2) || 0}</td>
                                                             <td>
-                                                                <span className="badge badge-outline-info">
-                                                                    {payment.payment_method?.replace('_', ' ').toUpperCase()}
-                                                                </span>
+                                                                <span className="badge badge-outline-info">{payment.payment_method?.replace('_', ' ').toUpperCase()}</span>
                                                             </td>
                                                             <td>{payment.transaction_id || '-'}</td>
                                                             <td className="max-w-xs truncate">{payment.notes || '-'}</td>
@@ -804,96 +768,94 @@ const CustomerPreview = () => {
                             <h5 className="text-lg font-semibold">Record New Payment</h5>
                             <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
                         </div>
 
-                        <form onSubmit={async (e) => {
-                            e.preventDefault();
-                            
-                            if (!paymentForm.booking_id) {
-                                alert('Please select a booking');
-                                return;
-                            }
+                        <form
+                            onSubmit={async (e) => {
+                                e.preventDefault();
 
-                            try {
-                                // Create invoice if not exists
-                                // @ts-ignore
-                                const { data: existingInvoice, error: invoiceCheckError } = await supabase
-                                    .from('invoices')
-                                    .select('*')
-                                    .eq('booking_id', paymentForm.booking_id)
-                                    .maybeSingle();
-
-                                if (invoiceCheckError) {
-                                    console.error('Error checking invoice:', invoiceCheckError);
-                                    throw invoiceCheckError;
+                                if (!paymentForm.booking_id) {
+                                    alert('Please select a booking');
+                                    return;
                                 }
 
-                                // @ts-ignore
-                                let invoiceId = existingInvoice?.id;
+                                try {
+                                    // Create invoice if not exists
+                                    // @ts-ignore
+                                    const { data: existingInvoice, error: invoiceCheckError } = await supabase.from('invoices').select('*').eq('booking_id', paymentForm.booking_id).maybeSingle();
 
-                                if (!existingInvoice) {
-                                    console.log('Creating new invoice...');
-                                    // Generate invoice number
-                                    const invoiceNumber = `INV-${Date.now()}`;
-                                    
-                                    const { data: newInvoice, error: invoiceError } = await supabase
-                                        .from('invoices')
+                                    if (invoiceCheckError) {
+                                        console.error('Error checking invoice:', invoiceCheckError);
+                                        throw invoiceCheckError;
+                                    }
+
+                                    // @ts-ignore
+                                    let invoiceId = existingInvoice?.id;
+
+                                    if (!existingInvoice) {
+                                        console.log('Creating new invoice...');
+                                        // Generate invoice number
+                                        const invoiceNumber = `INV-${Date.now()}`;
+
+                                        const { data: newInvoice, error: invoiceError } = await supabase
+                                            .from('invoices')
+                                            // @ts-ignore
+                                            .insert({
+                                                invoice_number: invoiceNumber,
+                                                booking_id: paymentForm.booking_id,
+                                                customer_id: customer?.id,
+                                                total_amount: parseFloat(paymentForm.amount),
+                                                paid_amount: 0,
+                                                remaining_amount: parseFloat(paymentForm.amount),
+                                                status: 'pending',
+                                                due_date: new Date().toISOString().split('T')[0],
+                                            })
+                                            .select()
+                                            .single();
+
+                                        if (invoiceError) {
+                                            console.error('Invoice creation error:', invoiceError);
+                                            throw invoiceError;
+                                        }
+                                        // @ts-ignore
+                                        invoiceId = newInvoice?.id;
+                                        console.log('Invoice created:', invoiceId);
+                                    }
+
+                                    // Create payment
+                                    console.log('Creating payment...');
+                                    const { error: paymentError } = await supabase
+                                        .from('payments')
                                         // @ts-ignore
                                         .insert({
-                                            invoice_number: invoiceNumber,
+                                            invoice_id: invoiceId,
                                             booking_id: paymentForm.booking_id,
                                             customer_id: customer?.id,
-                                            total_amount: parseFloat(paymentForm.amount),
-                                            paid_amount: 0,
-                                            remaining_amount: parseFloat(paymentForm.amount),
-                                            status: 'pending',
-                                            due_date: new Date().toISOString().split('T')[0]
-                                        })
-                                        .select()
-                                        .single();
+                                            amount: parseFloat(paymentForm.amount),
+                                            payment_method: paymentForm.payment_method,
+                                            transaction_id: paymentForm.transaction_id || null,
+                                            notes: paymentForm.notes || null,
+                                            payment_date: new Date().toISOString(),
+                                        });
 
-                                    if (invoiceError) {
-                                        console.error('Invoice creation error:', invoiceError);
-                                        throw invoiceError;
+                                    if (paymentError) {
+                                        console.error('Payment creation error:', paymentError);
+                                        throw paymentError;
                                     }
-                                    // @ts-ignore
-                                    invoiceId = newInvoice?.id;
-                                    console.log('Invoice created:', invoiceId);
+
+                                    console.log('Payment recorded successfully');
+                                    alert('Payment recorded successfully!');
+                                    setShowPaymentModal(false);
+                                    window.location.reload();
+                                } catch (error: any) {
+                                    console.error('Error recording payment:', error);
+                                    alert(`Error recording payment: ${error.message || 'Unknown error'}`);
                                 }
-
-                                // Create payment
-                                console.log('Creating payment...');
-                                const { error: paymentError } = await supabase
-                                    .from('payments')
-                                    // @ts-ignore
-                                    .insert({
-                                        invoice_id: invoiceId,
-                                        booking_id: paymentForm.booking_id,
-                                        customer_id: customer?.id,
-                                        amount: parseFloat(paymentForm.amount),
-                                        payment_method: paymentForm.payment_method,
-                                        transaction_id: paymentForm.transaction_id || null,
-                                        notes: paymentForm.notes || null,
-                                        payment_date: new Date().toISOString()
-                                    });
-
-                                if (paymentError) {
-                                    console.error('Payment creation error:', paymentError);
-                                    throw paymentError;
-                                }
-
-                                console.log('Payment recorded successfully');
-                                alert('Payment recorded successfully!');
-                                setShowPaymentModal(false);
-                                window.location.reload();
-                            } catch (error: any) {
-                                console.error('Error recording payment:', error);
-                                alert(`Error recording payment: ${error.message || 'Unknown error'}`);
-                            }
-                        }}>
+                            }}
+                        >
                             <div className="space-y-4">
                                 {/* Select Booking */}
                                 <div>
@@ -901,22 +863,24 @@ const CustomerPreview = () => {
                                     <select
                                         value={paymentForm.booking_id}
                                         onChange={(e) => {
-                                            const booking = bookings.find(b => b.id === e.target.value);
-                                            setPaymentForm({ 
-                                                ...paymentForm, 
+                                            const booking = bookings.find((b) => b.id === e.target.value);
+                                            setPaymentForm({
+                                                ...paymentForm,
                                                 booking_id: e.target.value,
-                                                amount: String(booking?.price || 0)
+                                                amount: String(booking?.price || 0),
                                             });
                                         }}
                                         className="form-select"
                                         required
                                     >
                                         <option value="">-- Select Booking --</option>
-                                        {bookings.filter(b => b.payment_status !== 'paid').map((booking) => (
-                                            <option key={booking.id} value={booking.id}>
-                                                #{booking.booking_number} - ${booking.price}
-                                            </option>
-                                        ))}
+                                        {bookings
+                                            .filter((b) => b.payment_status !== 'paid')
+                                            .map((booking) => (
+                                                <option key={booking.id} value={booking.id}>
+                                                    #{booking.booking_number} - ${booking.price}
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
 
@@ -936,39 +900,19 @@ const CustomerPreview = () => {
                                 {/* Payment Method */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Payment Method *</label>
-                                    <select
-                                        value={paymentForm.payment_method}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
-                                        className="form-select"
-                                        required
-                                    >
-                                        <option value="cash">Cash</option>
-                                        <option value="credit_card">Credit Card</option>
-                                        <option value="bank_transfer">Bank Transfer</option>
-                                        <option value="check">Check</option>
-                                    </select>
+                                    <MethodsSelect value={paymentForm.payment_method} onChange={(val) => setPaymentForm({ ...paymentForm, payment_method: val || 'cash' })} className="form-select" />
                                 </div>
 
                                 {/* Transaction ID */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
-                                    <input
-                                        type="text"
-                                        value={paymentForm.transaction_id}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
-                                        className="form-input"
-                                    />
+                                    <input type="text" value={paymentForm.transaction_id} onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })} className="form-input" />
                                 </div>
 
                                 {/* Notes */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
-                                    <textarea
-                                        value={paymentForm.notes}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                                        className="form-textarea"
-                                        rows={3}
-                                    />
+                                    <textarea value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} className="form-textarea" rows={3} />
                                 </div>
                             </div>
 

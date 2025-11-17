@@ -18,6 +18,7 @@ import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { Tab } from '@headlessui/react';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import MethodsSelect from '@/components/selectors/MethodsSelect';
 
 interface Booking {
     id: string;
@@ -97,6 +98,7 @@ const BookingPreview = () => {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [invoiceDeals, setInvoiceDeals] = useState<InvoiceDeal[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [bookingServices, setBookingServices] = useState<{ name: string; quantity: number; unit_price: number; total: number }[]>([]);
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -127,50 +129,84 @@ const BookingPreview = () => {
                 // Fetch related data
                 const booking = bookingData as any;
                 const [truckRes, driverRes, serviceRes] = await Promise.all([
-                    booking.truck_id
-                        ? supabase.from('trucks').select('truck_number, license_plate').eq('id', booking.truck_id).single()
-                        : { data: null },
-                    booking.driver_id
-                        ? supabase.from('drivers').select('name, driver_number').eq('id', booking.driver_id).single()
-                        : { data: null },
-                    booking.service_type
-                        ? supabase
-                              .from('services')
-                              .select('name, price_private, price_business')
-                              .eq('id', booking.service_type)
-                              .single()
-                        : { data: null },
+                    booking.truck_id ? supabase.from('trucks').select('truck_number, license_plate').eq('id', booking.truck_id).single() : { data: null },
+                    booking.driver_id ? supabase.from('drivers').select('name, driver_number').eq('id', booking.driver_id).single() : { data: null },
+                    booking.service_type ? supabase.from('services').select('name, price_private, price_business, description').eq('id', booking.service_type).single() : { data: null },
                 ]);
 
                 const serviceRecord = serviceRes.data as any;
 
+                // Fetch all booking services (main + extras) and resolve names & prices
+                // we'll compute a servicesTotal and prefer it as the booking price when available
+                let servicesTotal = 0;
+                try {
+                    const { data: bookingServicesData, error: bookingServicesError } = await supabase.from('booking_services').select('service_id, quantity, unit_price').eq('booking_id', params?.id);
+
+                    if (!bookingServicesError && bookingServicesData && bookingServicesData.length > 0) {
+                        const rows = bookingServicesData as any[];
+                        const uniqueServiceIds = Array.from(new Set(rows.map((r) => r.service_id).filter(Boolean)));
+
+                        let servicesMap = new Map<string, any>();
+                        if (uniqueServiceIds.length > 0) {
+                            const { data: svcList, error: svcError } = await supabase
+                                .from('services')
+                                .select('id, name, price_private, price_business, description')
+                                .in('id', uniqueServiceIds as any);
+
+                            if (!svcError && svcList) {
+                                servicesMap = new Map<string, any>((svcList as any[]).map((s) => [s.id, s]));
+                            }
+                        }
+
+                        const customerType = (booking as any).customer_type || 'private';
+
+                        const detailed = rows.map((r: any) => {
+                            const svc = servicesMap.get(r.service_id) as any | undefined;
+                            const resolvedName = (svc && svc.name) || (r.service_id === booking.service_type ? serviceRecord?.name : null);
+
+                            let unitPrice: number = typeof r.unit_price === 'number' ? r.unit_price : 0;
+                            if (!unitPrice && svc) {
+                                unitPrice = customerType === 'business' ? (svc.price_business as number) : (svc.price_private as number);
+                            }
+                            if (!unitPrice && serviceRecord && r.service_id === booking.service_type) {
+                                unitPrice = customerType === 'business' ? (serviceRecord.price_business as number) : (serviceRecord.price_private as number);
+                            }
+
+                            const quantity = r.quantity || 1;
+                            const total = (unitPrice || 0) * quantity;
+
+                            return {
+                                name: resolvedName || booking.service_type || '-',
+                                description: (svc && svc.description) || (serviceRecord && r.service_id === booking.service_type ? serviceRecord.description : null) || null,
+                                quantity,
+                                unit_price: unitPrice || 0,
+                                total,
+                            };
+                        });
+
+                        // compute total for all booking services
+                        servicesTotal = detailed.reduce((sum, it) => sum + (it.total || 0), 0);
+
+                        setBookingServices(detailed);
+                    } else {
+                        setBookingServices([]);
+                    }
+                } catch (e) {
+                    console.error('Error loading booking_services for preview:', e);
+                    setBookingServices([]);
+                }
+
                 // Fetch invoices for this booking
-                const { data: invoicesData, error: invoicesError } = await supabase
-                    .from('invoices')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: invoicesData, error: invoicesError } = await supabase.from('invoices').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
 
                 // Fetch payments for this booking
-                const { data: paymentsData, error: paymentsError } = await supabase
-                    .from('payments')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('payment_date', { ascending: false });
+                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('booking_id', params?.id).order('payment_date', { ascending: false });
 
                 // Fetch invoice deals for this booking
-                const { data: invoiceDealsData, error: invoiceDealsError } = await supabase
-                    .from('invoice_deals')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: invoiceDealsData, error: invoiceDealsError } = await supabase.from('invoice_deals').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
 
                 // Fetch booking tracks (status change history) - newest first
-                const { data: tracksData, error: tracksError } = await supabase
-                    .from('booking_tracks')
-                    .select('*')
-                    .eq('booking_id', params?.id)
-                    .order('created_at', { ascending: false });
+                const { data: tracksData, error: tracksError } = await supabase.from('booking_tracks').select('*').eq('booking_id', params?.id).order('created_at', { ascending: false });
 
                 // Combine data
                 const enrichedBooking: any = {
@@ -180,13 +216,13 @@ const BookingPreview = () => {
                     service_name: serviceRecord?.name,
                 };
 
-                // If booking has no explicit price, derive it from service pricing
-                if (!enrichedBooking.price && serviceRecord) {
+                // If booking has booking_services rows, prefer their summed total as the booking price.
+                // Otherwise, if booking has no explicit price, derive it from the main service pricing.
+                if (servicesTotal && servicesTotal > 0) {
+                    enrichedBooking.price = servicesTotal;
+                } else if (!enrichedBooking.price && serviceRecord) {
                     const customerType = enrichedBooking.customer_type || 'private';
-                    const basePrice =
-                        customerType === 'business'
-                            ? serviceRecord.price_business
-                            : serviceRecord.price_private;
+                    const basePrice = customerType === 'business' ? serviceRecord.price_business : serviceRecord.price_private;
                     enrichedBooking.price = basePrice || 0;
                 }
 
@@ -285,6 +321,19 @@ const BookingPreview = () => {
         }
     };
 
+    const getServicesDisplay = () => {
+        if (bookingServices && bookingServices.length > 0) {
+            return bookingServices.map((s) => `${s.name}${s.quantity && s.quantity !== 1 ? ` x${s.quantity}` : ''}`).join(', ');
+        }
+        if (booking) {
+            return (booking as any).service_name || booking.service_type || '-';
+        }
+        return '-';
+    };
+    const getServicesTotal = () => {
+        if (!bookingServices || bookingServices.length === 0) return 0;
+        return bookingServices.reduce((sum, s) => sum + (s.total || 0), 0);
+    };
     const handleCreateInvoiceDeal = async () => {
         if (!booking || creatingInvoiceDeal) return;
         try {
@@ -797,9 +846,7 @@ const BookingPreview = () => {
                                             <div>
                                                 <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
                                                 <div className="flex items-center gap-3">
-                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>
-                                                        {t(booking.status) || booking.status}
-                                                    </span>
+                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
                                                     {booking.status !== 'confirmed' && (
                                                         <button onClick={confirmBooking} className="btn btn-primary">
                                                             Confirm Booking
@@ -829,8 +876,6 @@ const BookingPreview = () => {
                                                         </a>
                                                     </span>
                                                 </div>
-
-                                               
 
                                                 <div className="flex items-center">
                                                     <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
@@ -869,16 +914,58 @@ const BookingPreview = () => {
                                                 </div>
                                                 <span className="font-semibold text-gray-700 dark:text-gray-300">{booking.scheduled_time}</span>
                                             </div>
-
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div className="flex items-center">
-                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                                    <span className="text-sm text-gray-600">Service Type:</span>
-                                                </div>
-                                                <span className="font-semibold text-gray-700 dark:text-gray-300">{(booking as any).service_name || booking.service_type || '-'}</span>
-                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Services - one panel per service */}
+                                    {bookingServices && bookingServices.length > 0 && (
+                                        <>
+                                            {bookingServices.map((svc, idx) => (
+                                                <div key={idx} className="panel mb-4">
+                                                    <div className="mb-3">
+                                                        <h3 className="text-lg font-semibold">{svc.name}</h3>
+                                                    </div>
+                                                    {(svc as any).description && <p className="text-sm text-gray-600 mb-3 whitespace-pre-wrap">{(svc as any).description}</p>}
+                                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <div className="text-gray-600">Quantity</div>
+                                                            <div className="font-medium">{svc.quantity || 1}</div>
+                                                        </div>
+                                                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                            <div className="text-gray-600">Unit Price</div>
+                                                            <div className="font-medium">₪{(svc.unit_price || 0).toFixed(2)}</div>
+                                                        </div>
+                                                        <div className="col-span-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                            <div className="text-gray-600">Line Total</div>
+                                                            <div className="font-semibold">₪{(svc.total || 0).toFixed(2)}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <div className="panel">
+                                                <div className="mb-3">
+                                                    <h3 className="text-lg font-semibold">Services Total</h3>
+                                                </div>
+                                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                    <div className="text-sm text-gray-600">Total</div>
+                                                    <div className="text-2xl font-bold">₪{getServicesTotal().toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Notes (moved here so notes have their own panel) */}
+                                    {booking?.notes && (
+                                        <div className="panel mt-4">
+                                            <div className="mb-3">
+                                                <h3 className="text-lg font-semibold">Notes</h3>
+                                            </div>
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Additional Information */}
@@ -896,7 +983,20 @@ const BookingPreview = () => {
                                             </div>
                                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                 <span className="text-sm text-gray-600">Driver:</span>
-                                                <span className="font-medium">{booking.driver?.name || 'Not Assigned'}</span>
+                                                {booking.driver ? (
+                                                    <div className="text-right">
+                                                        <div className="font-medium">{booking.driver.name}</div>
+                                                        {(booking.driver as any).driver_number && (
+                                                            <div className="text-sm text-gray-500">
+                                                                <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
+                                                                    {(booking.driver as any).driver_number}
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-medium">Not Assigned</span>
+                                                )}
                                             </div>
                                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                 <span className="text-sm text-gray-600">Contractor:</span>
@@ -905,6 +1005,8 @@ const BookingPreview = () => {
                                         </div>
                                     </div>
 
+                                    {/* Additional Information */}
+                                    <div className="space-y-6"></div>
                                     {/* Additional Details */}
                                     <div className="panel">
                                         <div className="mb-5">
@@ -932,12 +1034,7 @@ const BookingPreview = () => {
                                                     })}
                                                 </span>
                                             </div>
-                                            {booking.notes && (
-                                                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                    <span className="text-sm text-gray-600 block mb-2">Notes:</span>
-                                                    <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
-                                                </div>
-                                            )}
+                                            {/* Notes moved to its own panel in the left column */}
                                         </div>
                                     </div>
 
@@ -1032,7 +1129,7 @@ const BookingPreview = () => {
                                                                 <strong className="text-primary">{deal.invoice_number}</strong>
                                                             </td>
                                                             <td>{booking.customer_name || 'N/A'}</td>
-                                                            <td>{(booking as any).service_name || booking.service_type || '-'}</td>
+                                                            <td>{getServicesDisplay()}</td>
                                                             <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
                                                             <td className="text-danger">₪{(deal.remaining_amount || 0).toFixed(2)}</td>
                                                             <td>
@@ -1041,11 +1138,7 @@ const BookingPreview = () => {
                                                             <td className="text-blue-500">
                                                                 <div className="flex items-center gap-3">
                                                                     {relatedInvoice ? (
-                                                                        <Link
-                                                                            href={`/invoices/preview/${relatedInvoice.id}`}
-                                                                            className="inline-flex hover:text-primary"
-                                                                            title="View Invoice"
-                                                                        >
+                                                                        <Link href={`/invoices/preview/${relatedInvoice.id}`} className="inline-flex hover:text-primary" title="View Invoice">
                                                                             <IconEye className="h-5 w-5" />
                                                                         </Link>
                                                                     ) : (
@@ -1072,124 +1165,100 @@ const BookingPreview = () => {
                                     </div>
                                 )}
                             </div>
-
-                            
                         </Tab.Panel>
 
-                                <Tab.Panel>
-                                    <div className="panel ">
-                                        <div className="mb-5 flex items-center justify-between">
-                                            <h3 className="text-lg font-semibold">Tax & Receipt Invoices</h3>
-                                            <div className="flex items-center gap-3">
-                                                <button
-                                                    onClick={handleCreateInvoice}
-                                                    className="btn btn-outline-primary"
-                                                    disabled={creatingInvoice}
-                                                >
-                                                    {creatingInvoice ? 'Creating Invoice...' : 'Add New Invoice'}
-                                                </button>
-                                                <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
-                                                    Record New Receipt
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {(() => {
-                                            const transactions = [
-                                                ...invoices.map((inv) => ({
-                                                    id: inv.id,
-                                                    date: inv.created_at,
-                                                    type: 'Invoice' as const,
-                                                    reference: `#${inv.invoice_number}`,
-                                                    amount: (inv as any).subtotal_amount || inv.total_amount || 0,
-                                                    status: inv.status,
-                                                    isInvoice: true as const,
-                                                })),
-                                                ...payments.map((pay) => ({
-                                                    id: pay.id,
-                                                    date: pay.payment_date,
-                                                    type: 'Receipt' as const,
-                                                    reference: (pay.payment_method || '').replace('_', ' '),
-                                                    amount: pay.amount,
-                                                    status: 'completed' as const,
-                                                    isInvoice: false as const,
-                                                })),
-                                            ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-                                            if (transactions.length === 0) {
-                                                return (
-                                                    <div className="text-center text-gray-500 py-4">No invoices or receipts for this booking</div>
-                                                );
-                                            }
-
-                                            return (
-                                                <div className="table-responsive">
-                                                    <table className="table-bordered">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Reference</th>
-                                                                <th>Type</th>
-                                                                <th>Amount</th>
-                                                                <th>Status</th>
-                                                                <th>Date</th>
-                                                                <th>Action</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {transactions.map((tx) => (
-                                                                <tr key={tx.id}>
-                                                                    <td className="font-semibold">{tx.reference}</td>
-                                                                    <td>
-                                                                        <span
-                                                                            className={`badge ${
-                                                                                tx.isInvoice
-                                                                                    ? 'badge-outline-primary'
-                                                                                    : 'badge-outline-success'
-                                                                            }`}
-                                                                        >
-                                                                            {tx.type}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className={tx.isInvoice ? 'font-bold' : 'font-bold text-success'}>
-                                                                        ₪{tx.amount?.toFixed(2) || 0}
-                                                                    </td>
-                                                                    <td>
-                                                                        <span
-                                                                            className={`badge badge-sm ${
-                                                                                tx.status === 'paid' || tx.status === 'completed'
-                                                                                    ? 'badge-outline-success'
-                                                                                    : tx.status === 'overdue'
-                                                                                    ? 'badge-outline-danger'
-                                                                                    : 'badge-outline-warning'
-                                                                            }`}
-                                                                        >
-                                                                            {tx.status}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td>
-                                                                        {new Date(tx.date).toLocaleDateString('en-GB')}
-                                                                    </td>
-                                                                    <td>
-                                                                        {tx.isInvoice ? (
-                                                                            <Link
-                                                                                href={`/invoices/preview/${tx.id}`}
-                                                                                className="inline-flex hover:text-primary"
-                                                                                title="View Invoice"
-                                                                            >
-                                                                                <IconEye className="h-5 w-5" />
-                                                                            </Link>
-                                                                        ) : (
-                                                                            <span className="text-xs text-gray-400">-</span>
-                                                                        )}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            );
-                                        })()}
+                        <Tab.Panel>
+                            <div className="panel ">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold">Tax & Receipt Invoices</h3>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={handleCreateInvoice} className="btn btn-outline-primary" disabled={creatingInvoice}>
+                                            {creatingInvoice ? 'Creating Invoice...' : 'Add New Invoice'}
+                                        </button>
+                                        <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
+                                            Record New Receipt
+                                        </button>
                                     </div>
-                                </Tab.Panel>
+                                </div>
+                                {(() => {
+                                    const transactions = [
+                                        ...invoices.map((inv) => ({
+                                            id: inv.id,
+                                            date: inv.created_at,
+                                            type: 'Invoice' as const,
+                                            reference: `#${inv.invoice_number}`,
+                                            amount: (inv as any).subtotal_amount || inv.total_amount || 0,
+                                            status: inv.status,
+                                            isInvoice: true as const,
+                                        })),
+                                        ...payments.map((pay) => ({
+                                            id: pay.id,
+                                            date: pay.payment_date,
+                                            type: 'Receipt' as const,
+                                            reference: (pay.payment_method || '').replace('_', ' '),
+                                            amount: pay.amount,
+                                            status: 'completed' as const,
+                                            isInvoice: false as const,
+                                        })),
+                                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                                    if (transactions.length === 0) {
+                                        return <div className="text-center text-gray-500 py-4">No invoices or receipts for this booking</div>;
+                                    }
+
+                                    return (
+                                        <div className="table-responsive">
+                                            <table className="table-bordered">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Reference</th>
+                                                        <th>Type</th>
+                                                        <th>Amount</th>
+                                                        <th>Status</th>
+                                                        <th>Date</th>
+                                                        <th>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {transactions.map((tx) => (
+                                                        <tr key={tx.id}>
+                                                            <td className="font-semibold">{tx.reference}</td>
+                                                            <td>
+                                                                <span className={`badge ${tx.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>{tx.type}</span>
+                                                            </td>
+                                                            <td className={tx.isInvoice ? 'font-bold' : 'font-bold text-success'}>₪{tx.amount?.toFixed(2) || 0}</td>
+                                                            <td>
+                                                                <span
+                                                                    className={`badge badge-sm ${
+                                                                        tx.status === 'paid' || tx.status === 'completed'
+                                                                            ? 'badge-outline-success'
+                                                                            : tx.status === 'overdue'
+                                                                              ? 'badge-outline-danger'
+                                                                              : 'badge-outline-warning'
+                                                                    }`}
+                                                                >
+                                                                    {tx.status}
+                                                                </span>
+                                                            </td>
+                                                            <td>{new Date(tx.date).toLocaleDateString('en-GB')}</td>
+                                                            <td>
+                                                                {tx.isInvoice ? (
+                                                                    <Link href={`/invoices/preview/${tx.id}`} className="inline-flex hover:text-primary" title="View Invoice">
+                                                                        <IconEye className="h-5 w-5" />
+                                                                    </Link>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-400">-</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </Tab.Panel>
                         {/* السجل Tab */}
                         <Tab.Panel>
                             <div className="space-y-6">
@@ -1197,7 +1266,6 @@ const BookingPreview = () => {
                                 <div className="panel">
                                     <div className="mb-5">
                                         <h3 className="text-lg font-semibold">Booking History</h3>
-                                        
                                     </div>
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -1222,7 +1290,7 @@ const BookingPreview = () => {
                                         </div>
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                             <span className="font-medium">Service:</span>
-                                            <span className="font-medium">{(booking as any).service_name || booking.service_type || '-'}</span>
+                                            <span className="font-medium">{getServicesDisplay()}</span>
                                         </div>
                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                             <span className="font-medium">Status Changes:</span>
@@ -1285,7 +1353,7 @@ const BookingPreview = () => {
                                             <div className="text-center text-gray-500 py-2">No status changes recorded for this booking.</div>
                                         )}
                                     </div>
-                                </div>  
+                                </div>
                             </div>
                         </Tab.Panel>
                     </Tab.Panels>
@@ -1401,17 +1469,14 @@ const BookingPreview = () => {
                                 {/* Payment Method */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Payment Method *</label>
-                                    <select
+                                    <MethodsSelect
                                         value={paymentForm.payment_method}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                                        onChange={(val) => {
+                                            const newMethod = (val || 'cash') as 'cash' | 'credit_card' | 'bank_transfer' | 'check';
+                                            setPaymentForm({ ...paymentForm, payment_method: newMethod });
+                                        }}
                                         className="form-select"
-                                        required
-                                    >
-                                        <option value="cash">Cash</option>
-                                        <option value="credit_card">Credit Card</option>
-                                        <option value="bank_transfer">Bank Transfer</option>
-                                        <option value="check">Check</option>
-                                    </select>
+                                    />
                                 </div>
 
                                 {/* Transaction ID */}

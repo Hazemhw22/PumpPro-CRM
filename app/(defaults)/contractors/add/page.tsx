@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 export default function AddContractor() {
     const { t } = getTranslation();
@@ -25,10 +26,10 @@ export default function AddContractor() {
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>('');
-    const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({ 
-        visible: false, 
-        message: '', 
-        type: 'success' 
+    const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
+        visible: false,
+        message: '',
+        type: 'success',
     });
 
     const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -56,23 +57,19 @@ export default function AddContractor() {
     };
 
     const checkExistingUser = async (email: string) => {
-        const { data } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('email', email.trim())
-            .single();
+        const { data } = await supabase.from('profiles').select('email').eq('email', email.trim()).single();
         return !!data;
     };
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         try {
             // Validate form inputs
             validateForm();
-            
+
             setSaving(true);
-            
+
             // Check if email already exists
             if (form.email) {
                 const exists = await checkExistingUser(form.email);
@@ -82,7 +79,7 @@ export default function AddContractor() {
             }
 
             let userId: string | null = null;
-            
+
             // 1. Create auth user if email and password are provided
             if (form.email && form.password) {
                 const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -101,25 +98,27 @@ export default function AddContractor() {
                     console.error('Auth Error:', authError);
                     throw new Error(authError.message || 'Failed to create user account');
                 }
-                
+
                 userId = authData.user?.id || null;
 
                 // 2. Create profile in profiles table if user was created
                 if (authData.user) {
-                    const profileData = [{
-                    id: authData.user.id,
-                    full_name: form.name.trim(),
-                    email: form.email.trim(),
-                    role: 'contractor',
-                    avatar_url: null,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                }];
+                    const profileData = [
+                        {
+                            id: authData.user.id,
+                            full_name: form.name.trim(),
+                            email: form.email.trim(),
+                            role: 'contractor',
+                            avatar_url: null,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        },
+                    ];
 
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    // @ts-ignore - Supabase type definition issue
-                    .insert(profileData);
+                    const { error: profileError } = await supabase
+                        .from('profiles')
+                        // @ts-ignore - Supabase type definition issue
+                        .insert(profileData);
 
                     if (profileError) {
                         console.error('Profile Error:', profileError);
@@ -136,20 +135,18 @@ export default function AddContractor() {
                 try {
                     const ext = photoFile.name.split('.').pop();
                     const path = `contractors/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                    
-                    const { error: uploadError } = await supabase.storage
-                        .from('contractors')
-                        .upload(path, photoFile, { 
-                            cacheControl: '3600',
-                            upsert: false 
-                        });
-                    
+
+                    const { error: uploadError } = await supabase.storage.from('contractors').upload(path, photoFile, {
+                        cacheControl: '3600',
+                        upsert: false,
+                    });
+
                     if (uploadError) throw uploadError;
-                    
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('contractors')
-                        .getPublicUrl(path);
-                    
+
+                    const {
+                        data: { publicUrl },
+                    } = supabase.storage.from('contractors').getPublicUrl(path);
+
                     photoUrl = publicUrl;
                 } catch (uploadError) {
                     console.error('Upload Error:', uploadError);
@@ -158,48 +155,47 @@ export default function AddContractor() {
                 }
             }
 
-            const contractorData = [{
-                id: userId || undefined,
-                contractor_number: form.contractor_number.trim() || null,
-                name: form.name.trim(),
-                phone: form.phone.trim() || null,
-                email: form.email.trim() || null,
-                balance: parseFloat(form.balance) || 0,
-                status: form.status,
-                notes: form.notes || null,
-                photo_url: photoUrl,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }];
+            const contractorData = [
+                {
+                    id: userId || undefined,
+                    contractor_number: form.contractor_number.trim() || null,
+                    name: form.name.trim(),
+                    phone: form.phone.trim() || null,
+                    email: form.email.trim() || null,
+                    balance: parseFloat(form.balance) || 0,
+                    status: form.status,
+                    notes: form.notes || null,
+                    photo_url: photoUrl,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                },
+            ];
 
             // Save contractor data
             const { error: contractorError } = await supabase
                 .from('contractors')
                 // @ts-ignore - Supabase type definition issue
                 .insert(contractorData);
-                
+
             if (contractorError) {
                 console.error('Contractor Error:', contractorError);
                 throw new Error(contractorError.message || 'Failed to save contractor information');
             }
 
-            setAlert({ 
-                visible: true, 
-                message: 'Contractor added successfully', 
-                type: 'success' 
+            setAlert({
+                visible: true,
+                message: 'Contractor added successfully',
+                type: 'success',
             });
-            
+
             setTimeout(() => router.push('/contractors'), 1200);
-            
         } catch (err) {
-            const errorMessage = err instanceof Error 
-                ? err.message 
-                : 'An unexpected error occurred. Please try again.';
-                
-            setAlert({ 
-                visible: true, 
-                message: errorMessage, 
-                type: 'danger' 
+            const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.';
+
+            setAlert({
+                visible: true,
+                message: errorMessage,
+                type: 'danger',
             });
         } finally {
             setSaving(false);
@@ -266,10 +262,18 @@ export default function AddContractor() {
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
-                            <select name="status" value={form.status} onChange={onChange} className="form-select">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            <StatusSelect
+                                value={form.status}
+                                onChange={(val) => {
+                                    const newStatus = (val || 'active') as 'active' | 'inactive';
+                                    setForm({ ...form, status: newStatus });
+                                }}
+                                options={[
+                                    { label: 'Active', value: 'active' },
+                                    { label: 'Inactive', value: 'inactive' },
+                                ]}
+                                className="form-select"
+                            />
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Balance</label>
@@ -285,7 +289,12 @@ export default function AddContractor() {
                                         <img src={form.photo_url || '/assets/images/auth/user.png'} alt="placeholder" className="h-full w-full object-cover" />
                                     )}
                                 </div>
-                                <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={onPhotoChange}
+                                    className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white"
+                                />
                             </div>
                             <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
                         </div>

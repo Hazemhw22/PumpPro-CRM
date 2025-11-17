@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { getTranslation } from '@/i18n';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 export default function AddDriver() {
     const { t } = getTranslation();
@@ -149,11 +150,16 @@ export default function AddDriver() {
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Status</label>
-                            <select name="status" value={form.status} onChange={onChange} className="form-select">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="on_leave">On Leave</option>
-                            </select>
+                            <StatusSelect
+                                value={form.status}
+                                onChange={(val) => setForm({ ...form, status: val || 'active' })}
+                                options={[
+                                    { label: 'Active', value: 'active' },
+                                    { label: 'Inactive', value: 'inactive' },
+                                    { label: 'On Leave', value: 'on_leave' },
+                                ]}
+                                className="form-select"
+                            />
                         </div>
                         <div className="md:col-span-2">
                             <label className="mb-2 block text-sm font-bold text-gray-700 dark:text-white">Driver Photo</label>
@@ -165,7 +171,12 @@ export default function AddDriver() {
                                         <img src={form.photo_url || '/assets/images/auth/user.png'} alt="placeholder" className="h-full w-full object-cover" />
                                     )}
                                 </div>
-                                <input type="file" accept="image/*" onChange={onPhotoChange} className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white" />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={onPhotoChange}
+                                    className="form-input file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white"
+                                />
                             </div>
                             <p className="mt-1 text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
                         </div>

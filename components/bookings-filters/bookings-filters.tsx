@@ -4,6 +4,7 @@ import IconFilter from '@/components/icon/icon-filter';
 import IconX from '@/components/icon/icon-x';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import { getTranslation } from '@/i18n';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 export interface BookingFilters {
     search: string;
@@ -71,14 +72,19 @@ const BookingsFilters: React.FC<Props> = ({ onFilterChange, onClearFilters, view
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6 xl:grid-cols-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('status')}</label>
-                            <select className="form-select" value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
-                                <option value="">{t('all')}</option>
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                            <StatusSelect
+                                value={filters.status}
+                                onChange={(val) => setFilters((p) => ({ ...p, status: val || '' }))}
+                                options={[
+                                    { label: 'Pending', value: 'pending' },
+                                    { label: 'Confirmed', value: 'confirmed' },
+                                    { label: 'In Progress', value: 'in_progress' },
+                                    { label: 'Completed', value: 'completed' },
+                                    { label: 'Cancelled', value: 'cancelled' },
+                                ]}
+                                placeholder={t('all')}
+                                className="form-select"
+                            />
                         </div>
 
                         <div className="space-y-2">

@@ -7,6 +7,7 @@ import IconPlus from '@/components/icon/icon-plus';
 import IconPrinter from '@/components/icon/icon-printer';
 import IconPdf from '@/components/icon/icon-pdf';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 interface Invoice {
     id: string;
@@ -85,7 +86,9 @@ const InvoicesPage = () => {
                 let r: string | null = null;
                 let contractorId: string | null = null;
                 try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    const {
+                        data: { user },
+                    } = await supabase.auth.getUser();
                     if (user) {
                         // @ts-ignore
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
@@ -97,20 +100,28 @@ const InvoicesPage = () => {
                             contractorId = (c as any)?.id || null;
                             if (!contractorId && (user as any).email) {
                                 // @ts-ignore
-                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                const { data: c2 } = await supabase
+                                    .from('contractors')
+                                    .select('id')
+                                    .eq('email', (user as any).email)
+                                    .maybeSingle();
                                 contractorId = (c2 as any)?.id || null;
                             }
                         }
                     }
-                } catch (e) { /* ignore */ }
+                } catch (e) {
+                    /* ignore */
+                }
 
                 // Enforce role filtering strictly
-                if (r === 'contractor' && !contractorId) { setInvoices([] as any); setLoading(false); return; }
+                if (r === 'contractor' && !contractorId) {
+                    setInvoices([] as any);
+                    setLoading(false);
+                    return;
+                }
 
                 // Build invoices query
-                let invoicesQuery: any = supabase
-                    .from('invoices')
-                    .select(`
+                let invoicesQuery: any = supabase.from('invoices').select(`
                         *,
                         customers ( name, phone, address, tax_id ),
                         bookings ( service_type, booking_number, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id )
@@ -139,10 +150,15 @@ const InvoicesPage = () => {
 
                 // Fetch bookings (with provider ids and scheduling fields)
                 // @ts-ignore
-                let { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id');
+                let { data: bookingsData, error: bookingsError } = await supabase
+                    .from('bookings')
+                    .select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id');
                 if (r === 'contractor' && contractorId) {
                     // @ts-ignore
-                    const res = await supabase.from('bookings').select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id').eq('contractor_id', contractorId);
+                    const res = await supabase
+                        .from('bookings')
+                        .select('id, booking_number, service_type, service_address, scheduled_date, scheduled_time, notes, contractor_id, driver_id')
+                        .eq('contractor_id', contractorId);
                     bookingsData = res.data as any;
                 }
                 if (!bookingsError && bookingsData) {
@@ -201,14 +217,14 @@ const InvoicesPage = () => {
         const key = String(type).toLowerCase();
         let label = 'receipt only';
         let classes = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium';
-    
+
         if (key.includes('tax')) {
             classes += ' bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
             label = type.replace(/_/g, ' ');
         } else {
             classes += ' bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200';
         }
-    
+
         return <span className={classes}>{label}</span>;
     };
 
@@ -252,26 +268,30 @@ const InvoicesPage = () => {
                     created_at: invoice.created_at,
                     due_date: invoice.due_date,
                 },
-                booking: booking ? {
-                    booking_number: (booking as any).booking_number,
-                    service_type: (booking as any).service_type,
-                    service_address: (booking as any).service_address,
-                    scheduled_date: (booking as any).scheduled_date,
-                    scheduled_time: (booking as any).scheduled_time,
-                    notes: (booking as any).notes,
-                    contractor_id: (booking as any).contractor_id,
-                    driver_id: (booking as any).driver_id,
-                } : undefined,
+                booking: booking
+                    ? {
+                          booking_number: (booking as any).booking_number,
+                          service_type: (booking as any).service_type,
+                          service_address: (booking as any).service_address,
+                          scheduled_date: (booking as any).scheduled_date,
+                          scheduled_time: (booking as any).scheduled_time,
+                          notes: (booking as any).notes,
+                          contractor_id: (booking as any).contractor_id,
+                          driver_id: (booking as any).driver_id,
+                      }
+                    : undefined,
                 contractor: provider ? { name: provider.name, phone: provider.phone || undefined } : undefined,
-                customer: invoice.customers ? {
-                    name: invoice.customers.name,
-                    phone: (invoice.customers as any).phone,
-                    address: (invoice.customers as any).address,
-                    tax_id: (invoice.customers as any).tax_id,
-                } : undefined,
+                customer: invoice.customers
+                    ? {
+                          name: invoice.customers.name,
+                          phone: (invoice.customers as any).phone,
+                          address: (invoice.customers as any).address,
+                          tax_id: (invoice.customers as any).tax_id,
+                      }
+                    : undefined,
                 service: booking ? { name: getServiceName((booking as any).service_type) } : undefined,
             };
-    
+
             await InvoiceDealPDFGenerator.generatePDF(data, `invoice-${invoice.invoice_number}.pdf`, 'invoice');
         } catch (e: any) {
             alert(e?.message || 'Error generating PDF');
@@ -311,11 +331,16 @@ const InvoicesPage = () => {
                             </Link>
                         </div>
                         <div className="ltr:ml-auto rtl:mr-auto flex items-center gap-2">
-                            <select className="form-select w-36 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-                                <option value="all">All Status</option>
-                                <option value="paid">Paid</option>
-                                <option value="pending">Pending</option>
-                            </select>
+                            <StatusSelect
+                                value={statusFilter}
+                                onChange={(val) => setStatusFilter(val as any)}
+                                options={[
+                                    { label: 'Paid', value: 'paid' },
+                                    { label: 'Pending', value: 'pending' },
+                                ]}
+                                placeholder="All Statuses"
+                                className="form-select w-36 py-1 text-sm"
+                            />
                             <input type="text" className="form-input w-auto" placeholder="Search invoices..." value={search} onChange={(e) => setSearch(e.target.value)} />
                         </div>
                     </div>
@@ -360,11 +385,7 @@ const InvoicesPage = () => {
                                                     <td>
                                                         <span
                                                             className={`badge ${
-                                                                invoice.status === 'paid'
-                                                                    ? 'badge-outline-success'
-                                                                    : invoice.status === 'overdue'
-                                                                    ? 'badge-outline-danger'
-                                                                    : 'badge-outline-warning'
+                                                                invoice.status === 'paid' ? 'badge-outline-success' : invoice.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'
                                                             }`}
                                                         >
                                                             {invoice.status?.toUpperCase()}

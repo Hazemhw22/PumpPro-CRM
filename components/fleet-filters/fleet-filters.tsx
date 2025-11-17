@@ -3,6 +3,7 @@ import IconSearch from '@/components/icon/icon-search';
 import IconFilter from '@/components/icon/icon-filter';
 import IconX from '@/components/icon/icon-x';
 import { getTranslation } from '@/i18n';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 export interface FleetFilters {
     search: string;
@@ -71,13 +72,18 @@ const FleetFilters: React.FC<Props> = ({ onFilterChange, onClearFilters, viewMod
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6 xl:grid-cols-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('status')}</label>
-                            <select className="form-select" value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
-                                <option value="">{t('all')}</option>
-                                <option value="available">Available</option>
-                                <option value="in_use">In Use</option>
-                                <option value="maintenance">Maintenance</option>
-                                <option value="out_of_service">Out of Service</option>
-                            </select>
+                            <StatusSelect
+                                value={filters.status}
+                                onChange={(val) => setFilters((p) => ({ ...p, status: val || '' }))}
+                                options={[
+                                    { label: 'Available', value: 'available' },
+                                    { label: 'In Use', value: 'in_use' },
+                                    { label: 'Maintenance', value: 'maintenance' },
+                                    { label: 'Out of Service', value: 'out_of_service' },
+                                ]}
+                                placeholder={t('all')}
+                                className="form-select"
+                            />
                         </div>
 
                         <div className="space-y-2">

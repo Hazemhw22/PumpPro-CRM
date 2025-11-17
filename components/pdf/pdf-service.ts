@@ -1,3 +1,5 @@
+import chromium from '@sparticuz/chromium';
+
 export class PDFService {
   private static instance: PDFService | null = null;
 
@@ -14,10 +16,26 @@ export class PDFService {
     try {
       const puppeteerMod = await import('puppeteer');
       const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+
+      let browser: any;
+
+      // On Vercel use @sparticuz/chromium for a compatible headless Chrome binary
+      if (process.env.VERCEL) {
+        const executablePath = await chromium.executablePath();
+        browser = await puppeteer.launch({
+          args: (chromium as any).args,
+          defaultViewport: (chromium as any).defaultViewport,
+          executablePath: executablePath || undefined,
+          headless: (chromium as any).headless,
+        });
+      } else {
+        // Local / non-serverless environments can use the default Puppeteer Chrome
+        browser = await puppeteer.launch({
+          headless: 'new',
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
+      }
+
       const page = await browser.newPage();
       await page.emulateMediaType('screen');
       await page.setContent(contractHtml, { waitUntil: 'networkidle0' });

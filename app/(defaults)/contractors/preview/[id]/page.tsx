@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { Tab } from '@headlessui/react';
+import MethodsSelect from '@/components/selectors/MethodsSelect';
 
 interface Contractor {
     id: string;
@@ -74,69 +75,56 @@ const ContractorPreview = () => {
 
     useEffect(() => {
         let mounted = true;
-        
+
         const fetchData = async () => {
             try {
                 const contractorId = Array.isArray(params.id) ? params.id[0] : params.id;
-                
+
                 // Fetch contractor data (with fresh balance from database)
-                const { data: contractorData, error: contractorError } = await supabase
-                    .from('contractors')
-                    .select('*')
-                    .eq('id', contractorId)
-                    .single();
-                
+                const { data: contractorData, error: contractorError } = await supabase.from('contractors').select('*').eq('id', contractorId).single();
+
                 if (contractorError) throw contractorError;
                 if (!mounted) return;
-                
+
                 setContractor(contractorData);
-                
+
                 // Fetch bookings for this contractor
                 // @ts-ignore
-                const { data: bookingsData, error: bookingsError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('contractor_id', contractorId)
-                    .order('scheduled_date', { ascending: false });
-                
+                const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('*').eq('contractor_id', contractorId).order('scheduled_date', { ascending: false });
+
                 if (bookingsError) {
                     console.error('Error fetching bookings:', bookingsError);
                 } else {
                     setBookings(bookingsData || []);
                 }
-                
+
                 // Fetch payments for this contractor
                 // @ts-ignore
-                const { data: paymentsData, error: paymentsError } = await supabase
-                    .from('payments')
-                    .select('*')
-                    .eq('contractor_id', contractorId)
-                    .order('payment_date', { ascending: false });
-                
+                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('contractor_id', contractorId).order('payment_date', { ascending: false });
+
                 if (paymentsError) {
                     console.error('Error fetching payments:', paymentsError);
                 } else {
                     setPayments(paymentsData || []);
                 }
-                
             } catch (err) {
                 console.error('Error loading data:', err);
             } finally {
                 if (mounted) setLoading(false);
             }
         };
-        
+
         fetchData();
-        
+
         // Refresh data when page becomes visible (user returns to tab)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && mounted) {
                 fetchData();
             }
         };
-        
+
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         return () => {
             mounted = false;
             document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -146,22 +134,16 @@ const ContractorPreview = () => {
     const handleConfirmBooking = async (bookingId: string) => {
         try {
             // @ts-ignore
-            const { error } = await (supabase
-                .from('bookings') as any)
-                .update({ status: 'confirmed' })
-                .eq('id', bookingId);
-            
+            const { error } = await (supabase.from('bookings') as any).update({ status: 'confirmed' }).eq('id', bookingId);
+
             if (error) throw error;
-            
+
             // Adjust contractor balance by subtracting the booking price
-            const confirmed = bookings.find(b => b.id === bookingId);
+            const confirmed = bookings.find((b) => b.id === bookingId);
             if (confirmed && contractor?.id) {
                 const newBalance = (contractor.balance || 0) - (confirmed.price || 0);
                 // @ts-ignore
-                const { error: contractorUpdateError } = await (supabase
-                    .from('contractors') as any)
-                    .update({ balance: newBalance, updated_at: new Date().toISOString() })
-                    .eq('id', contractor.id);
+                const { error: contractorUpdateError } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', contractor.id);
 
                 if (contractorUpdateError) throw contractorUpdateError;
 
@@ -170,12 +152,8 @@ const ContractorPreview = () => {
             }
 
             // Update UI
-            setBookings(bookings.map(booking => 
-                booking.id === bookingId 
-                    ? { ...booking, status: 'confirmed' } 
-                    : booking
-            ));
-            
+            setBookings(bookings.map((booking) => (booking.id === bookingId ? { ...booking, status: 'confirmed' } : booking)));
+
             alert('Booking confirmed successfully!');
         } catch (error) {
             console.error('Error confirming booking:', error);
@@ -247,13 +225,14 @@ const ContractorPreview = () => {
                         <p className="text-gray-500">{contractor.name}</p>
                     </div>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={() => window.location.reload()} 
-                            className="btn btn-outline-primary"
-                            title="Refresh data to see latest balance"
-                        >
+                        <button onClick={() => window.location.reload()} className="btn btn-outline-primary" title="Refresh data to see latest balance">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
                             </svg>
                             Refresh
                         </button>
@@ -298,9 +277,7 @@ const ContractorPreview = () => {
                                 <IconDollarSign className="h-6 w-6 text-purple-500" />
                             </div>
                             <div>
-                                <div className={`text-2xl font-bold ${(contractor?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>
-                                    ₪{(contractor?.balance || 0).toFixed(2)}
-                                </div>
+                                <div className={`text-2xl font-bold ${(contractor?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>₪{(contractor?.balance || 0).toFixed(2)}</div>
                                 <div className="text-xs text-gray-500">Current Balance</div>
                             </div>
                         </div>
@@ -351,7 +328,7 @@ const ContractorPreview = () => {
                                         selected ? 'text-primary !outline-none before:!w-full' : ''
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
-                                   <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
+                                    <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
                                     Accounting
                                 </button>
                             )}
@@ -361,173 +338,173 @@ const ContractorPreview = () => {
                         {/* Details Tab */}
                         <Tab.Panel>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Contractor Information */}
-                    <div className="space-y-6">
-                        {/* Basic Info */}
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Basic Information</h3>
-                            </div>
+                                {/* Contractor Information */}
+                                <div className="space-y-6">
+                                    {/* Basic Info */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Basic Information</h3>
+                                        </div>
 
-                            <div className="space-y-4">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-primary mb-2">{contractor.name}</h2>
-                                    <span className={`badge ${contractor.status === 'active' ? 'badge-outline-success' : 'badge-outline-danger'}`}>
-                                        {contractor.status === 'active' ? 'Active' : 'Inactive'}
-                                    </span>
-                                </div>
-                                <div className="space-y-3">
-                                    <div className="flex items-center">
-                                        <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Name:</span>
-                                        <span className="font-medium">{contractor.name}</span>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <h2 className="text-2xl font-bold text-primary mb-2">{contractor.name}</h2>
+                                                <span className={`badge ${contractor.status === 'active' ? 'badge-outline-success' : 'badge-outline-danger'}`}>
+                                                    {contractor.status === 'active' ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center">
+                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Name:</span>
+                                                    <span className="font-medium">{contractor.name}</span>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
+                                                    <span className="font-medium">
+                                                        <a href={`tel:${contractor.phone}`} className="text-primary hover:underline">
+                                                            {contractor.phone}
+                                                        </a>
+                                                    </span>
+                                                </div>
+
+                                                {contractor.email && (
+                                                    <div className="flex items-center">
+                                                        <IconMail className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Email:</span>
+                                                        <span className="font-medium">
+                                                            <a href={`mailto:${contractor.email}`} className="text-primary hover:underline">
+                                                                {contractor.email}
+                                                            </a>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="flex items-center">
-                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
-                                        <span className="font-medium">
-                                            <a href={`tel:${contractor.phone}`} className="text-primary hover:underline">
-                                                {contractor.phone}
-                                            </a>
-                                        </span>
-                                    </div>
+                                    {/* Contact Information */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Contact Information</h3>
+                                        </div>
 
-                                    {contractor.email && (
-                                        <div className="flex items-center">
-                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
-                                            <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Email:</span>
-                                            <span className="font-medium">
-                                                <a href={`mailto:${contractor.email}`} className="text-primary hover:underline">
-                                                    {contractor.email}
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                    <span className="text-sm text-gray-600">Phone:</span>
+                                                </div>
+                                                <a href={`tel:${contractor.phone}`} className="font-semibold text-primary hover:underline">
+                                                    {contractor.phone}
                                                 </a>
-                                            </span>
+                                            </div>
+
+                                            {contractor.email && (
+                                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                    <div className="flex items-center">
+                                                        <IconMail className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                        <span className="text-sm text-gray-600">Email:</span>
+                                                    </div>
+                                                    <a href={`mailto:${contractor.email}`} className="font-semibold text-primary hover:underline">
+                                                        {contractor.email}
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Additional Information */}
+                                <div className="space-y-6">
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Additional Information</h3>
+                                        </div>
+
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Contractor Number:</span>
+                                                <span className="font-medium">#{contractor.contractor_number || contractor.id.slice(0, 8)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Contractor ID:</span>
+                                                <span className="font-medium font-mono text-xs">{contractor.id}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Status:</span>
+                                                <span className={`badge ${contractor.status === 'active' ? 'badge-outline-success' : 'badge-outline-danger'}`}>
+                                                    {contractor.status === 'active' ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Created At:</span>
+                                                <span className="font-medium">
+                                                    {new Date(contractor.created_at || '').toLocaleDateString('en-GB', {
+                                                        year: 'numeric',
+                                                        month: '2-digit',
+                                                        day: '2-digit',
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    {contractor.notes && (
+                                        <div className="panel">
+                                            <div className="mb-5">
+                                                <h3 className="text-lg font-semibold">Notes</h3>
+                                            </div>
+                                            <p className="text-gray-600 whitespace-pre-wrap">{contractor.notes}</p>
                                         </div>
                                     )}
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Contact Information */}
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Contact Information</h3>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                    <div className="flex items-center">
-                                        <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                        <span className="text-sm text-gray-600">Phone:</span>
-                                    </div>
-                                    <a href={`tel:${contractor.phone}`} className="font-semibold text-primary hover:underline">
-                                        {contractor.phone}
-                                    </a>
-                                </div>
-
-                                {contractor.email && (
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div className="flex items-center">
-                                            <IconMail className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
-                                            <span className="text-sm text-gray-600">Email:</span>
+                                    {/* Contact Card */}
+                                    <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                                        <div className="mb-3">
+                                            <h3 className="text-lg font-semibold">Quick Contact</h3>
                                         </div>
-                                        <a href={`mailto:${contractor.email}`} className="font-semibold text-primary hover:underline">
-                                            {contractor.email}
-                                        </a>
+                                        <div className="space-y-2">
+                                            <a href={`tel:${contractor.phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                                <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                                <span className="font-medium">Call Contractor</span>
+                                            </a>
+                                            {contractor.email && (
+                                                <a href={`mailto:${contractor.email}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                                    <IconMail className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="font-medium">Send Email</span>
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                                </div>
 
-                    {/* Additional Information */}
-                    <div className="space-y-6">
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h3 className="text-lg font-semibold">Additional Information</h3>
-                            </div>
-
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Contractor Number:</span>
-                                    <span className="font-medium">#{contractor.contractor_number || contractor.id.slice(0, 8)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Contractor ID:</span>
-                                    <span className="font-medium font-mono text-xs">{contractor.id}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Status:</span>
-                                    <span className={`badge ${contractor.status === 'active' ? 'badge-outline-success' : 'badge-outline-danger'}`}>
-                                        {contractor.status === 'active' ? 'Active' : 'Inactive'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Created At:</span>
-                                    <span className="font-medium">
-                                        {new Date(contractor.created_at || '').toLocaleDateString('en-GB', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                        })}
-                                    </span>
+                                {/* Contractor Photo */}
+                                <div className="panel">
+                                    <div className="mb-5">
+                                        <h3 className="text-lg font-semibold">Contractor Photo</h3>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <div className="mb-5">
+                                            <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                {contractor.photo_url ? (
+                                                    <img src={contractor.photo_url} alt={contractor.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <IconUser className="w-16 h-16 text-gray-400" />
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button className="btn btn-primary gap-2">
+                                            <IconCamera />
+                                            Upload a photo
+                                        </button>
+                                        <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Notes */}
-                        {contractor.notes && (
-                            <div className="panel">
-                                <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Notes</h3>
-                                </div>
-                                <p className="text-gray-600 whitespace-pre-wrap">{contractor.notes}</p>
-                            </div>
-                        )}
-
-                        {/* Contact Card */}
-                        <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                            <div className="mb-3">
-                                <h3 className="text-lg font-semibold">Quick Contact</h3>
-                            </div>
-                            <div className="space-y-2">
-                                <a href={`tel:${contractor.phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                    <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
-                                    <span className="font-medium">Call Contractor</span>
-                                </a>
-                                {contractor.email && (
-                                    <a href={`mailto:${contractor.email}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                        <IconMail className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
-                                        <span className="font-medium">Send Email</span>
-                                    </a>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Contractor Photo */}
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h3 className="text-lg font-semibold">Contractor Photo</h3>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <div className="mb-5">
-                                <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                                    {contractor.photo_url ? (
-                                        <img src={contractor.photo_url} alt={contractor.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <IconUser className="w-16 h-16 text-gray-400" />
-                                    )}
-                                </div>
-                            </div>
-                            <button className="btn btn-primary gap-2">
-                                <IconCamera />
-                                Upload a photo
-                            </button>
-                            <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
-                        </div>
-                    </div>
-                </div>
                         </Tab.Panel>
 
                         {/* Bookings Tab */}
@@ -562,36 +539,36 @@ const ContractorPreview = () => {
                                                         <td>{new Date(booking.scheduled_date).toLocaleDateString()}</td>
                                                         <td className="text-right font-bold">₪{booking.price.toLocaleString()}</td>
                                                         <td className="text-center">
-                                                            <span className={`badge ${
-                                                                booking.status === 'confirmed' 
-                                                                    ? 'badge-outline-success' 
-                                                                    : booking.status === 'pending'
-                                                                        ? 'badge-outline-warning'
-                                                                        : booking.status === 'completed'
+                                                            <span
+                                                                className={`badge ${
+                                                                    booking.status === 'confirmed'
+                                                                        ? 'badge-outline-success'
+                                                                        : booking.status === 'pending'
+                                                                          ? 'badge-outline-warning'
+                                                                          : booking.status === 'completed'
                                                                             ? 'badge-outline-info'
                                                                             : 'badge-outline-danger'
-                                                            }`}>
+                                                                }`}
+                                                            >
                                                                 {booking.status}
                                                             </span>
                                                         </td>
                                                         <td className="text-center">
-                                                            <span className={`badge ${
-                                                                booking.payment_status === 'paid' 
-                                                                    ? 'badge-outline-success' 
-                                                                    : booking.payment_status === 'partial'
-                                                                        ? 'badge-outline-warning'
-                                                                        : 'badge-outline-danger'
-                                                            }`}>
+                                                            <span
+                                                                className={`badge ${
+                                                                    booking.payment_status === 'paid'
+                                                                        ? 'badge-outline-success'
+                                                                        : booking.payment_status === 'partial'
+                                                                          ? 'badge-outline-warning'
+                                                                          : 'badge-outline-danger'
+                                                                }`}
+                                                            >
                                                                 {booking.payment_status}
                                                             </span>
                                                         </td>
                                                         <td className="text-center">
                                                             {booking.status === 'pending' && (
-                                                                <button
-                                                                    onClick={() => handleConfirmBooking(booking.id)}
-                                                                    className="btn btn-sm btn-success ltr:mr-2 rtl:ml-2"
-                                                                    title="Confirm Booking"
-                                                                >
+                                                                <button onClick={() => handleConfirmBooking(booking.id)} className="btn btn-sm btn-success ltr:mr-2 rtl:ml-2" title="Confirm Booking">
                                                                     <IconCheck className="w-4 h-4" />
                                                                     Confirm
                                                                 </button>
@@ -611,10 +588,7 @@ const ContractorPreview = () => {
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Payments History</h3>
-                                    <button 
-                                        onClick={() => setShowPaymentModal(true)}
-                                        className="btn btn-primary gap-2"
-                                    >
+                                    <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary gap-2">
                                         <IconCreditCard className="w-4 h-4" />
                                         Record Payment
                                     </button>
@@ -634,17 +608,11 @@ const ContractorPreview = () => {
                                             {payments.map((payment) => (
                                                 <tr key={payment.id}>
                                                     <td>{new Date(payment.payment_date).toLocaleDateString()}</td>
-                                                    <td className="font-semibold text-primary">
-                                                        {bookings.find(b => b.id === payment.booking_id)?.booking_number || '-'}
-                                                    </td>
+                                                    <td className="font-semibold text-primary">{bookings.find((b) => b.id === payment.booking_id)?.booking_number || '-'}</td>
                                                     <td>
-                                                        <span className="badge badge-outline-info">
-                                                            {payment.payment_method}
-                                                        </span>
+                                                        <span className="badge badge-outline-info">{payment.payment_method}</span>
                                                     </td>
-                                                    <td className="text-right font-bold text-success">
-                                                        +₪{payment.amount.toLocaleString()}
-                                                    </td>
+                                                    <td className="text-right font-bold text-success">+₪{payment.amount.toLocaleString()}</td>
                                                     <td className="text-sm text-gray-600">{payment.notes || '-'}</td>
                                                 </tr>
                                             ))}
@@ -665,8 +633,7 @@ const ContractorPreview = () => {
                                         ₪{contractor.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                                     </p>
                                     <p className="text-sm text-gray-500 mt-2">
-                                        Total Bookings: ₪{bookings.reduce((sum, b) => sum + b.price, 0).toFixed(2)} | 
-                                        Total Payments: ₪{payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                                        Total Bookings: ₪{bookings.reduce((sum, b) => sum + b.price, 0).toFixed(2)} | Total Payments: ₪{payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
                                     </p>
                                 </div>
                             </div>
@@ -683,28 +650,27 @@ const ContractorPreview = () => {
                             <h5 className="text-lg font-semibold">Record New Payment</h5>
                             <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
                         </div>
 
-                        <form onSubmit={async (e) => {
-                            e.preventDefault();
-                            
-                            if (!paymentForm.booking_id) {
-                                alert('Please select a booking');
-                                return;
-                            }
+                        <form
+                            onSubmit={async (e) => {
+                                e.preventDefault();
 
-                            try {
-                                const paymentAmount = parseFloat(paymentForm.amount);
-                                
-                                // Create payment record
-                                // Database trigger will automatically update contractor balance
-                                // @ts-ignore
-                                const { error: paymentError } = await (supabase
-                                    .from('payments') as any)
-                                    .insert([
+                                if (!paymentForm.booking_id) {
+                                    alert('Please select a booking');
+                                    return;
+                                }
+
+                                try {
+                                    const paymentAmount = parseFloat(paymentForm.amount);
+
+                                    // Create payment record
+                                    // Database trigger will automatically update contractor balance
+                                    // @ts-ignore
+                                    const { error: paymentError } = await (supabase.from('payments') as any).insert([
                                         {
                                             booking_id: paymentForm.booking_id,
                                             contractor_id: contractor?.id,
@@ -716,31 +682,31 @@ const ContractorPreview = () => {
                                         },
                                     ] as any);
 
-                                if (paymentError) {
-                                    console.error('Payment creation error:', paymentError);
-                                    throw paymentError;
-                                }
+                                    if (paymentError) {
+                                        console.error('Payment creation error:', paymentError);
+                                        throw paymentError;
+                                    }
 
-                                // Deduct payment from contractor balance as requested
-                                if (contractor?.id) {
-                                    const newBalance = (contractor.balance || 0) + paymentAmount;
-                                    // @ts-ignore
-                                    const { error: contractorUpdateError } = await (supabase
-                                        .from('contractors') as any)
-                                        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-                                        .eq('id', contractor.id);
-                                    if (contractorUpdateError) throw contractorUpdateError;
-                                    setContractor({ ...contractor, balance: newBalance });
-                                }
+                                    // Deduct payment from contractor balance as requested
+                                    if (contractor?.id) {
+                                        const newBalance = (contractor.balance || 0) + paymentAmount;
+                                        // @ts-ignore
+                                        const { error: contractorUpdateError } = await (supabase.from('contractors') as any)
+                                            .update({ balance: newBalance, updated_at: new Date().toISOString() })
+                                            .eq('id', contractor.id);
+                                        if (contractorUpdateError) throw contractorUpdateError;
+                                        setContractor({ ...contractor, balance: newBalance });
+                                    }
 
-                                alert('Payment recorded successfully!');
-                                setShowPaymentModal(false);
-                                window.location.reload();
-                            } catch (error: any) {
-                                console.error('Error recording payment:', error);
-                                alert(`Error recording payment: ${error.message || 'Unknown error'}`);
-                            }
-                        }}>
+                                    alert('Payment recorded successfully!');
+                                    setShowPaymentModal(false);
+                                    window.location.reload();
+                                } catch (error: any) {
+                                    console.error('Error recording payment:', error);
+                                    alert(`Error recording payment: ${error.message || 'Unknown error'}`);
+                                }
+                            }}
+                        >
                             <div className="space-y-4">
                                 {/* Select Booking */}
                                 <div>
@@ -748,22 +714,24 @@ const ContractorPreview = () => {
                                     <select
                                         value={paymentForm.booking_id}
                                         onChange={(e) => {
-                                            const booking = bookings.find(b => b.id === e.target.value);
-                                            setPaymentForm({ 
-                                                ...paymentForm, 
+                                            const booking = bookings.find((b) => b.id === e.target.value);
+                                            setPaymentForm({
+                                                ...paymentForm,
                                                 booking_id: e.target.value,
-                                                amount: String(booking?.price || 0)
+                                                amount: String(booking?.price || 0),
                                             });
                                         }}
                                         className="form-select"
                                         required
                                     >
                                         <option value="">-- Select Booking --</option>
-                                        {bookings.filter(b => b.payment_status !== 'paid').map((booking) => (
-                                            <option key={booking.id} value={booking.id}>
-                                                #{booking.booking_number} - ₪{booking.price}
-                                            </option>
-                                        ))}
+                                        {bookings
+                                            .filter((b) => b.payment_status !== 'paid')
+                                            .map((booking) => (
+                                                <option key={booking.id} value={booking.id}>
+                                                    #{booking.booking_number} - ₪{booking.price}
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
 
@@ -783,39 +751,26 @@ const ContractorPreview = () => {
                                 {/* Payment Method */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Payment Method *</label>
-                                    <select
+                                    <MethodsSelect
                                         value={paymentForm.payment_method}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                                        onChange={(val) => {
+                                            const newMethod = (val || 'cash') as 'cash' | 'credit_card' | 'bank_transfer' | 'check';
+                                            setPaymentForm({ ...paymentForm, payment_method: newMethod });
+                                        }}
                                         className="form-select"
-                                        required
-                                    >
-                                        <option value="cash">Cash</option>
-                                        <option value="credit_card">Credit Card</option>
-                                        <option value="bank_transfer">Bank Transfer</option>
-                                        <option value="check">Check</option>
-                                    </select>
+                                    />
                                 </div>
 
                                 {/* Transaction ID */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
-                                    <input
-                                        type="text"
-                                        value={paymentForm.transaction_id}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })}
-                                        className="form-input"
-                                    />
+                                    <input type="text" value={paymentForm.transaction_id} onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })} className="form-input" />
                                 </div>
 
                                 {/* Notes */}
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Notes (Optional)</label>
-                                    <textarea
-                                        value={paymentForm.notes}
-                                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                                        className="form-textarea"
-                                        rows={3}
-                                    />
+                                    <textarea value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} className="form-textarea" rows={3} />
                                 </div>
                             </div>
 

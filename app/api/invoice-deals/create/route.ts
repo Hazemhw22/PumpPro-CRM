@@ -23,11 +23,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 1) Fetch booking
-        const { data: bookingRaw, error: bookingError } = await supabaseAdmin
-            .from('bookings')
-            .select('*')
-            .eq('id', booking_id)
-            .single();
+        const { data: bookingRaw, error: bookingError } = await supabaseAdmin.from('bookings').select('*').eq('id', booking_id).single();
 
         if (bookingError) {
             console.error('invoice-deals/create: booking fetch error', bookingError);
@@ -41,11 +37,7 @@ export async function POST(req: NextRequest) {
 
         // 2) Idempotency: if booking already linked to invoice_deal, return it
         if (booking.invoice_deal_id) {
-            const { data: existingDeal, error: existingErr } = await supabaseAdmin
-                .from('invoice_deals')
-                .select('*')
-                .eq('id', booking.invoice_deal_id)
-                .maybeSingle();
+            const { data: existingDeal, error: existingErr } = await supabaseAdmin.from('invoice_deals').select('*').eq('id', booking.invoice_deal_id).maybeSingle();
 
             if (existingErr) {
                 console.error('invoice-deals/create: fetch existing invoice_deal error', existingErr);
@@ -62,34 +54,28 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // 3) Fetch related data: service, customer, contractor
-        const [serviceRes, customerRes, contractorRes] = await Promise.all([
-            supabaseAdmin
-                .from('services')
-                .select('*')
-                .eq('id', booking.service_type)
-                .maybeSingle(),
-            booking.customer_id
-                ? supabaseAdmin
-                      .from('customers')
-                      .select('*')
-                      .eq('id', booking.customer_id)
-                      .maybeSingle()
-                : Promise.resolve({ data: null, error: null } as any),
-            booking.contractor_id
-                ? supabaseAdmin
-                      .from('contractors')
-                      .select('*')
-                      .eq('id', booking.contractor_id)
-                      .maybeSingle()
-                : Promise.resolve({ data: null, error: null } as any),
+        // 3) Fetch related data: services (all), customer, contractor, driver
+        const [bookingServicesRes, customerRes, contractorRes, driverRes] = await Promise.all([
+            supabaseAdmin.from('booking_services').select('*').eq('booking_id', booking_id),
+            booking.customer_id ? supabaseAdmin.from('customers').select('*').eq('id', booking.customer_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+            booking.contractor_id ? supabaseAdmin.from('contractors').select('*').eq('id', booking.contractor_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+            booking.driver_id ? supabaseAdmin.from('drivers').select('*').eq('id', booking.driver_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
         ]);
 
-        const service = serviceRes.data as Tables<'services'> | null;
-        const serviceError = serviceRes.error;
-        if (serviceError || !service) {
-            console.error('invoice-deals/create: service fetch error', serviceError);
-            return NextResponse.json({ message: 'Failed to fetch service details for pricing' }, { status: 500 });
+        const bookingServices = bookingServicesRes.data as Array<{ service_id: string; quantity: number; unit_price: number }> | null;
+        const bookingServicesError = bookingServicesRes.error;
+        if (bookingServicesError || !bookingServices || bookingServices.length === 0) {
+            console.error('invoice-deals/create: booking_services fetch error', bookingServicesError);
+            return NextResponse.json({ message: 'Failed to fetch booking services' }, { status: 500 });
+        }
+
+        // Fetch all service details
+        const serviceIds = bookingServices.map((bs: any) => bs.service_id);
+        const { data: allServices, error: servicesError } = await supabaseAdmin.from('services').select('*').in('id', serviceIds);
+
+        if (servicesError || !allServices || allServices.length === 0) {
+            console.error('invoice-deals/create: services fetch error', servicesError);
+            return NextResponse.json({ message: 'Failed to fetch service details' }, { status: 500 });
         }
 
         const customer = customerRes.data as Tables<'customers'> | null;
@@ -100,13 +86,14 @@ export async function POST(req: NextRequest) {
         }
 
         const contractor = contractorRes.data as Tables<'contractors'> | null;
+        const driver = driverRes.data as Tables<'drivers'> | null;
 
-        // 4) Calculate total amount based on customer type & service pricing
+        // 4) Calculate total amount based on all services
         const customerType = (customer as any)?.type || 'private';
-        const basePrice =
-            customerType === 'business' ? (service as any).price_business : (service as any).price_private;
-
-        const totalAmount = Number(basePrice || (booking as any).price || 0);
+        let totalAmount = 0;
+        (bookingServices as any[]).forEach((bs: any) => {
+            totalAmount += Number(bs.unit_price || 0);
+        });
         const nowIso = new Date().toISOString();
         const invoiceNumber = `ID-${Date.now()}`;
 
@@ -124,11 +111,7 @@ export async function POST(req: NextRequest) {
             updated_at: nowIso,
         } as any;
 
-        const { data: newDeal, error: insertError } = await supabaseAdmin
-            .from('invoice_deals')
-            .insert(insertPayload)
-            .select('*')
-            .single();
+        const { data: newDeal, error: insertError } = await supabaseAdmin.from('invoice_deals').insert(insertPayload).select('*').single();
 
         const deal = newDeal as any;
 
@@ -148,27 +131,20 @@ export async function POST(req: NextRequest) {
             invoice_deal_id: deal?.id ?? null,
         };
 
-        const { error: updateBookingError } = await (supabaseAdmin as any)
-            .from('bookings')
-            .update(bookingUpdatePayload)
-            .eq('id', booking_id);
+        const { error: updateBookingError } = await (supabaseAdmin as any).from('bookings').update(bookingUpdatePayload).eq('id', booking_id);
 
         if (updateBookingError) {
             console.error('invoice-deals/create: update booking.invoice_deal_id error', updateBookingError);
         }
 
-        const { data: linkedInvoice, error: fetchInvoiceError } = await supabaseAdmin
-            .from('invoices')
-            .select('id')
-            .eq('booking_id', booking_id)
-            .maybeSingle();
+        const { data: linkedInvoice, error: fetchInvoiceError } = await supabaseAdmin.from('invoices').select('id').eq('booking_id', booking_id).maybeSingle();
 
         if (fetchInvoiceError) {
             console.error('invoice-deals/create: fetch invoice by booking_id error', fetchInvoiceError);
         } else if (linkedInvoice) {
             const { error: updateInvoiceError } = await (supabaseAdmin as any)
                 .from('invoices')
-                .update({ status: 'paid', updated_at: nowIso } as any)
+                .update({ status: 'pending', updated_at: nowIso } as any)
                 .eq('id', (linkedInvoice as any).id);
 
             if (updateInvoiceError) {
@@ -177,6 +153,20 @@ export async function POST(req: NextRequest) {
         }
 
         // 7) Build PDF data and generate HTML
+        const servicesForPdf = (bookingServices as any[]).map((bs: any) => {
+            const svc = (allServices as any[]).find((s: any) => s.id === bs.service_id);
+            return {
+                name: svc?.name || '-',
+                description: svc?.description || null,
+                quantity: bs.quantity || 1,
+                unit_price: bs.unit_price || 0,
+                total: (bs.unit_price || 0) * (bs.quantity || 1),
+            };
+        });
+
+        console.log('DEBUG: driver data', driver);
+        console.log('DEBUG: contractor data', contractor);
+
         const pdfData = {
             invoice: {
                 id: deal?.id,
@@ -203,6 +193,12 @@ export async function POST(req: NextRequest) {
                       phone: contractor.phone,
                   }
                 : null,
+            driver: driver
+                ? {
+                      name: `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || driver.email || driver.phone || '-',
+                      driver_number: driver.phone,
+                  }
+                : null,
             customer: customer
                 ? {
                       name: customer.name,
@@ -211,11 +207,7 @@ export async function POST(req: NextRequest) {
                       business_name: customer.business_name,
                   }
                 : null,
-            service: {
-                name: service.name,
-                price_private: service.price_private,
-                price_business: service.price_business,
-            },
+            services: servicesForPdf,
             companyInfo: null,
             doc_type: 'invoice' as const,
             lang: 'en' as const,
@@ -227,9 +219,7 @@ export async function POST(req: NextRequest) {
             const pdfBuffer = await PDFService.getInstance().generateContractPDF({ contractHtml: html });
 
             const path = `invoice-deals/${deal?.invoice_number}-${deal?.id}.pdf`;
-            const { error: uploadError } = await supabaseAdmin.storage
-                .from('invoices')
-                .upload(path, pdfBuffer, { upsert: true, contentType: 'application/pdf' } as any);
+            const { error: uploadError } = await supabaseAdmin.storage.from('invoices').upload(path, pdfBuffer, { upsert: true, contentType: 'application/pdf' } as any);
 
             if (uploadError) {
                 console.error('invoice-deals/create: upload PDF error', uploadError);
@@ -269,4 +259,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Internal server error', error: err?.message || String(err) }, { status: 500 });
     }
 }
-

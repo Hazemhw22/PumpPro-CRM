@@ -8,6 +8,7 @@ import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconTrendingUp from '@/components/icon/icon-trending-up';
 import IconBox from '@/components/icon/icon-box';
 import IconPdf from '@/components/icon/icon-pdf';
+import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf-generator';
 import { Tables } from '@/types/database.types';
@@ -94,11 +95,7 @@ const AccountingPage = () => {
     const handleGenerateDealPdf = async (invoiceId: string) => {
         try {
             // Fetch minimal invoice fields
-            const invRes: any = await supabase
-                .from('invoices')
-                .select('id, invoice_number, booking_id')
-                .eq('id', invoiceId)
-                .maybeSingle();
+            const invRes: any = await supabase.from('invoices').select('id, invoice_number, booking_id').eq('id', invoiceId).maybeSingle();
             const inv: any = invRes?.data;
             const invErr: any = invRes?.error;
             if (invErr || !inv) throw invErr || new Error('Invoice not found');
@@ -139,149 +136,145 @@ const AccountingPage = () => {
     };
 
     const fetchAll = async () => {
+        try {
+            // Determine role and contractor id
+            let r: string | null = null;
+            let contractorId: string | null = null;
             try {
-                // Determine role and contractor id
-                let r: string | null = null;
-                let contractorId: string | null = null;
-                try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (user) {
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
+                if (user) {
+                    // @ts-ignore
+                    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                    r = (profile as any)?.role || null;
+                    setRole(r);
+                    if (r === 'contractor') {
                         // @ts-ignore
-                        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-                        r = (profile as any)?.role || null;
-                        setRole(r);
-                        if (r === 'contractor') {
+                        let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
+                        contractorId = (c as any)?.id || null;
+                        if (!contractorId && (user as any).email) {
                             // @ts-ignore
-                            let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
-                            contractorId = (c as any)?.id || null;
-                            if (!contractorId && (user as any).email) {
-                                // @ts-ignore
-                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
-                                contractorId = (c2 as any)?.id || null;
-                            }
+                            const { data: c2 } = await supabase
+                                .from('contractors')
+                                .select('id')
+                                .eq('email', (user as any).email)
+                                .maybeSingle();
+                            contractorId = (c2 as any)?.id || null;
                         }
                     }
-                } catch (e) { /* ignore */ }
-
-                // Enforce: driver sees zeros; contractor without id sees zeros
-                if (r === 'driver') {
-                    setInvoices([] as any); setPayments([] as any); setBookings([] as any);
-                    setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
-                    setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
-                    setBookingStats({ totalBookings: 0 });
-                    setLoading(false);
-                    return;
                 }
-                if (r === 'contractor' && !contractorId) {
-                    setInvoices([] as any); setPayments([] as any); setBookings([] as any);
-                    setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
-                    setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
-                    setBookingStats({ totalBookings: 0 });
-                    setLoading(false);
-                    return;
-                }
+            } catch (e) {
+                /* ignore */
+            }
 
-                // Fetch invoices with customer data
-                // @ts-ignore
-                let invoicesQuery: any = supabase
-                    .from('invoices')
-                    .select(`
+            // Enforce: driver sees zeros; contractor without id sees zeros
+            if (r === 'driver') {
+                setInvoices([] as any);
+                setPayments([] as any);
+                setBookings([] as any);
+                setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
+                setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
+                setBookingStats({ totalBookings: 0 });
+                setLoading(false);
+                return;
+            }
+            if (r === 'contractor' && !contractorId) {
+                setInvoices([] as any);
+                setPayments([] as any);
+                setBookings([] as any);
+                setInvoiceStats({ totalInvoices: 0, paidRevenue: 0, pendingRevenue: 0, remainingAmount: 0 });
+                setPaymentStats({ totalPayments: 0, totalReceived: 0, cash: 0, creditCard: 0, bankTransfer: 0 });
+                setBookingStats({ totalBookings: 0 });
+                setLoading(false);
+                return;
+            }
+
+            // Fetch invoices with customer data
+            // @ts-ignore
+            let invoicesQuery: any = supabase.from('invoices').select(`
                         *,
                         customers (
                             name
                         )
                     `);
-                if (r === 'contractor') invoicesQuery = invoicesQuery.eq('contractor_id', contractorId);
-                const { data: invoicesData, error: invoicesError } = await invoicesQuery.order('created_at', { ascending: false });
+            if (r === 'contractor') invoicesQuery = invoicesQuery.eq('contractor_id', contractorId);
+            const { data: invoicesData, error: invoicesError } = await invoicesQuery.order('created_at', { ascending: false });
 
-                if (!invoicesError && invoicesData) {
-                    setInvoices(invoicesData as any);
-                    
-                    // Calculate invoice statistics
-                    const totalInvoices = invoicesData.length;
-                    const paidRevenue = invoicesData
-                        .filter((inv: any) => inv.status === 'paid')
-                        .reduce((sum: number, inv: any) => sum + (inv.paid_amount || 0), 0);
-                    const pendingRevenue = invoicesData
-                        .filter((inv: any) => inv.status !== 'paid')
-                        .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
-                    const remainingAmount = invoicesData
-                        .reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
-                    
-                    setInvoiceStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
-                }
+            if (!invoicesError && invoicesData) {
+                setInvoices(invoicesData as any);
 
-                // Fetch payments with invoice and customer data
-                // @ts-ignore
-                let paymentsQuery: any = supabase
-                    .from('payments')
-                    .select(`
+                // Calculate invoice statistics
+                const totalInvoices = invoicesData.length;
+                const paidRevenue = invoicesData.filter((inv: any) => inv.status === 'paid').reduce((sum: number, inv: any) => sum + (inv.paid_amount || 0), 0);
+                const pendingRevenue = invoicesData.filter((inv: any) => inv.status !== 'paid').reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
+                const remainingAmount = invoicesData.reduce((sum: number, inv: any) => sum + (inv.remaining_amount || 0), 0);
+
+                setInvoiceStats({ totalInvoices, paidRevenue, pendingRevenue, remainingAmount });
+            }
+
+            // Fetch payments with invoice and customer data
+            // @ts-ignore
+            let paymentsQuery: any = supabase
+                .from('payments')
+                .select(
+                    `
                         *,
                         invoices (
                             customers ( name )
                         )
-                    `)
-                    .order('payment_date', { ascending: false });
-                if (r === 'contractor') paymentsQuery = paymentsQuery.eq('contractor_id', contractorId);
-                const { data: paymentsData, error: paymentsError } = await paymentsQuery;
+                    `,
+                )
+                .order('payment_date', { ascending: false });
+            if (r === 'contractor') paymentsQuery = paymentsQuery.eq('contractor_id', contractorId);
+            const { data: paymentsData, error: paymentsError } = await paymentsQuery;
 
-                if (!paymentsError && paymentsData) {
-                    setPayments(paymentsData as any);
-                    
-                    // Calculate payment statistics
-                    const totalPayments = paymentsData.length;
-                    const totalReceived = paymentsData.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-                    const cash = paymentsData
-                        .filter((p: any) => p.payment_method === 'cash')
-                        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-                    const creditCard = paymentsData
-                        .filter((p: any) => p.payment_method === 'credit_card')
-                        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-                    const bankTransfer = paymentsData
-                        .filter((p: any) => p.payment_method === 'bank_transfer')
-                        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-                    
-                    setPaymentStats({ totalPayments, totalReceived, cash, creditCard, bankTransfer });
-                }
+            if (!paymentsError && paymentsData) {
+                setPayments(paymentsData as any);
 
-                // Fetch bookings
-                // @ts-ignore
-                let bookingsQuery: any = supabase
-                    .from('bookings')
-                    .select('id, booking_number, service_type, status, invoice_deal_id');
-                if (r === 'contractor') bookingsQuery = bookingsQuery.eq('contractor_id', contractorId);
-                const { data: bookingsData, error: bookingsError } = await bookingsQuery;
+                // Calculate payment statistics
+                const totalPayments = paymentsData.length;
+                const totalReceived = paymentsData.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                const cash = paymentsData.filter((p: any) => p.payment_method === 'cash').reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                const creditCard = paymentsData.filter((p: any) => p.payment_method === 'credit_card').reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                const bankTransfer = paymentsData.filter((p: any) => p.payment_method === 'bank_transfer').reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
-                if (!bookingsError && bookingsData) {
-                    setBookings(bookingsData as any);
-
-                    // Map booking_id to existing invoice_deal_id
-                    const map: Record<string, string | null> = {};
-                    (bookingsData as any[]).forEach((b: any) => {
-                        map[b.id] = b.invoice_deal_id || null;
-                    });
-                    setDealsByBookingId(map);
-
-                    // Calculate booking statistics
-                    const totalBookings = bookingsData.length;
-                    setBookingStats({ totalBookings });
-                }
-
-                // Fetch services
-                // @ts-ignore
-                const { data: servicesData, error: servicesError } = await supabase
-                    .from('services')
-                    .select('id, name')
-                    .eq('active', true);
-
-                if (!servicesError && servicesData) {
-                    setServices(servicesData as any);
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            } finally {
-                setLoading(false);
+                setPaymentStats({ totalPayments, totalReceived, cash, creditCard, bankTransfer });
             }
+
+            // Fetch bookings
+            // @ts-ignore
+            let bookingsQuery: any = supabase.from('bookings').select('id, booking_number, service_type, status, invoice_deal_id');
+            if (r === 'contractor') bookingsQuery = bookingsQuery.eq('contractor_id', contractorId);
+            const { data: bookingsData, error: bookingsError } = await bookingsQuery;
+
+            if (!bookingsError && bookingsData) {
+                setBookings(bookingsData as any);
+
+                // Map booking_id to existing invoice_deal_id
+                const map: Record<string, string | null> = {};
+                (bookingsData as any[]).forEach((b: any) => {
+                    map[b.id] = b.invoice_deal_id || null;
+                });
+                setDealsByBookingId(map);
+
+                // Calculate booking statistics
+                const totalBookings = bookingsData.length;
+                setBookingStats({ totalBookings });
+            }
+
+            // Fetch services
+            // @ts-ignore
+            const { data: servicesData, error: servicesError } = await supabase.from('services').select('id, name').eq('active', true);
+
+            if (!servicesError && servicesData) {
+                setServices(servicesData as any);
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -312,22 +305,28 @@ const AccountingPage = () => {
         };
         try {
             window.addEventListener('focus', onFocus);
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            /* ignore */
+        }
 
         return () => {
             try {
                 if (channel) supabase.removeChannel(channel);
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                /* ignore */
+            }
             try {
                 window.removeEventListener('focus', onFocus);
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                /* ignore */
+            }
         };
     }, []);
 
     // Helper function to get service name
     const getServiceName = (serviceType: string) => {
-        const service = services.find(s => s.id === serviceType);
-        return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const service = services.find((s) => s.id === serviceType);
+        return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
     // Helper: check if invoice already has a DEAL via booking_id
@@ -367,7 +366,6 @@ const AccountingPage = () => {
 
             // Redirect to the invoices page
             window.location.href = '/accounting';
-
         } catch (e: any) {
             console.error('Failed to create invoice deal', e);
             alert(`Failed to create invoice deal: ${e.message}`);
@@ -389,11 +387,7 @@ const AccountingPage = () => {
                 return;
             }
 
-            const { data: deal, error: dealErr } = await supabase
-                .from('invoice_deals')
-                .select('id, pdf_url')
-                .eq('booking_id', inv.booking_id)
-                .maybeSingle();
+            const { data: deal, error: dealErr } = await supabase.from('invoice_deals').select('id, pdf_url').eq('booking_id', inv.booking_id).maybeSingle();
             if (dealErr) throw dealErr;
 
             const pdfUrl = (deal as any)?.pdf_url as string | null | undefined;
@@ -574,8 +568,8 @@ const AccountingPage = () => {
                             </thead>
                             <tbody>
                                 {[
-                                    ...invoices.slice(0, 5).map(inv => {
-                                        const booking = bookings.find(b => b.id === (inv.booking_id as any));
+                                    ...invoices.slice(0, 5).map((inv) => {
+                                        const booking = bookings.find((b) => b.id === (inv.booking_id as any));
                                         return {
                                             id: inv.id,
                                             date: inv.created_at,
@@ -588,8 +582,8 @@ const AccountingPage = () => {
                                             bookingStatus: booking?.status || null,
                                         };
                                     }),
-                                    ...payments.slice(0, 5).map(pay => {
-                                        const invoice = invoices.find(inv => inv.id === pay.invoice_id);
+                                    ...payments.slice(0, 5).map((pay) => {
+                                        const invoice = invoices.find((inv) => inv.id === pay.invoice_id);
                                         const customerName = pay.invoices?.customers?.name || invoice?.customers?.name;
                                         return {
                                             id: pay.id,
@@ -602,60 +596,68 @@ const AccountingPage = () => {
                                             isInvoice: false,
                                             bookingStatus: null,
                                         };
-                                    })
+                                    }),
                                 ]
-                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                .slice(0, 10)
-                                .map((transaction) => (
-                                    <tr key={transaction.id}>
-                                        <td className="font-semibold">{transaction.reference}</td>
-                                        <td>{transaction.customer}</td>
-                                        <td>
-                                            <span className={`badge ${transaction.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>
-                                                {transaction.type}
-                                            </span>
-                                        </td>
-                                        <td className={transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>
-                                            ₪{transaction.amount?.toFixed(2) || 0}
-                                        </td>
-                                        <td>
-                                            <span className={`badge badge-sm ${
-                                                transaction.status === 'paid' || transaction.status === 'completed' ? 'badge-outline-success' :
-                                                transaction.status === 'overdue' ? 'badge-outline-danger' :
-                                                'badge-outline-warning'
-                                            }`}>
-                                                {transaction.status}
-                                            </span>
-                                        </td>
-                                        <td className="flex items-center gap-2">
-                                            <span>{new Date(transaction.date).toLocaleDateString('en-GB')}</span> </td>
-                                        <td> {transaction.isInvoice && transaction.bookingStatus === 'confirmed' && (
-                                                hasDealForInvoice(transaction.id) ? (
-                                                    <button
-                                                        onClick={() => handleDownloadInvoicePdf(transaction.id)}
-                                                        className="inline-flex hover:text-primary"
-                                                        title="Download PDF"
-                                                    >
-                                                        <IconPdf className="h-5 w-5" />
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleCreateInvoiceDeal(transaction.id)}
-                                                        disabled={creatingDeal === transaction.id}
-                                                        className="inline-flex hover:text-primary disabled:opacity-50"
-                                                        title="Create Invoice Deal"
-                                                    >
-                                                        {creatingDeal === transaction.id ? (
-                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                                                        ) : (
-                                                            <IconPlus className="h-5 w-5" />
-                                                        )}
-                                                    </button>
-                                                )
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    .slice(0, 10)
+                                    .map((transaction) => (
+                                        <tr key={transaction.id}>
+                                            <td className="font-semibold">{transaction.reference}</td>
+                                            <td>{transaction.customer}</td>
+                                            <td>
+                                                <span className={`badge ${transaction.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>{transaction.type}</span>
+                                            </td>
+                                            <td className={transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>₪{transaction.amount?.toFixed(2) || 0}</td>
+                                            <td>
+                                                <span
+                                                    className={`badge badge-sm ${
+                                                        transaction.status === 'paid' || transaction.status === 'completed'
+                                                            ? 'badge-outline-success'
+                                                            : transaction.status === 'overdue'
+                                                              ? 'badge-outline-danger'
+                                                              : 'badge-outline-warning'
+                                                    }`}
+                                                >
+                                                    {transaction.status}
+                                                </span>
+                                            </td>
+                                            <td className="flex items-center gap-2">
+                                                <span>{new Date(transaction.date).toLocaleDateString('en-GB')}</span>{' '}
+                                            </td>
+                                            <td>
+                                                {transaction.isInvoice && (
+                                                    <Link href={`/invoices/preview/${transaction.id}`} className="inline-flex hover:text-primary mr-2" title="View">
+                                                        <IconEye className="h-5 w-5" />
+                                                    </Link>
+                                                )}
+                                                {transaction.isInvoice &&
+                                                    transaction.bookingStatus === 'confirmed' &&
+                                                    (hasDealForInvoice(transaction.id) ? (
+                                                        <button onClick={() => handleDownloadInvoicePdf(transaction.id)} className="inline-flex hover:text-primary" title="Download PDF">
+                                                            <IconPdf className="h-5 w-5" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleCreateInvoiceDeal(transaction.id)}
+                                                            disabled={creatingDeal === transaction.id}
+                                                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 hover:bg-primary/30 rounded text-primary disabled:opacity-50 transition"
+                                                            title="Create Invoice Deal"
+                                                        >
+                                                            {creatingDeal === transaction.id ? (
+                                                                <>
+                                                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                                                                    <span>Creating...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span>Create Deal</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ))}
+                                            </td>
+                                        </tr>
+                                    ))}
                             </tbody>
                         </table>
                     </div>

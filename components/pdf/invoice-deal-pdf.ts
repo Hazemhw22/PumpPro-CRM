@@ -1,225 +1,266 @@
+import { i } from 'framer-motion/dist/types.d-BJcRxCew';
+
 export type InvoiceDealPdfData = {
-  invoice?: {
-    id?: string;
-    invoice_number?: string;
-    total_amount?: number;
-    paid_amount?: number;
-    remaining_amount?: number;
-    status?: string;
-    created_at?: string;
-  } | null;
-  booking?: {
-    booking_number?: string;
-    service_type?: string;
-    service_address?: string;
-    scheduled_date?: string | null;
-    scheduled_time?: string | null;
-    notes?: string | null;
-    contractor_id?: string | null;
-    driver_id?: string | null;
-    price?: number | null;
-  } | null;
-  contractor?: {
-    name?: string | null;
-    phone?: string | null;
-  } | null;
-  customer?: {
-    name?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    business_name?: string | null;
-  } | null;
-  service?: {
-    name?: string | null;
-    price_private?: number | null;
-    price_business?: number | null;
-  } | null;
-  companyInfo?: {
-    name?: string | null;
-    address?: string | null;
-    phone?: string | null;
-    tax_id?: string | null;
-    logo_url?: string | null;
-  } | null;
-  doc_type?: 'invoice' | 'receipt';
-  lang?: 'en' | 'he' | 'ar';
-  payment_method?: 'cash' | 'credit_card' | 'bank_transfer' | 'check' | null;
-  payment_type?: 'cash' | 'visa' | 'bank_transfer' | 'check' | null;
-  no_price?: boolean;
+    invoice?: {
+        id?: string;
+        invoice_number?: string;
+        total_amount?: number;
+        paid_amount?: number;
+        remaining_amount?: number;
+        status?: string;
+        created_at?: string;
+    } | null;
+    booking?: {
+        booking_number?: string;
+        service_type?: string;
+        service_address?: string;
+        scheduled_date?: string | null;
+        scheduled_time?: string | null;
+        notes?: string | null;
+        contractor_id?: string | null;
+        driver_id?: string | null;
+        price?: number | null;
+    } | null;
+    contractor?: {
+        name?: string | null;
+        phone?: string | null;
+    } | null;
+    driver?: {
+        name?: string | null;
+        driver_number?: string | null;
+    } | null;
+    customer?: {
+        name?: string | null;
+        phone?: string | null;
+        address?: string | null;
+        business_name?: string | null;
+    } | null;
+    service?: {
+        name?: string | null;
+        price_private?: number | null;
+        price_business?: number | null;
+    } | null;
+    services?: Array<{
+        name?: string | null;
+        description?: string | null;
+        quantity?: number;
+        unit_price?: number;
+        total?: number;
+    }> | null;
+    companyInfo?: {
+        name?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        tax_id?: string | null;
+        logo_url?: string | null;
+    } | null;
+    doc_type?: 'invoice' | 'receipt';
+    lang?: 'en' | 'he' | 'ar';
+    payment_method?: 'cash' | 'credit_card' | 'bank_transfer' | 'check' | null;
+    payment_type?: 'cash' | 'visa' | 'bank_transfer' | 'check' | null;
+    no_price?: boolean;
 };
 
 export class InvoiceDealPDFGenerator {
-  static formatCurrency(value: number) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'ILS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Number(value || 0));
-  }
-
-  static formatDate(dateString?: string | null) {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleDateString('en-GB', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    } catch {
-      return '-';
+    static formatCurrency(value: number) {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'ILS',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(Number(value || 0));
     }
-  }
 
-  static inferSellerType(booking: InvoiceDealPdfData['booking']): 'driver' | 'contractor' | null {
-    if (booking?.driver_id) return 'driver';
-    if (booking?.contractor_id) return 'contractor';
-    return null;
-  }
-
-  static t(lang: 'en' | 'he' | 'ar' | '') {
-    const en = {
-      title: 'Service Document',
-      contract_date: 'Document Date',
-      seller: 'Seller',
-      driver: 'Driver',
-      contractor: 'Contractor',
-      provider_signature: "Provider Signature",
-      customer: 'Customer',
-      company: 'PumpPro',
-      tax_number: 'Tax Number',
-      phone: 'Phone',
-      address: 'Address',
-      service_info: 'Service Information',
-      service_type: 'Service Type',
-      booking_number: 'Booking Number',
-      service_date: 'Service Date',
-      service_time: 'Service Time',
-      service_address: 'Service Address',
-      notes: 'Notes',
-      purchase_details: 'Payment Details',
-      purchase_amount: 'Amount',
-      terms_title: 'Terms and Conditions',
-      term_1: 'The service is provided as agreed and scheduled.',
-      term_2: 'Any changes must be communicated in advance.',
-      term_3: 'Invoices are due upon receipt unless otherwise stated.',
-      term_4: 'Disputes must be raised within 7 days.',
-      term_5: 'This document is binding once issued.',
-      buyer_signature: "Customer's Signature",
-      price: 'Price',
-      payment_method: 'Payment Method',
-    };
-    const ar = {
-      title: 'مستند الخدمة',
-      contract_date: 'تاريخ المستند',
-      seller: 'البائع',
-      driver: 'السائق',
-      contractor: 'المقاول',
-      provider_signature: 'توقيع مقدم الخدمة',
-      customer: 'العميل',
-      company: 'شركة',
-      tax_number: 'الرقم الضريبي',
-      phone: 'الهاتف',
-      address: 'العنوان',
-      service_info: 'معلومات الخدمة',
-      service_type: 'نوع الخدمة',
-      booking_number: 'رقم الحجز',
-      service_date: 'تاريخ الخدمة',
-      service_time: 'وقت الخدمة',
-      service_address: 'عنوان الخدمة',
-      notes: 'ملاحظات',
-      purchase_details: 'تفاصيل الدفع',
-      purchase_amount: 'المبلغ',
-      terms_title: 'الشروط والأحكام',
-      term_1: 'تم تقديم الخدمة حسب الاتفاق والجدول المحدد.',
-      term_2: 'يجب إبلاغ أي تغييرات مسبقًا.',
-      term_3: 'تستحق الفواتير عند الاستلام ما لم يُذكر خلاف ذلك.',
-      term_4: 'يجب رفع أي نزاع خلال 7 أيام.',
-      term_5: 'هذا المستند ملزم بمجرد إصداره.',
-      buyer_signature: 'توقيع العميل',
-      price: 'السعر',
-      payment_method: 'طريقة الدفع',
-    };
-    const he = {
-      title: 'מסמך שירות',
-      contract_date: 'תאריך מסמך',
-      seller: 'מוכר',
-      driver: 'נהג',
-      contractor: 'קבלן',
-      provider_signature: 'חתימת נותן שירות',
-      customer: 'לקוח',
-      company: 'חברה',
-      tax_number: 'מספר עוסק',
-      phone: 'טלפון',
-      address: 'כתובת',
-      service_info: 'מידע שירות',
-      service_type: 'סוג שירות',
-      booking_number: 'מספר הזמנה',
-      service_date: 'תאריך שירות',
-      service_time: 'שעת שירות',
-      service_address: 'כתובת שירות',
-      notes: 'הערות',
-      purchase_details: 'פרטי תשלום',
-      purchase_amount: 'סכום',
-      terms_title: 'תנאים והגבלות',
-      term_1: 'השירות מסופק כפי שסוכם ומתוזמן.',
-      term_2: 'יש לתקשר שינויים מראש.',
-      term_3: 'חשבוניות לתשלום עם קבלה אלא אם צוין אחרת.',
-      term_4: 'יש להעלות מחלוקות תוך 7 ימים.',
-      term_5: 'מסמך זה מחייב עם הנפקתו.',
-      buyer_signature: 'חתימת לקוח',
-      price: 'מחיר',
-      payment_method: 'אמצעי תשלום',
-    };
-    return lang === 'ar' ? ar : lang === 'he' ? he : en;
-  }
-
-  static calculatePrice(data: InvoiceDealPdfData): number {
-    const inv = data.invoice;
-    if (typeof inv?.total_amount === 'number' && !isNaN(inv.total_amount)) return Number(inv.total_amount);
-    const bk = data.booking as any;
-    if (bk?.price) return Number(bk.price);
-    const svc = (data as any).service;
-    if (svc?.price_private || svc?.price_business) {
-      return Number(svc.price_private || svc.price_business || 0);
+    static formatDate(dateString?: string | null) {
+        if (!dateString) return '-';
+        try {
+            return new Date(dateString).toLocaleDateString('en-GB', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            });
+        } catch {
+            return '-';
+        }
     }
-    const amountFallback = (data as any)?.amount;
-    if (amountFallback) return Number(amountFallback);
-    return 0;
-  }
 
-  static formatPaymentMethod(data: InvoiceDealPdfData): string {
-    // Prefer explicit payment_method if provided; otherwise map payment_type
-    const method = data.payment_method || (data.payment_type === 'visa' ? 'credit_card' : (data.payment_type as any)) || null;
-    if (!method) return '-';
-    return String(method).replace('_', ' ').toUpperCase();
-  }
+    static inferSellerType(booking: InvoiceDealPdfData['booking']): 'driver' | 'contractor' | null {
+        if (booking?.driver_id) return 'driver';
+        if (booking?.contractor_id) return 'contractor';
+        return null;
+    }
 
-  static async generateHTML(data: InvoiceDealPdfData): Promise<string> {
-    const lang = data.lang || 'en';
-    const t = this.t(lang);
-    const company = data.companyInfo || {};
-    const bk = data.booking || {};
-    const inv = data.invoice || null;
-    const sellerType = this.inferSellerType(bk);
-    const sellerName = (data.contractor as any)?.name || '-';
-    const sellerPhone = (data.contractor as any)?.phone || '-';
-    const providerTitle = sellerType === 'driver' ? t.driver : sellerType === 'contractor' ? t.contractor : t.seller;
-    const customerCompany = (data.customer as any)?.business_name || (data.customer as any)?.name || (data as any).customer_name || '-';
-    const customerPhone = (data.customer as any)?.phone || '-';
-    const customerAddress = (data.customer as any)?.address || '-';
+    static t(lang: 'en' | 'he' | 'ar' | '') {
+        const en = {
+            title: 'Service Document',
+            contract_date: 'Document Date',
+            seller: 'Seller',
+            driver: 'Driver',
+            contractor: 'Contractor',
+            provider_signature: 'Provider Signature',
+            customer: 'Customer',
+            company: 'PumpPro',
+            tax_number: 'Tax Number',
+            phone: 'Phone',
+            address: 'Address',
+            service_info: 'Service Information',
+            service_type: 'Service Type',
+            booking_number: 'Booking Number',
+            service_date: 'Service Date',
+            service_time: 'Service Time',
+            service_address: 'Service Address',
+            notes: 'Notes',
+            purchase_details: 'Payment Details',
+            purchase_amount: 'Amount',
+            terms_title: 'Terms and Conditions',
+            term_1: 'The service is provided as agreed and scheduled.',
+            term_2: 'Any changes must be communicated in advance.',
+            term_3: 'Invoices are due upon receipt unless otherwise stated.',
+            term_4: 'Disputes must be raised within 7 days.',
+            term_5: 'This document is binding once issued.',
+            buyer_signature: "Customer's Signature",
+            price: 'Price',
+            payment_method: 'Payment Method',
+        };
+        const ar = {
+            title: 'مستند الخدمة',
+            contract_date: 'تاريخ المستند',
+            seller: 'البائع',
+            driver: 'السائق',
+            contractor: 'المقاول',
+            provider_signature: 'توقيع مقدم الخدمة',
+            customer: 'العميل',
+            company: 'شركة',
+            tax_number: 'الرقم الضريبي',
+            phone: 'الهاتف',
+            address: 'العنوان',
+            service_info: 'معلومات الخدمة',
+            service_type: 'نوع الخدمة',
+            booking_number: 'رقم الحجز',
+            service_date: 'تاريخ الخدمة',
+            service_time: 'وقت الخدمة',
+            service_address: 'عنوان الخدمة',
+            notes: 'ملاحظات',
+            purchase_details: 'تفاصيل الدفع',
+            purchase_amount: 'المبلغ',
+            terms_title: 'الشروط والأحكام',
+            term_1: 'تم تقديم الخدمة حسب الاتفاق والجدول المحدد.',
+            term_2: 'يجب إبلاغ أي تغييرات مسبقًا.',
+            term_3: 'تستحق الفواتير عند الاستلام ما لم يُذكر خلاف ذلك.',
+            term_4: 'يجب رفع أي نزاع خلال 7 أيام.',
+            term_5: 'هذا المستند ملزم بمجرد إصداره.',
+            buyer_signature: 'توقيع العميل',
+            price: 'السعر',
+            payment_method: 'طريقة الدفع',
+        };
+        const he = {
+            title: 'מסמך שירות',
+            contract_date: 'תאריך מסמך',
+            seller: 'מוכר',
+            driver: 'נהג',
+            contractor: 'קבלן',
+            provider_signature: 'חתימת נותן שירות',
+            customer: 'לקוח',
+            company: 'חברה',
+            tax_number: 'מספר עוסק',
+            phone: 'טלפון',
+            address: 'כתובת',
+            service_info: 'מידע שירות',
+            service_type: 'סוג שירות',
+            booking_number: 'מספר הזמנה',
+            service_date: 'תאריך שירות',
+            service_time: 'שעת שירות',
+            service_address: 'כתובת שירות',
+            notes: 'הערות',
+            purchase_details: 'פרטי תשלום',
+            purchase_amount: 'סכום',
+            terms_title: 'תנאים והגבלות',
+            term_1: 'השירות מסופק כפי שסוכם ומתוזמן.',
+            term_2: 'יש לתקשר שינויים מראש.',
+            term_3: 'חשבוניות לתשלום עם קבלה אלא אם צוין אחרת.',
+            term_4: 'יש להעלות מחלוקות תוך 7 ימים.',
+            term_5: 'מסמך זה מחייב עם הנפקתו.',
+            buyer_signature: 'חתימת לקוח',
+            price: 'מחיר',
+            payment_method: 'אמצעי תשלום',
+        };
+        return lang === 'ar' ? ar : lang === 'he' ? he : en;
+    }
 
-    const includeAmount = data.doc_type === 'receipt';
-    const noPrice = (data as any).no_price === true;
-    const amount = inv ? this.formatCurrency(inv.total_amount as any) : this.formatCurrency(0);
-    const price = this.formatCurrency(this.calculatePrice(data));
-    const paymentMethod = this.formatPaymentMethod(data);
+    static calculatePrice(data: InvoiceDealPdfData): number {
+        const inv = data.invoice;
+        if (typeof inv?.total_amount === 'number' && !isNaN(inv.total_amount)) return Number(inv.total_amount);
+        const bk = data.booking as any;
+        if (bk?.price) return Number(bk.price);
+        const svc = (data as any).service;
+        if (svc?.price_private || svc?.price_business) {
+            return Number(svc.price_private || svc.price_business || 0);
+        }
+        const amountFallback = (data as any)?.amount;
+        if (amountFallback) return Number(amountFallback);
+        return 0;
+    }
 
-    const serviceTypeName = (data.service as any)?.name || (bk as any).service_type || '-';
-    const todayStr = this.formatDate(inv?.created_at);
-    const logoSrc = (company as any).logo_url || '/favicon.png';
+    static formatPaymentMethod(data: InvoiceDealPdfData): string {
+        // Prefer explicit payment_method if provided; otherwise map payment_type
+        const method = data.payment_method || (data.payment_type === 'visa' ? 'credit_card' : (data.payment_type as any)) || null;
+        if (!method) return '-';
+        return String(method).replace('_', ' ').toUpperCase();
+    }
 
-    return `<!DOCTYPE html>
+    static async generateHTML(data: InvoiceDealPdfData): Promise<string> {
+        const lang = data.lang || 'en';
+        const t = this.t(lang);
+        const company = data.companyInfo || {};
+        const bk = data.booking || {};
+        const inv = data.invoice || null;
+        const sellerType = this.inferSellerType(bk);
+        const sellerName = (data.contractor as any)?.name || '-';
+        const providerTitle = sellerType === 'driver' ? t.driver : sellerType === 'contractor' ? t.contractor : t.seller;
+
+        // Get seller info (contractor or driver)
+        let finalSellerName = '-';
+        let finalSellerPhone = '-';
+        let finalProviderTitle = t.seller;
+
+        console.log('DEBUG PDF: sellerType=', sellerType, 'driver data=', data.driver, 'contractor data=', data.contractor);
+
+        if (sellerType === 'contractor' && data.contractor) {
+            finalSellerName = data.contractor.name || '-';
+            finalSellerPhone = data.contractor.phone || '-';
+            finalProviderTitle = t.contractor;
+        } else if (sellerType === 'driver' && data.driver) {
+            // Driver name is already formatted as "firstName lastName" from API
+            const driverName = (data.driver as any).name || (data.driver as any).driver_name;
+            finalSellerName = driverName && driverName.trim() ? driverName : '-';
+            finalSellerPhone = (data.driver as any).driver_number || (data.driver as any).phone || '-';
+            finalProviderTitle = t.driver;
+        }
+
+        const customerCompany = (data.customer as any)?.business_name || (data.customer as any)?.name || (data as any).customer_name || '-';
+        const customerPhone = (data.customer as any)?.phone || '-';
+        const customerAddress = (data.customer as any)?.address || '-';
+
+        const includeAmount = data.doc_type === 'receipt';
+        const noPrice = (data as any).no_price === true;
+        const amount = inv ? this.formatCurrency(inv.total_amount as any) : this.formatCurrency(0);
+        const price = this.formatCurrency(this.calculatePrice(data));
+        const paymentMethod = this.formatPaymentMethod(data);
+
+        const serviceTypeName = (data.service as any)?.name || (bk as any).service_type || '-';
+        const todayStr = this.formatDate(inv?.created_at);
+        const logoSrc = (company as any).logo_url || '/favicon.png';
+        const servicesList =
+            data.services && data.services.length > 0
+                ? data.services
+                : serviceTypeName !== '-'
+                  ? [{ name: serviceTypeName, description: null, quantity: 1, unit_price: this.calculatePrice(data), total: this.calculatePrice(data) }]
+                  : [];
+
+        // Calculate total price as sum of all services
+        const totalPrice = servicesList.reduce((sum: number, svc: any) => sum + (svc.total || 0), 0);
+
+        return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -253,14 +294,15 @@ export class InvoiceDealPDFGenerator {
       <div style="font-weight:700;">${t.title}</div>
       <div>${t.contract_date}</div>
       <div style="font-weight:700;">${todayStr}</div>
+      ${bk.booking_number ? `<div style="margin-top:6px;color:#f3f4f6;">${t.booking_number}</div><div style="font-weight:700;color:#ffffff;">${bk.booking_number}</div>` : ''}
     </div>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
     <div class="panel" style="background:#DBEAFE;">
-      <div style="font-weight:700;margin-bottom:6px;">${providerTitle}</div>
-      <div><span class="muted">Name:</span> ${sellerName}</div>
-      <div><span class="muted">${t.phone}:</span> ${sellerPhone}</div>
+      <div style="font-weight:700;margin-bottom:6px;">${finalProviderTitle}</div>
+      <div><span class="muted">Name:</span> ${finalSellerName}</div>
+      <div><span class="muted">${t.phone}:</span> ${finalSellerPhone}</div>
     </div>
     <div class="panel" style="background:#DCFCE7;">
       <div style="font-weight:700;margin-bottom:6px;">${t.customer}</div>
@@ -270,26 +312,68 @@ export class InvoiceDealPDFGenerator {
     </div>
   </div>
 
+  ${
+      servicesList.length === 1
+          ? `
   <div class="panel" style="margin-bottom:12px;background:#FCE7F3;">
-    <div style="font-weight:700;margin-bottom:6px;">🚗 ${t.service_info}</div>
+    <div style="font-weight:700;margin-bottom:6px;">🚗 ${servicesList[0].name || '-'}</div>
     <div class="kv">
-      <div class="muted">${t.service_type}</div><div>${serviceTypeName}</div>
-      <div class="muted">${t.booking_number}</div><div>${bk.booking_number || '-'}</div>
-      <div class="muted">${t.service_date}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}</div>
-      <div class="muted">${t.service_time}</div><div>${bk.scheduled_time || '-'}</div>
+      <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
       <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
-      <div class="muted">${t.notes}</div><div>${bk.notes || '-'}</div>
+      ${servicesList[0].quantity || servicesList[0].unit_price ? `<div class="muted">Quantity / Unit Price</div><div>${servicesList[0].quantity || 1} / ${servicesList[0].unit_price ? this.formatCurrency(servicesList[0].unit_price) : '-'}</div>` : ''}
+      ${servicesList[0].total ? `<div class="muted">Total</div><div>${this.formatCurrency(servicesList[0].total)}</div>` : ''}
     </div>
   </div>
+  `
+          : servicesList.length > 1
+            ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+    ${servicesList
+        .map(
+            (svc: any) => `
+    <div class="panel" style="background:#FCE7F3;">
+      <div style="font-weight:700;margin-bottom:6px;">🚗 ${svc.name || '-'}</div>
+      <div class="kv">
+        ${svc.description ? `<div class="muted">Description</div><div>${svc.description}</div>` : ''}
+        <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
+        <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
+        ${svc.quantity || svc.unit_price ? `<div class="muted">Quantity / Unit Price</div><div>${svc.quantity || 1} / ${svc.unit_price ? this.formatCurrency(svc.unit_price) : '-'}</div>` : ''}
+        ${svc.total ? `<div class="muted">Total</div><div>${this.formatCurrency(svc.total)}</div>` : ''}
+      </div>
+    </div>
+    `,
+        )
+        .join('')}
+  </div>
+  `
+            : ''
+  }
 
-  ${!noPrice ? `
+  ${
+      bk.notes
+          ? `
+  <div class="panel" style="margin-bottom:12px;background:#FEF3C7;">
+    <div style="font-weight:700;margin-bottom:6px;">📝 ${t.notes}</div>
+    <div>${bk.notes}</div>
+  </div>
+  `
+          : ''
+  }
+
+  ${
+      !noPrice
+          ? `
   <div class="panel" style="margin-bottom:12px;">
     <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💲 ${t.price}</div>
-    <div class="purchase-amount">${price}</div>
+    <div class="purchase-amount">${this.formatCurrency(totalPrice)}</div>
   </div>
-  ` : ''}
+  `
+          : ''
+  }
 
-  ${includeAmount && !noPrice ? `
+  ${
+      includeAmount && !noPrice
+          ? `
   <div class="panel" style="margin-bottom:12px;">
     <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💳 ${t.purchase_details}</div>
     <div class="kv">
@@ -297,7 +381,9 @@ export class InvoiceDealPDFGenerator {
       <div class="muted">${t.payment_method}</div><div>${paymentMethod}</div>
     </div>
   </div>
-  ` : ''}
+  `
+          : ''
+  }
 
   <div class="panel" style="margin-bottom:12px;">
     <div style="font-weight:700;margin-bottom:6px;">⚠️ ${t.terms_title}</div>
@@ -322,58 +408,58 @@ export class InvoiceDealPDFGenerator {
   </div>
 </body>
 </html>`;
-  }
-
-  static async generatePDF(data: any, filename: string, docType?: 'invoice' | 'receipt') {
-    try {
-      const company = data.companyInfo || data.company || {};
-      const pdfData: any = {
-        invoice: data.invoice || {
-          id: data?.invoice_id || '',
-          invoice_number: data?.invoice_number || '',
-          total_amount: Number(data?.total_amount || data?.amount || 0),
-          paid_amount: Number(data?.paid_amount || data?.amount || 0),
-          remaining_amount: Number(data?.remaining_amount || 0),
-          status: String(data?.status || 'paid'),
-          created_at: String(data?.created_at || data?.date || new Date().toISOString()),
-        },
-        booking: data.booking || {},
-        contractor: data.contractor || null,
-        customer: data.customer || null,
-        service: data.service || null,
-        doc_type: docType || data.doc_type || 'invoice',
-        companyInfo: {
-          name: company?.name || null,
-          address: company?.address || null,
-          phone: company?.phone || null,
-          tax_id: company?.tax_id || null,
-          logo_url: company?.logo_url || null,
-        },
-        lang: data?.lang || 'en',
-        payment_method: data?.payment_method || null,
-        payment_type: data?.payment_type || null,
-        no_price: data?.no_price || false,
-      };
-
-      const res = await fetch('/api/generate-contract-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfData, docType: pdfData.doc_type, filename }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || 'Failed to generate PDF');
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || `document-${Date.now()}.pdf`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('generatePDF error', e);
-      throw e;
     }
-  }
+
+    static async generatePDF(data: any, filename: string, docType?: 'invoice' | 'receipt') {
+        try {
+            const company = data.companyInfo || data.company || {};
+            const pdfData: any = {
+                invoice: data.invoice || {
+                    id: data?.invoice_id || '',
+                    invoice_number: data?.invoice_number || '',
+                    total_amount: Number(data?.total_amount || data?.amount || 0),
+                    paid_amount: Number(data?.paid_amount || data?.amount || 0),
+                    remaining_amount: Number(data?.remaining_amount || 0),
+                    status: String(data?.status || 'pending'),
+                    created_at: String(data?.created_at || data?.date || new Date().toISOString()),
+                },
+                booking: data.booking || {},
+                contractor: data.contractor || null,
+                customer: data.customer || null,
+                service: data.service || null,
+                doc_type: docType || data.doc_type || 'invoice',
+                companyInfo: {
+                    name: company?.name || null,
+                    address: company?.address || null,
+                    phone: company?.phone || null,
+                    tax_id: company?.tax_id || null,
+                    logo_url: company?.logo_url || null,
+                },
+                lang: data?.lang || 'en',
+                payment_method: data?.payment_method || null,
+                payment_type: data?.payment_type || null,
+                no_price: data?.no_price || false,
+            };
+
+            const res = await fetch('/api/generate-contract-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pdfData, docType: pdfData.doc_type, filename }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || 'Failed to generate PDF');
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || `document-${Date.now()}.pdf`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('generatePDF error', e);
+            throw e;
+        }
+    }
 }

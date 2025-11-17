@@ -112,19 +112,20 @@ const EditBooking = () => {
     const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
-    
+
     const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
     const [assignMode, setAssignMode] = useState<'contractor' | 'driver'>('driver');
     const [contractorPrice, setContractorPrice] = useState<string>('');
     const [hasInvoice, setHasInvoice] = useState<boolean>(false);
-    
+    const [extraServices, setExtraServices] = useState<{ service_id: string; quantity: number }[]>([]);
+
     const addAlert = (type: 'success' | 'danger' | 'warning' | 'info', message: string, title?: string) => {
         const id = Date.now().toString();
-        setAlerts(prev => [...prev, { id, type, message, title }]);
+        setAlerts((prev) => [...prev, { id, type, message, title }]);
     };
-    
+
     const removeAlert = (id: string) => {
-        setAlerts(prev => prev.filter(alert => alert.id !== id));
+        setAlerts((prev) => prev.filter((alert) => alert.id !== id));
     };
 
     useEffect(() => {
@@ -175,29 +176,26 @@ const EditBooking = () => {
                     // Load contractor if assigned
                     if (bookingData.contractor_id) {
                         try {
-                            const { data: contractorData } = await (supabase.from('contractors') as any)
-                                .select('id, name')
-                                .eq('id', bookingData.contractor_id)
-                                .single();
+                            const { data: contractorData } = await (supabase.from('contractors') as any).select('id, name').eq('id', bookingData.contractor_id).single();
                             if (contractorData) {
                                 const cd = contractorData as any;
                                 setSelectedContractor({ id: cd.id, name: cd.name });
                             }
-                // Check if invoice exists for this booking to block edits
-                try {
-                    const { data: inv } = await supabase.from('invoices').select('id').eq('booking_id', bookingId).maybeSingle();
-                    setHasInvoice(!!inv);
-                    if (inv) {
-                        addAlert('info', t('invoice_exists_no_edit') || 'An invoice exists for this booking. Editing is disabled.', 'Info');
-                    }
-                } catch (e) {
-                    // ignore
-                }
+                            // Check if invoice exists for this booking to block edits
+                            try {
+                                const { data: inv } = await supabase.from('invoices').select('id').eq('booking_id', bookingId).maybeSingle();
+                                setHasInvoice(!!inv);
+                                if (inv) {
+                                    addAlert('info', t('invoice_exists_no_edit') || 'An invoice exists for this booking. Editing is disabled.', 'Info');
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
                         } catch (e) {
                             // ignore if not found
                         }
                     }
-                    
+
                     // Set selected items
                     if (customersData && bookingData.customer_id) {
                         const customer = customersData.find((c: any) => c.id === bookingData.customer_id);
@@ -215,6 +213,25 @@ const EditBooking = () => {
                         const service = servicesData.find((s: any) => s.id === bookingData.service_type);
                         setSelectedService(service || null);
                     }
+
+                    // Load additional services from booking_services (excluding main service_type)
+                    try {
+                        // @ts-ignore
+                        const { data: bookingServicesData } = await supabase.from('booking_services').select('service_id, quantity').eq('booking_id', bookingId);
+                        if (bookingServicesData) {
+                            const rows = bookingServicesData as any[];
+                            const mainServiceId = bookingData.service_type || null;
+                            const extras = mainServiceId ? rows.filter((r: any) => r.service_id !== mainServiceId) : rows.slice(1);
+                            setExtraServices(
+                                extras.map((r: any) => ({
+                                    service_id: r.service_id,
+                                    quantity: r.quantity || 1,
+                                })),
+                            );
+                        }
+                    } catch (e) {
+                        // ignore booking_services load errors
+                    }
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -229,27 +246,50 @@ const EditBooking = () => {
         }
     }, [bookingId]);
 
+    // Auto-calculate total price from services and extra services
+    const calculateTotalPrice = () => {
+        let total = 0;
+
+        // Add main service price
+        if (form.service_type) {
+            const mainService = services.find((s) => s.id === form.service_type);
+            if (mainService) {
+                const price = form.customer_type === 'private' ? mainService.price_private : mainService.price_business;
+                total += price || 0;
+            }
+        }
+
+        // Add extra services prices
+        extraServices.forEach((row) => {
+            if (row.service_id) {
+                const svc = services.find((s) => s.id === row.service_id);
+                if (svc) {
+                    const price = form.customer_type === 'private' ? svc.price_private : svc.price_business;
+                    total += (price || 0) * (row.quantity || 1);
+                }
+            }
+        });
+
+        return total;
+    };
+
+    // Recalculate price when service type, customer type, or extra services change
+    useEffect(() => {
+        const newPrice = calculateTotalPrice();
+        setForm((prev) => ({ ...prev, price: newPrice ? newPrice.toString() : '' }));
+    }, [form.service_type, form.customer_type, extraServices, services]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
 
-        // Auto-fill price based on service type and customer type
-        if (name === 'service_type' || name === 'customer_type') {
-            const serviceId = name === 'service_type' ? value : form.service_type;
-            const customerType = name === 'customer_type' ? value : form.customer_type;
-            
-            const selectedService = services.find((s: Service) => s.id === serviceId);
-            if (selectedService) {
-                const price = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
-                setForm(prev => ({ ...prev, price: price ? price.toString() : '' }));
-            }
-        }
+        // Price is now auto-calculated by useEffect, so we don't manually set it here
 
         // Auto-fill driver when selecting truck
         if (name === 'truck_id' && value) {
             const selectedTruck = trucks.find((t: any) => t.id === value);
             if (selectedTruck && selectedTruck.driver_id) {
-                setForm(prev => ({ ...prev, driver_id: selectedTruck.driver_id }));
+                setForm((prev) => ({ ...prev, driver_id: selectedTruck.driver_id }));
             }
         }
 
@@ -257,7 +297,7 @@ const EditBooking = () => {
         if (name === 'customer_id' && value) {
             const selectedCustomer = customers.find((c: Customer) => c.id === value);
             if (selectedCustomer) {
-                setForm(prev => ({
+                setForm((prev) => ({
                     ...prev,
                     customer_name: selectedCustomer.name,
                     customer_phone: selectedCustomer.phone,
@@ -265,6 +305,27 @@ const EditBooking = () => {
                 }));
             }
         }
+    };
+
+    const addExtraServiceRow = () => {
+        setExtraServices((prev) => [...prev, { service_id: '', quantity: 1 }]);
+    };
+
+    const updateExtraServiceRow = (index: number, field: 'service_id' | 'quantity', value: string | number) => {
+        setExtraServices((prev) =>
+            prev.map((row, i) =>
+                i === index
+                    ? {
+                          ...row,
+                          [field]: field === 'quantity' ? Number(value) || 1 : (value as string),
+                      }
+                    : row,
+            ),
+        );
+    };
+
+    const removeExtraServiceRow = (index: number) => {
+        setExtraServices((prev) => prev.filter((_, i) => i !== index));
     };
 
     const validateForm = () => {
@@ -284,8 +345,9 @@ const EditBooking = () => {
             addAlert('danger', t('scheduled_time_required') || 'Scheduled time is required', 'Error');
             return false;
         }
-        if (!form.service_type) {
-            addAlert('danger', t('service_type_required') || 'Service type is required', 'Error');
+        // At least one service required (primary OR additional)
+        if (!form.service_type && extraServices.length === 0) {
+            addAlert('danger', t('at_least_one_service_required') || 'At least one service is required', 'Error');
             return false;
         }
         return true;
@@ -314,16 +376,53 @@ const EditBooking = () => {
                 status: form.status,
                 service_type: form.service_type.trim(),
                 contractor_id: selectedContractor ? selectedContractor.id : null,
-                notes: (
-                    (form.notes || '') +
-                    (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')
-                ).trim() || null,
+                notes: ((form.notes || '') + (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')).trim() || null,
             };
 
             // @ts-ignore - Supabase type inference issue
             const { error } = await supabase.from('bookings').update(bookingData).eq('id', bookingId);
 
             if (error) throw error;
+
+            // Sync booking_services (main + extra services)
+            try {
+                // @ts-ignore
+                await supabase.from('booking_services').delete().eq('booking_id', bookingId);
+
+                const bookingServicesPayload: any[] = [];
+
+                if (form.service_type) {
+                    const mainService = services.find((s) => s.id === form.service_type);
+                    const mainUnitPrice = mainService ? (form.customer_type === 'private' ? mainService.price_private : mainService.price_business) : parseFloat(form.price) || 0;
+
+                    bookingServicesPayload.push({
+                        booking_id: bookingId,
+                        service_id: form.service_type,
+                        quantity: 1,
+                        unit_price: mainUnitPrice,
+                    } as any);
+                }
+
+                extraServices.forEach((row) => {
+                    if (!row.service_id) return;
+                    const svc = services.find((s) => s.id === row.service_id);
+                    const unitPrice = svc ? (form.customer_type === 'private' ? svc.price_private : svc.price_business) : 0;
+
+                    bookingServicesPayload.push({
+                        booking_id: bookingId,
+                        service_id: row.service_id,
+                        quantity: row.quantity || 1,
+                        unit_price: unitPrice,
+                    } as any);
+                });
+
+                if (bookingServicesPayload.length > 0) {
+                    // @ts-ignore
+                    await supabase.from('booking_services').insert(bookingServicesPayload);
+                }
+            } catch (e) {
+                console.error('Error updating booking_services rows:', e);
+            }
 
             addAlert('success', t('booking_updated_successfully') || 'Booking updated successfully', 'Success');
 
@@ -361,7 +460,7 @@ const EditBooking = () => {
     return (
         <>
             <AlertContainer alerts={alerts} onClose={removeAlert} />
-            
+
             <div className="container mx-auto p-6">
                 <div className="flex items-center gap-5 mb-6">
                     <div onClick={() => router.back()}>
@@ -391,356 +490,388 @@ const EditBooking = () => {
                     <p className="text-gray-500">{t('update_booking_information') || 'Update booking information'}</p>
                 </div>
 
-            <Tab.Group>
-                <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
-                    <Tab as="div" className="flex-1">
-                        {({ selected }) => (
-                            <button
-                                type="button"
-                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
-                            >
-                                <IconInfoCircle className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                                {t('basic_information') || 'Basic Information'}
-                            </button>
-                        )}
-                    </Tab>
-                    <Tab as="div" className="flex-1">
-                        {({ selected }) => (
-                            <button
-                                type="button"
-                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
-                            >
-                                <IconBox className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                                {t('assignment') || 'Assignment'}
-                            </button>
-                        )}
-                    </Tab>
-                    <Tab as="div" className="flex-1">
-                        {({ selected }) => (
-                            <button
-                                type="button"
-                                className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
-                            >
-                                <IconClock className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
-                                {t('schedule_information') || 'Schedule Information'}
-                            </button>
-                        )}
-                    </Tab>
-                </Tab.List>
+                <Tab.Group>
+                    <Tab.List className="mt-3 flex flex-wrap border-b border-white-light dark:border-[#191e3a]">
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    type="button"
+                                    className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconInfoCircle className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                    {t('basic_information') || 'Basic Information'}
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    type="button"
+                                    className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconBox className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                    {t('assignment') || 'Assignment'}
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    type="button"
+                                    className={`${selected ? 'text-primary !outline-none before:!w-full' : ''} relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconClock className="w-5 h-5 ltr:mr-2 rtl:ml-2" />
+                                    {t('schedule_information') || 'Schedule Information'}
+                                </button>
+                            )}
+                        </Tab>
+                    </Tab.List>
 
-                <Tab.Panels className="mt-5">
-                    {/* Basic Information Tab */}
-                    <Tab.Panel>
-                        <div className="panel">
-                            <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-                        {/* Customer Name */}
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('customer_name') || 'Customer Name'} <span className="text-red-500">*</span>
-                            </label>
-                            <CustomerSelect
-                                selectedCustomer={selectedCustomer}
-                                onCustomerSelect={(customer) => {
-                                    setSelectedCustomer(customer);
-                                    if (customer) {
-                                        setForm(prev => ({
-                                            ...prev,
-                                            customer_id: customer.id,
-                                            customer_name: customer.name,
-                                            customer_phone: customer.phone,
-                                            customer_email: (customer as any).email || '',
-                                        }));
-                                    }
-                                }}
-                                onCreateNew={() => router.push('/customers/add')}
-                                className="form-select"
-                            />
-                        </div>
-
-                        {/* Customer Phone */}
-                        <div>
-                            <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('phone') || 'Phone'} <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="tel"
-                                id="customer_phone"
-                                name="customer_phone"
-                                value={form.customer_phone}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder={t('enter_phone') || 'Enter phone number'}
-                                required
-                            />
-                        </div>
-
-                        {/* Service Type */}
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('service_type') || 'Service Type'} <span className="text-red-500">*</span>
-                            </label>
-                            <ServiceSelect
-                                selectedService={selectedService}
-                                onServiceSelect={(service) => {
-                                    setSelectedService(service);
-                                    if (service) {
-                                        const price = form.customer_type === 'private' 
-                                            ? service.price_private 
-                                            : service.price_business;
-                                        setForm(prev => ({
-                                            ...prev,
-                                            service_type: service.id,
-                                            price: price.toString(),
-                                        }));
-                                    }
-                                }}
-                                onCreateNew={() => router.push('/services/add')}
-                                customerType={form.customer_type}
-                                className="form-select"
-                            />
-                        </div>
-
-                    </div>
-
-                    {/* Service Address */}
-                    <div>
-                        <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('service_address') || 'Service Address'} <span className="text-red-500">*</span>
-                        </label>
-                        <textarea
-                            id="service_address"
-                            name="service_address"
-                            value={form.service_address}
-                            onChange={handleInputChange}
-                            className="form-textarea"
-                            placeholder={t('enter_service_address') || 'Enter service address'}
-                            rows={4}
-                            required
-                        />
-                    </div>
-
-                    {/* Submit Button */}
-                    <div className="flex justify-end gap-4 mt-8">
-                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                            {t('cancel')}
-                        </button>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                            {saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
-                        </button>
-                    </div>
-                            </form>
-                        </div>
-                    </Tab.Panel>
-
-                    {/* Assignment Tab */}
-                    <Tab.Panel>
-                        <div className="panel ">
-                            <form onSubmit={handleSubmit} className="space-y-5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                {/* Assignment Mode */}
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assignment Mode</label>
-                                    <AssignmentModeSelectAdd
-                                        value={assignMode}
-                                        onChange={(val) => {
-                                            setAssignMode(val);
-                                            if (val === 'contractor') {
-                                                setSelectedDriver(null);
-                                                setForm(prev => ({ ...prev, driver_id: '' }));
-                                            } else if (val === 'driver') {
-            										setSelectedContractor(null);
-                                                setContractorPrice('');
-                                            }
-                                        }}
-                                        className="form-select"
-                                    />
-                                </div>
-                                {/* Assign Truck (Always visible) */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('assign_truck') || 'Assign Truck'}
-                                    </label>
-                                    <TruckSelect
-                                        selectedTruck={selectedTruck}
-                                        onTruckSelect={(truck) => {
-                                            setSelectedTruck(truck);
-                                            if (truck) {
-                                                setForm(prev => ({ ...prev, truck_id: (truck as any).id, driver_id: assignMode === 'driver' && (truck as any).driver_id ? (truck as any).driver_id : prev.driver_id }));
-                                                if (assignMode === 'driver' && (truck as any).driver_id) {
-                                                    const driver = drivers.find(d => d.id === (truck as any).driver_id);
-                                                    if (driver) setSelectedDriver(driver);
-                                                }
-                                            } else {
-                                                setForm(prev => ({ ...prev, truck_id: '' }));
-                                            }
-                                        }}
-                                        onCreateNew={() => router.push('/fleet/add')}
-                                        className="form-select"
-                                    />
-                                </div>
-                                {/* Driver Assignment */}
-                                {assignMode === 'driver' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('assign_driver') || 'Assign Driver'}
-                                        </label>
-                                        <DriverSelect
-                                            selectedDriver={selectedDriver}
-                                            onDriverSelect={(driver) => {
-                                                setSelectedDriver(driver);
-                                                if (driver) {
-                                                    setForm(prev => ({ ...prev, driver_id: driver.id }));
-                                                    const truck = trucks.find(t => (t as any).driver_id === driver.id);
-                                                    if (truck) {
-                                                        setSelectedTruck(truck);
-                                                        setForm(prev => ({ ...prev, truck_id: (truck as any).id }));
+                    <Tab.Panels className="mt-5">
+                        {/* Basic Information Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <form onSubmit={handleSubmit} className="space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {/* Customer Name */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('customer_name') || 'Customer Name'} <span className="text-red-500">*</span>
+                                            </label>
+                                            <CustomerSelect
+                                                selectedCustomer={selectedCustomer}
+                                                onCustomerSelect={(customer) => {
+                                                    setSelectedCustomer(customer);
+                                                    if (customer) {
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            customer_id: customer.id,
+                                                            customer_name: customer.name,
+                                                            customer_phone: customer.phone,
+                                                            customer_email: (customer as any).email || '',
+                                                        }));
                                                     }
-                                                } else {
-                                                    setForm(prev => ({ ...prev, driver_id: '' }));
-                                                }
-                                            }}
-                                            onCreateNew={() => router.push('/drivers/add')}
-                                            className="form-select"
+                                                }}
+                                                onCreateNew={() => router.push('/customers/add')}
+                                                className="form-select"
+                                            />
+                                        </div>
+
+                                        {/* Customer Phone */}
+                                        <div>
+                                            <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('phone') || 'Phone'} <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="tel"
+                                                id="customer_phone"
+                                                name="customer_phone"
+                                                value={form.customer_phone}
+                                                onChange={handleInputChange}
+                                                className="form-input"
+                                                placeholder={t('enter_phone') || 'Enter phone number'}
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Service Type */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('service_type') || 'Service Type'} (Optional)</label>
+                                            <ServiceSelect
+                                                selectedService={selectedService}
+                                                onServiceSelect={(service) => {
+                                                    setSelectedService(service);
+                                                    if (service) {
+                                                        const price = form.customer_type === 'private' ? service.price_private : service.price_business;
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            service_type: service.id,
+                                                            price: price.toString(),
+                                                        }));
+                                                    }
+                                                }}
+                                                onCreateNew={() => router.push('/services/add')}
+                                                customerType={form.customer_type}
+                                                className="form-select"
+                                            />
+                                        </div>
+
+                                        {/* Extra Services */}
+                                        <div className="md:col-span-2 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-0">
+                                                    {t('additional_services') || 'Additional Services'} {!form.service_type && <span className="text-red-500">*</span>}
+                                                </label>
+                                                <button type="button" onClick={addExtraServiceRow} className="btn btn-outline-primary btn-sm">
+                                                    + {t('add_service') || 'Add Service'}
+                                                </button>
+                                            </div>
+
+                                            {extraServices.length > 0 && (
+                                                <div className="space-y-3">
+                                                    {extraServices.map((row, index) => (
+                                                        <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end border border-gray-200 dark:border-gray-700 rounded-md p-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                                                                    {t('service') || 'Service'} <span className="text-red-500">*</span>
+                                                                </label>
+                                                                <ServiceSelect
+                                                                    selectedService={services.find((svc) => svc.id === row.service_id) || null}
+                                                                    onServiceSelect={(service) => {
+                                                                        updateExtraServiceRow(index, 'service_id', service ? service.id : '');
+                                                                    }}
+                                                                    onCreateNew={() => router.push('/services/add')}
+                                                                    customerType={form.customer_type}
+                                                                    className="form-select"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">{t('quantity') || 'Quantity'}</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    className="form-input"
+                                                                    value={row.quantity}
+                                                                    onChange={(e) => updateExtraServiceRow(index, 'quantity', e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="flex md:justify-end">
+                                                                <button type="button" onClick={() => removeExtraServiceRow(index)} className="btn btn-outline-danger btn-sm mt-4 md:mt-0">
+                                                                    {t('remove') || 'Remove'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Status */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('status') || 'Status'} <span className="text-red-500">*</span>
+                                            </label>
+                                            <StatusSelect
+                                                value={form.status}
+                                                onChange={(value) => setForm((prev) => ({ ...prev, status: value as any }))}
+                                                type="booking"
+                                                className="form-select"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Price - Auto-calculated */}
+                                        <div>
+                                            <label htmlFor="price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('price') || 'Price'}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                id="price"
+                                                name="price"
+                                                value={form.price}
+                                                readOnly
+                                                className="form-input bg-gray-50 dark:bg-gray-900 cursor-not-allowed"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+
+                                        {/* Profit */}
+                                        <div>
+                                            <label htmlFor="profit" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('profit') || 'Profit'}
+                                            </label>
+                                            <input type="number" id="profit" name="profit" value={form.profit} onChange={handleInputChange} className="form-input" placeholder="0.00" />
+                                        </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    <div>
+                                        <label htmlFor="notes" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('notes') || 'Notes'}
+                                        </label>
+                                        <textarea
+                                            id="notes"
+                                            name="notes"
+                                            value={form.notes}
+                                            onChange={handleInputChange}
+                                            className="form-textarea"
+                                            rows={4}
+                                            placeholder={t('enter_notes') || 'Enter additional notes'}
                                         />
                                     </div>
-                                )}
-                                {/* Contractor Assignment */}
-                                {assignMode === 'contractor' && (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('contractor') || 'Contractor'}
-                                    </label>
-                                    <ContractorSelect
-                                        selectedContractor={selectedContractor as any}
-                                        onContractorSelect={(c) => {
-                                            setSelectedContractor(c);
-                                        }}
-                                        onCreateNew={() => router.push('/contractors/add')}
-                                        className="form-select"
-                                    />
-                                    {selectedContractor && (
-                                        <div className="mt-3">
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor Price You Pay</label>
-                                            <input type="number" className="form-input" placeholder="0" value={contractorPrice} onChange={(e) => setContractorPrice(e.target.value)} />
-                                        </div>
-                                    )}
-                                </div>
-                                )}
 
-                            </div>
-
-                                <div className="flex justify-end gap-4 mt-8">
-                                    <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                                        {t('cancel')}
-                                    </button>
-                                    <button type="submit" className="btn btn-primary" disabled={saving || hasInvoice}>
-                                        {hasInvoice ? (t('disabled') || 'Disabled') : (saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking')}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </Tab.Panel>
-
-                    {/* Schedule Information Tab */}
-                    <Tab.Panel>
-                        <div className="panel">
-                            <form onSubmit={handleSubmit} className="space-y-5">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    {/* Scheduled Date */}
+                                    {/* Service Address */}
                                     <div>
-                                        <label htmlFor="scheduled_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('scheduled_date') || 'Scheduled Date'} <span className="text-red-500">*</span>
+                                        <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('service_address') || 'Service Address'} <span className="text-red-500">*</span>
                                         </label>
-                                        <input type="date" id="scheduled_date" name="scheduled_date" value={form.scheduled_date} onChange={handleInputChange} className="form-input" required />
-                                    </div>
-
-                                    {/* Scheduled Time */}
-                                    <div>
-                                        <label htmlFor="scheduled_time" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('scheduled_time') || 'Scheduled Time'} <span className="text-red-500">*</span>
-                                        </label>
-                                        <input type="time" id="scheduled_time" name="scheduled_time" value={form.scheduled_time} onChange={handleInputChange} className="form-input" required />
-                                    </div>
-
-                                    {/* Status */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('status') || 'Status'} <span className="text-red-500">*</span>
-                                        </label>
-                                        <StatusSelect
-                                            value={form.status}
-                                            onChange={(value) => setForm(prev => ({ ...prev, status: value as any }))}
-                                            type="booking"
-                                            className="form-select"
+                                        <textarea
+                                            id="service_address"
+                                            name="service_address"
+                                            value={form.service_address}
+                                            onChange={handleInputChange}
+                                            className="form-textarea"
+                                            placeholder={t('enter_service_address') || 'Enter service address'}
+                                            rows={4}
                                             required
                                         />
                                     </div>
 
-                                    {/* Price */}
-                                    <div>
-                                        <label htmlFor="price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('price') || 'Price'}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            id="price"
-                                            name="price"
-                                            value={form.price}
-                                            onChange={handleInputChange}
-                                            className="form-input"
-                                            placeholder="0.00"
-                                        />
+                                    {/* Submit Button */}
+                                    <div className="flex justify-end gap-4 mt-8">
+                                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                            {t('cancel')}
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                                            {saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </Tab.Panel>
+
+                        {/* Assignment Tab */}
+                        <Tab.Panel>
+                            <div className="panel ">
+                                <form onSubmit={handleSubmit} className="space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {/* Assignment Mode */}
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assignment Mode</label>
+                                            <AssignmentModeSelectAdd
+                                                value={assignMode}
+                                                onChange={(val) => {
+                                                    setAssignMode(val);
+                                                    if (val === 'contractor') {
+                                                        setSelectedDriver(null);
+                                                        setForm((prev) => ({ ...prev, driver_id: '' }));
+                                                    } else if (val === 'driver') {
+                                                        setSelectedContractor(null);
+                                                        setContractorPrice('');
+                                                    }
+                                                }}
+                                                className="form-select"
+                                            />
+                                        </div>
+                                        {/* Assign Truck (Always visible) */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('assign_truck') || 'Assign Truck'}</label>
+                                            <TruckSelect
+                                                selectedTruck={selectedTruck}
+                                                onTruckSelect={(truck) => {
+                                                    setSelectedTruck(truck);
+                                                    if (truck) {
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            truck_id: (truck as any).id,
+                                                            driver_id: assignMode === 'driver' && (truck as any).driver_id ? (truck as any).driver_id : prev.driver_id,
+                                                        }));
+                                                        if (assignMode === 'driver' && (truck as any).driver_id) {
+                                                            const driver = drivers.find((d) => d.id === (truck as any).driver_id);
+                                                            if (driver) setSelectedDriver(driver);
+                                                        }
+                                                    } else {
+                                                        setForm((prev) => ({ ...prev, truck_id: '' }));
+                                                    }
+                                                }}
+                                                onCreateNew={() => router.push('/fleet/add')}
+                                                className="form-select"
+                                            />
+                                        </div>
+                                        {/* Driver Assignment */}
+                                        {assignMode === 'driver' && (
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('assign_driver') || 'Assign Driver'}</label>
+                                                <DriverSelect
+                                                    selectedDriver={selectedDriver}
+                                                    onDriverSelect={(driver) => {
+                                                        setSelectedDriver(driver);
+                                                        if (driver) {
+                                                            setForm((prev) => ({ ...prev, driver_id: driver.id }));
+                                                            const truck = trucks.find((t) => (t as any).driver_id === driver.id);
+                                                            if (truck) {
+                                                                setSelectedTruck(truck);
+                                                                setForm((prev) => ({ ...prev, truck_id: (truck as any).id }));
+                                                            }
+                                                        } else {
+                                                            setForm((prev) => ({ ...prev, driver_id: '' }));
+                                                        }
+                                                    }}
+                                                    onCreateNew={() => router.push('/drivers/add')}
+                                                    className="form-select"
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Contractor Assignment */}
+                                        {assignMode === 'contractor' && (
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('contractor') || 'Contractor'}</label>
+                                                <ContractorSelect
+                                                    selectedContractor={selectedContractor as any}
+                                                    onContractorSelect={(c) => {
+                                                        setSelectedContractor(c);
+                                                    }}
+                                                    onCreateNew={() => router.push('/contractors/add')}
+                                                    className="form-select"
+                                                />
+                                                {selectedContractor && (
+                                                    <div className="mt-3">
+                                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor Price You Pay</label>
+                                                        <input type="number" className="form-input" placeholder="0" value={contractorPrice} onChange={(e) => setContractorPrice(e.target.value)} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Profit */}
-                                    <div>
-                                        <label htmlFor="profit" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('profit') || 'Profit'}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            id="profit"
-                                            name="profit"
-                                            value={form.profit}
-                                            onChange={handleInputChange}
-                                            className="form-input"
-                                            placeholder="0.00"
-                                        />
+                                    <div className="flex justify-end gap-4 mt-8">
+                                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                            {t('cancel')}
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={saving || hasInvoice}>
+                                            {hasInvoice ? t('disabled') || 'Disabled' : saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
+                                        </button>
                                     </div>
-                                </div>
+                                </form>
+                            </div>
+                        </Tab.Panel>
 
-                                {/* Notes */}
-                                <div>
-                                    <label htmlFor="notes" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('notes') || 'Notes'}
-                                    </label>
-                                    <textarea
-                                        id="notes"
-                                        name="notes"
-                                        value={form.notes}
-                                        onChange={handleInputChange}
-                                        className="form-textarea"
-                                        rows={4}
-                                        placeholder={t('enter_notes') || 'Enter additional notes'}
-                                    />
-                                </div>
+                        {/* Schedule Information Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <form onSubmit={handleSubmit} className="space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {/* Scheduled Date */}
+                                        <div>
+                                            <label htmlFor="scheduled_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('scheduled_date') || 'Scheduled Date'} <span className="text-red-500">*</span>
+                                            </label>
+                                            <input type="date" id="scheduled_date" name="scheduled_date" value={form.scheduled_date} onChange={handleInputChange} className="form-input" required />
+                                        </div>
 
-                                <div className="flex justify-end gap-4 mt-8">
-                                    <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                                        {t('cancel')}
-                                    </button>
-                                    <button type="submit" className="btn btn-primary" disabled={saving}>
-                                        {saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </Tab.Panel>
-                </Tab.Panels>
-            </Tab.Group>
-        </div>
+                                        {/* Scheduled Time */}
+                                        <div>
+                                            <label htmlFor="scheduled_time" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('scheduled_time') || 'Scheduled Time'} <span className="text-red-500">*</span>
+                                            </label>
+                                            <input type="time" id="scheduled_time" name="scheduled_time" value={form.scheduled_time} onChange={handleInputChange} className="form-input" required />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-4 mt-8">
+                                        <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
+                                            {t('cancel')}
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                                            {saving ? t('updating') || 'Updating...' : t('update_booking') || 'Update Booking'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </Tab.Panel>
+                    </Tab.Panels>
+                </Tab.Group>
+            </div>
         </>
     );
 };

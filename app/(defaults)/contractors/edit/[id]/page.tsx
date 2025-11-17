@@ -10,6 +10,7 @@ import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { Tab } from '@headlessui/react';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 interface Contractor {
     id: string;
@@ -53,11 +54,7 @@ const EditContractor = () => {
     useEffect(() => {
         const fetchContractor = async () => {
             try {
-                const { data, error } = await supabase
-                    .from('contractors')
-                    .select('*')
-                    .eq('id', params?.id)
-                    .single();
+                const { data, error } = await supabase.from('contractors').select('*').eq('id', params?.id).single();
 
                 if (error) throw error;
 
@@ -132,16 +129,12 @@ const EditContractor = () => {
                 const fileName = `${params?.id}-${Math.random()}.${fileExt}`;
                 const filePath = `contractors/${fileName}`;
 
-                const { error: uploadError } = await supabase.storage
-                    .from('contractors')
-                    .upload(filePath, photoFile, { upsert: true });
+                const { error: uploadError } = await supabase.storage.from('contractors').upload(filePath, photoFile, { upsert: true });
 
                 if (uploadError) {
                     console.error('Upload error:', uploadError);
                 } else {
-                    const { data: urlData } = supabase.storage
-                        .from('contractors')
-                        .getPublicUrl(filePath);
+                    const { data: urlData } = supabase.storage.from('contractors').getPublicUrl(filePath);
                     photoUrl = urlData.publicUrl;
                 }
             }
@@ -301,9 +294,7 @@ const EditContractor = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {/* Contractor Number */}
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                Contractor Number
-                                            </label>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor Number</label>
                                             <input
                                                 type="text"
                                                 name="contractor_number"
@@ -319,31 +310,13 @@ const EditContractor = () => {
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                 Name <span className="text-red-500">*</span>
                                             </label>
-                                            <input
-                                                type="text"
-                                                name="name"
-                                                value={form.name}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter name"
-                                                required
-                                            />
+                                            <input type="text" name="name" value={form.name} onChange={handleInputChange} className="form-input" placeholder="Enter name" required />
                                         </div>
 
                                         {/* Balance */}
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                Balance
-                                            </label>
-                                            <input
-                                                type="number"
-                                                name="balance"
-                                                value={form.balance}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter balance"
-                                                step="0.01"
-                                            />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Balance</label>
+                                            <input type="number" name="balance" value={form.balance} onChange={handleInputChange} className="form-input" placeholder="Enter balance" step="0.01" />
                                         </div>
 
                                         {/* Status */}
@@ -351,32 +324,25 @@ const EditContractor = () => {
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                 Status <span className="text-red-500">*</span>
                                             </label>
-                                            <select
-                                                name="status"
+                                            <StatusSelect
                                                 value={form.status}
-                                                onChange={handleInputChange}
+                                                onChange={(val) => {
+                                                    const newStatus = (val || 'active') as 'active' | 'inactive';
+                                                    setForm((prev) => ({ ...prev, status: newStatus }));
+                                                }}
+                                                options={[
+                                                    { label: 'Active', value: 'active' },
+                                                    { label: 'Inactive', value: 'inactive' },
+                                                ]}
                                                 className="form-select"
-                                                required
-                                            >
-                                                <option value="active">Active</option>
-                                                <option value="inactive">Inactive</option>
-                                            </select>
+                                            />
                                         </div>
                                     </div>
 
                                     {/* Notes */}
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            Notes
-                                        </label>
-                                        <textarea
-                                            name="notes"
-                                            value={form.notes}
-                                            onChange={handleInputChange}
-                                            className="form-textarea"
-                                            rows={4}
-                                            placeholder="Enter additional notes"
-                                        />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Notes</label>
+                                        <textarea name="notes" value={form.notes} onChange={handleInputChange} className="form-textarea" rows={4} placeholder="Enter additional notes" />
                                     </div>
 
                                     {/* Submit Buttons */}
@@ -402,30 +368,13 @@ const EditContractor = () => {
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                 Phone <span className="text-red-500">*</span>
                                             </label>
-                                            <input
-                                                type="tel"
-                                                name="phone"
-                                                value={form.phone}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter phone number"
-                                                required
-                                            />
+                                            <input type="tel" name="phone" value={form.phone} onChange={handleInputChange} className="form-input" placeholder="Enter phone number" required />
                                         </div>
 
                                         {/* Email */}
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                Email
-                                            </label>
-                                            <input
-                                                type="email"
-                                                name="email"
-                                                value={form.email}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter email address"
-                                            />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Email</label>
+                                            <input type="email" name="email" value={form.email} onChange={handleInputChange} className="form-input" placeholder="Enter email address" />
                                         </div>
                                     </div>
 
@@ -456,20 +405,14 @@ const EditContractor = () => {
                                                 )}
                                             </div>
                                         </div>
-                                        
-                                        <input
-                                            type="file"
-                                            id="photo-upload"
-                                            accept="image/*"
-                                            onChange={handlePhotoChange}
-                                            className="hidden"
-                                        />
-                                        
+
+                                        <input type="file" id="photo-upload" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+
                                         <label htmlFor="photo-upload" className="btn btn-primary gap-2 cursor-pointer">
                                             <IconCamera />
                                             Upload Photo
                                         </label>
-                                        
+
                                         <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
                                     </div>
 

@@ -5,6 +5,7 @@ import IconLayoutGrid from '@/components/icon/icon-layout-grid';
 import IconListCheck from '@/components/icon/icon-list-check';
 import IconFilter from '@/components/icon/icon-filter';
 import IconX from '@/components/icon/icon-x';
+import StatusSelect from '@/components/selectors/StatusSelect';
 
 export interface ContractorFilters {
     search: string;
@@ -73,11 +74,7 @@ const ContractorFiltersComponent = ({ onFilterChange, onClearFilters, viewMode, 
                 </div>
 
                 {/* Filter Toggle Button */}
-                <button
-                    type="button"
-                    className={`btn ${hasActiveFilters ? 'btn-primary' : 'btn-outline-primary'} gap-2`}
-                    onClick={() => setShowFilters(!showFilters)}
-                >
+                <button type="button" className={`btn ${hasActiveFilters ? 'btn-primary' : 'btn-outline-primary'} gap-2`} onClick={() => setShowFilters(!showFilters)}>
                     <IconFilter className="h-4 w-4" />
                     Filters
                     {hasActiveFilters && <span className="badge bg-white text-primary">Active</span>}
@@ -93,20 +90,10 @@ const ContractorFiltersComponent = ({ onFilterChange, onClearFilters, viewMode, 
 
                 {/* View Mode Toggle */}
                 <div className="flex items-center gap-1 border border-white-light dark:border-[#191e3a] rounded-md p-1">
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary border-0'}`}
-                        onClick={() => onViewModeChange('list')}
-                        title="List View"
-                    >
+                    <button type="button" className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary border-0'}`} onClick={() => onViewModeChange('list')} title="List View">
                         <IconListCheck className="h-4 w-4" />
                     </button>
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary border-0'}`}
-                        onClick={() => onViewModeChange('grid')}
-                        title="Grid View"
-                    >
+                    <button type="button" className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-primary border-0'}`} onClick={() => onViewModeChange('grid')} title="Grid View">
                         <IconLayoutGrid className="h-4 w-4" />
                     </button>
                 </div>
@@ -119,15 +106,16 @@ const ContractorFiltersComponent = ({ onFilterChange, onClearFilters, viewMode, 
                         {/* Status Filter */}
                         <div>
                             <label className="mb-2 block text-sm font-medium">Status</label>
-                            <select
+                            <StatusSelect
+                                value={filters.status || ''}
+                                onChange={(val) => handleInputChange('status', val || '')}
+                                options={[
+                                    { label: 'Active', value: 'active' },
+                                    { label: 'Inactive', value: 'inactive' },
+                                ]}
+                                placeholder="All Status"
                                 className="form-select"
-                                value={filters.status}
-                                onChange={(e) => handleInputChange('status', e.target.value)}
-                            >
-                                <option value="">All Status</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            />
                         </div>
 
                         {/* Balance From */}
@@ -159,23 +147,13 @@ const ContractorFiltersComponent = ({ onFilterChange, onClearFilters, viewMode, 
                         {/* Date From */}
                         <div>
                             <label className="mb-2 block text-sm font-medium">Created From</label>
-                            <input
-                                type="date"
-                                className="form-input"
-                                value={filters.dateFrom}
-                                onChange={(e) => handleInputChange('dateFrom', e.target.value)}
-                            />
+                            <input type="date" className="form-input" value={filters.dateFrom} onChange={(e) => handleInputChange('dateFrom', e.target.value)} />
                         </div>
 
                         {/* Date To */}
                         <div>
                             <label className="mb-2 block text-sm font-medium">Created To</label>
-                            <input
-                                type="date"
-                                className="form-input"
-                                value={filters.dateTo}
-                                onChange={(e) => handleInputChange('dateTo', e.target.value)}
-                            />
+                            <input type="date" className="form-input" value={filters.dateTo} onChange={(e) => handleInputChange('dateTo', e.target.value)} />
                         </div>
                     </div>
                 </div>

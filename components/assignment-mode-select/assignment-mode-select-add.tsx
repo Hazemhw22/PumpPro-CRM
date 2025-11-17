@@ -29,8 +29,8 @@ const AssignmentModeSelectAdd: React.FC<AssignmentModeSelectAddProps> = ({ value
     }, []);
 
     const options: Option[] = [
-        { value: 'contractor', label: 'By Contractor' },
-        { value: 'driver', label: 'By Driver' },
+        { value: 'contractor', label: ' Contractor' },
+        { value: 'driver', label: ' Driver' },
     ];
 
     const selected = options.find((o) => o.value === value);
