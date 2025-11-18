@@ -129,6 +129,61 @@ const BookingPreview = () => {
         notes: '',
     });
 
+    // determine current user's role and linked driver/contractor id so we can
+    // show Confirm only to the assigned driver/contractor (admin shouldn't confirm)
+    useEffect(() => {
+        const loadCurrentUser = async () => {
+            try {
+                // @ts-ignore
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
+                if (!user) return;
+                // @ts-ignore
+                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                const r = (profile as any)?.role || null;
+                setRole(r);
+
+                if (r === 'contractor') {
+                    // try to find contractor by user_id or email
+                    // @ts-ignore
+                    const { data: c } = await supabase.from('contractors').select('id').eq('user_id', user.id).maybeSingle();
+                    if (c && (c as any).id) {
+                        setCurrentContractorId((c as any).id);
+                    } else if ((user as any).email) {
+                        // fallback by email
+                        // @ts-ignore
+                        const { data: c2 } = await supabase
+                            .from('contractors')
+                            .select('id')
+                            .eq('email', (user as any).email)
+                            .maybeSingle();
+                        setCurrentContractorId((c2 as any)?.id || null);
+                    }
+                } else if (r === 'driver') {
+                    // try to find driver by user_id or email
+                    // @ts-ignore
+                    const { data: d } = await supabase.from('drivers').select('id').eq('user_id', user.id).maybeSingle();
+                    if (d && (d as any).id) {
+                        setCurrentDriverId((d as any).id);
+                    } else if ((user as any).email) {
+                        // fallback by email
+                        // @ts-ignore
+                        const { data: d2 } = await supabase
+                            .from('drivers')
+                            .select('id')
+                            .eq('email', (user as any).email)
+                            .maybeSingle();
+                        setCurrentDriverId((d2 as any)?.id || null);
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not resolve current user role or ids', e);
+            }
+        };
+        loadCurrentUser();
+    }, []);
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -565,17 +620,15 @@ const BookingPreview = () => {
                 const { error } = await (supabase.from('bookings').update as any)({ truck_id: truck.id, status: 'awaiting_execution' }).eq('id', booking.id);
                 if (error) throw error;
 
-                await supabase
-                    .from('booking_tracks')
-                    .insert([
-                        {
-                            booking_id: booking.id,
-                            old_status: booking.status,
-                            new_status: 'awaiting_execution',
-                            notes: `Assigned truck ${truck.truck_number || truck.id}`,
-                            created_at: new Date().toISOString(),
-                        },
-                    ] as any);
+                await supabase.from('booking_tracks').insert([
+                    {
+                        booking_id: booking.id,
+                        old_status: booking.status,
+                        new_status: 'awaiting_execution',
+                        notes: `Assigned truck ${truck.truck_number || truck.id}`,
+                        created_at: new Date().toISOString(),
+                    },
+                ] as any);
 
                 setBooking((prev) => (prev ? ({ ...prev, truck_id: truck.id, truck: { truck_number: truck.truck_number }, status: 'awaiting_execution' } as any) : prev));
                 setAlert({ visible: true, message: 'Truck assigned and booking moved to Awaiting Execution', type: 'success' });
@@ -920,11 +973,12 @@ const BookingPreview = () => {
                                                 <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
-                                                    {booking.status !== 'confirmed' && (
-                                                        <button onClick={confirmBooking} className="btn btn-primary">
-                                                            Confirm Booking
-                                                        </button>
-                                                    )}
+                                                    {booking.status !== 'confirmed' &&
+                                                        ((role === 'driver' && booking.driver_id === currentDriverId) || (role === 'contractor' && booking.contractor_id === currentContractorId)) && (
+                                                            <button onClick={confirmBooking} className="btn btn-primary">
+                                                                Confirm Booking
+                                                            </button>
+                                                        )}
                                                 </div>
                                             </div>
                                             <div className="space-y-3">

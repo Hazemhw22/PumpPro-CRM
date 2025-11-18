@@ -28,12 +28,18 @@ interface Booking {
     scheduled_time: string;
     status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
     service_type: string;
+    contractor_id?: string | null;
+    driver_id?: string | null;
+    contractor?: { id?: string; name?: string } | null;
+    driver?: { id?: string; name?: string } | null;
 }
 
 const BookingsList = () => {
     const { t } = getTranslation();
     const [items, setItems] = useState<Booking[]>([]);
     const [role, setRole] = useState<string | null>(null);
+    const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
+    const [currentContractorId, setCurrentContractorId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [page, setPage] = useState(1);
@@ -86,6 +92,9 @@ const BookingsList = () => {
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
                         role = (profile as any)?.role || null;
                         setRole(role);
+                        // expose current driver/contractor ids to UI for permission checks
+                        setCurrentDriverId(driverId);
+                        setCurrentContractorId(contractorId);
                         if (role === 'contractor') {
                             // @ts-ignore
                             let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
@@ -646,7 +655,7 @@ const BookingsList = () => {
                                                         </button>
                                                     </>
                                                 )}
-                                                {(role === 'contractor' || role === 'driver') && (
+                                                {((role === 'contractor' && row.contractor_id === currentContractorId) || (role === 'driver' && row.driver_id === currentDriverId)) && (
                                                     <>
                                                         <button type="button" className="flex hover:text-info" onClick={() => handleDownloadBookingPdf(row)}>
                                                             <IconPdf className="h-4.5 w-4.5" />
