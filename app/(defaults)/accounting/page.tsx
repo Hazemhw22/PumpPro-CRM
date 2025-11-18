@@ -412,7 +412,15 @@ const AccountingPage = () => {
 
     const totalInvoiceDeal = invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
     const totalRevenue = paymentStats.totalReceived - totalInvoiceDeal;
-    const pendingRevenue = invoiceStats.pendingRevenue;
+
+    // Pending revenue: start with invoice-based pending amount
+    // plus any bookings in 'pending' status that don't have an invoice yet (use booking.price if available)
+    const bookingPendingFromNoInvoice = bookings
+        .filter((b) => String(b.status || '').toLowerCase() === 'pending')
+        .filter((b) => !invoices.find((inv) => inv.booking_id === b.id))
+        .reduce((sum, b) => sum + (Number((b as any).price) || 0), 0);
+
+    const pendingRevenue = (invoiceStats.pendingRevenue || 0) + bookingPendingFromNoInvoice;
 
     return (
         <div className="space-y-6">

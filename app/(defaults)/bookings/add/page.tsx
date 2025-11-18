@@ -6,10 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import AlertContainer from '@/components/elements/alerts/alert-container';
 import CustomerSelect from '@/components/customer-select/customer-select';
 import ServiceSelect from '@/components/service-select/service-select';
-import TruckSelect from '@/components/truck-select/truck-select';
-import DriverSelect from '@/components/driver-select/driver-select';
-import ContractorSelect from '@/components/contractor-select/contractor-select';
-import AssignmentModeSelectAdd from '@/components/assignment-mode-select/assignment-mode-select-add';
+// Assignment is moved to booking preview. Do not assign driver/contractor/truck in Add.
 import { getTranslation } from '@/i18n';
 
 interface Customer {
@@ -69,17 +66,16 @@ const AddBooking = () => {
         truck_id: '',
         driver_id: '',
         notes: '',
-        status: 'pending' as 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled',
+        // New bookings start as 'request' (admin will assign and move to awaiting_execution)
+        status: 'request' as 'request' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'awaiting_execution',
     });
 
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [selectedService, setSelectedService] = useState<Service | null>(null);
-    const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
-    const [selectedDriver, setSelectedDriver] = useState<{ id: string; name: string; phone: string; license_number: string | null; status: 'active' | 'inactive' | 'on_leave' } | null>(null);
+    // Assignment will happen in booking preview, so we don't need selectedTruck/Driver/Contractor here
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string; phone?: string; email?: string } | null>(null);
     const [alerts, setAlerts] = useState<Array<{ id: string; type: 'success' | 'danger' | 'warning' | 'info'; message: string; title?: string }>>([]);
     const [role, setRole] = useState<string>('');
-    const [assignMode, setAssignMode] = useState<'contractor' | 'driver'>('driver');
     const [contractorPrice, setContractorPrice] = useState<string>('');
     const [extraServices, setExtraServices] = useState<{ service_id: string; quantity: number }[]>([]);
 
@@ -282,6 +278,11 @@ const AddBooking = () => {
 
         setSaving(true);
         try {
+            // Map UI-only statuses to DB-compatible enum values before saving.
+            // NOTE: consider migrating the Postgres enum `booking_status` to include
+            // 'request' and 'awaiting_execution' in production. See migration SQL below.
+            const statusToSave = form.status === 'request' || form.status === 'awaiting_execution' ? 'pending' : form.status;
+
             const bookingData = {
                 customer_type: form.customer_type,
                 customer_id: form.customer_id || null,
@@ -294,11 +295,13 @@ const AddBooking = () => {
                 service_type: form.service_type.trim(),
                 price: parseFloat(form.price) || 0,
                 profit: parseFloat(form.profit) || 0,
-                truck_id: form.truck_id || null,
-                driver_id: form.driver_id || null,
-                contractor_id: selectedContractor ? selectedContractor.id : null,
+                // Do NOT assign truck/driver/contractor on create — assignments happen in Preview by admin
+                truck_id: null,
+                driver_id: null,
+                contractor_id: null,
                 notes: ((form.notes || '') + (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')).trim() || null,
-                status: form.status,
+                // Save a DB-compatible status (avoid writing unknown enum values)
+                status: statusToSave,
             };
 
             // @ts-ignore - Supabase type inference issue
@@ -649,108 +652,7 @@ const AddBooking = () => {
                                 <input type="number" id="profit" name="profit" value={form.profit} onChange={handleInputChange} className="form-input" placeholder="0" />
                             </div>
 
-                            {/* Assign Truck (Always visible) */}
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assign Truck</label>
-                                <TruckSelect
-                                    selectedTruck={selectedTruck as any}
-                                    onTruckSelect={(truck) => {
-                                        setSelectedTruck(truck as any);
-                                        if (truck) {
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                truck_id: (truck as any).id,
-                                                driver_id: assignMode === 'driver' && (truck as any).driver_id ? ((truck as any).driver_id as string) : prev.driver_id,
-                                            }));
-                                            if (assignMode === 'driver' && (truck as any).driver_id) {
-                                                const driver = drivers.find((d) => d.id === (truck as any).driver_id);
-                                                if (driver) setSelectedDriver(driver as any);
-                                            }
-                                        } else {
-                                            setForm((prev) => ({ ...prev, truck_id: '' }));
-                                        }
-                                    }}
-                                    onCreateNew={() => router.push('/fleet/add')}
-                                    className="form-select"
-                                />
-                            </div>
-
-                            {/* Assignment Mode */}
-                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Select Service Handler</label>
-                                    <AssignmentModeSelectAdd
-                                        value={assignMode}
-                                        onChange={(val) => {
-                                            setAssignMode(val);
-                                            if (val === 'contractor') {
-                                                setSelectedDriver(null as any);
-                                                setSelectedTruck(null as any);
-                                                setForm((prev) => ({ ...prev, driver_id: '', truck_id: '' }));
-                                            } else if (val === 'driver') {
-                                                setSelectedContractor(null);
-                                                setContractorPrice('');
-                                            }
-                                        }}
-                                        className="form-select"
-                                    />
-                                </div>
-
-                                {assignMode === 'contractor' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Select Contractor</label>
-                                        <ContractorSelect
-                                            selectedContractor={selectedContractor as any}
-                                            onContractorSelect={(c) => {
-                                                if (c) {
-                                                    setSelectedContractor({
-                                                        id: c.id,
-                                                        name: c.name,
-                                                        phone: c.phone,
-                                                        email: c.email || undefined,
-                                                    });
-                                                } else {
-                                                    setSelectedContractor(null);
-                                                }
-                                            }}
-                                            onCreateNew={() => router.push('/contractors/add')}
-                                            className="form-select"
-                                        />
-                                        {selectedContractor && (
-                                            <div className="mt-3">
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Contractor Price You Pay</label>
-                                                <input type="number" className="form-input" placeholder="0" value={contractorPrice} onChange={(e) => setContractorPrice(e.target.value)} />
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {assignMode === 'driver' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assign Driver</label>
-                                        <DriverSelect
-                                            selectedDriver={selectedDriver}
-                                            onDriverSelect={(driver) => {
-                                                setSelectedDriver(driver);
-                                                if (driver) {
-                                                    setForm((prev) => ({ ...prev, driver_id: driver.id }));
-                                                    if (assignMode === 'driver') {
-                                                        const truck = trucks.find((t) => t.driver_id === driver.id);
-                                                        if (truck) {
-                                                            setSelectedTruck(truck as any);
-                                                            setForm((prev) => ({ ...prev, truck_id: truck.id }));
-                                                        }
-                                                    }
-                                                } else {
-                                                    setForm((prev) => ({ ...prev, driver_id: '' }));
-                                                }
-                                            }}
-                                            onCreateNew={() => router.push('/drivers/add')}
-                                            className="form-select"
-                                        />
-                                    </div>
-                                )}
-                            </div>
+                            {/* Assignment moved to Booking Preview (admin will assign driver/contractor there) */}
                         </div>
 
                         {/* Notes */}

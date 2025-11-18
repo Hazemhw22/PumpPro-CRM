@@ -19,6 +19,10 @@ import Link from 'next/link';
 import { Tab } from '@headlessui/react';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import MethodsSelect from '@/components/selectors/MethodsSelect';
+import TruckSelect from '@/components/truck-select/truck-select';
+import DriverSelect from '@/components/driver-select/driver-select';
+import ContractorSelect from '@/components/contractor-select/contractor-select';
+import AssignmentModeSelectAdd from '@/components/assignment-mode-select/assignment-mode-select-add';
 
 interface Booking {
     id: string;
@@ -101,6 +105,13 @@ const BookingPreview = () => {
     const [bookingServices, setBookingServices] = useState<{ name: string; quantity: number; unit_price: number; total: number }[]>([]);
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
     const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
+    const [assignMode, setAssignMode] = useState<'driver' | 'contractor'>('driver');
+    const [selectedTruckAssign, setSelectedTruckAssign] = useState<{ id: string; truck_number?: string } | null>(null);
+    const [selectedDriverAssign, setSelectedDriverAssign] = useState<{ id: string; name?: string } | null>(null);
+    const [selectedContractorAssign, setSelectedContractorAssign] = useState<{ id: string; name?: string } | null>(null);
+    const [role, setRole] = useState<string | null>(null);
+    const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
+    const [currentContractorId, setCurrentContractorId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [creatingInvoice, setCreatingInvoice] = useState(false);
     const [creatingInvoiceDeal, setCreatingInvoiceDeal] = useState(false);
@@ -515,6 +526,68 @@ const BookingPreview = () => {
         } catch (err) {
             console.error('Error assigning contractor:', err);
             setAlert({ visible: true, message: 'Could not assign contractor', type: 'danger' });
+        }
+    };
+
+    const handleDriverAssign = async (driver: { id: string; name: string } | null, truckId?: string | null) => {
+        if (!booking) return;
+        try {
+            if (driver) {
+                const payload: any = { driver_id: driver.id, status: 'awaiting_execution' };
+                if (truckId) payload.truck_id = truckId;
+                const { error } = await (supabase.from('bookings').update as any)(payload).eq('id', booking.id);
+                if (error) throw error;
+
+                await supabase
+                    .from('booking_tracks')
+                    .insert([
+                        { booking_id: booking.id, old_status: booking.status, new_status: 'awaiting_execution', notes: `Assigned driver ${driver.name}`, created_at: new Date().toISOString() },
+                    ] as any);
+
+                setBooking((prev) => (prev ? ({ ...prev, driver_id: driver.id, driver: { name: driver.name }, status: 'awaiting_execution', truck_id: truckId || prev?.truck_id } as any) : prev));
+                setAlert({ visible: true, message: 'Driver assigned and booking moved to Awaiting Execution', type: 'success' });
+            } else {
+                const { error } = await (supabase.from('bookings').update as any)({ driver_id: null }).eq('id', booking.id);
+                if (error) throw error;
+                setBooking((prev) => (prev ? ({ ...prev, driver_id: null, driver: null } as any) : prev));
+                setAlert({ visible: true, message: 'Driver removed', type: 'success' });
+            }
+        } catch (err) {
+            console.error('Error assigning driver:', err);
+            setAlert({ visible: true, message: 'Could not assign driver', type: 'danger' });
+        }
+    };
+
+    const handleTruckAssign = async (truck: { id: string; truck_number?: string } | null) => {
+        if (!booking) return;
+        try {
+            if (truck) {
+                const { error } = await (supabase.from('bookings').update as any)({ truck_id: truck.id, status: 'awaiting_execution' }).eq('id', booking.id);
+                if (error) throw error;
+
+                await supabase
+                    .from('booking_tracks')
+                    .insert([
+                        {
+                            booking_id: booking.id,
+                            old_status: booking.status,
+                            new_status: 'awaiting_execution',
+                            notes: `Assigned truck ${truck.truck_number || truck.id}`,
+                            created_at: new Date().toISOString(),
+                        },
+                    ] as any);
+
+                setBooking((prev) => (prev ? ({ ...prev, truck_id: truck.id, truck: { truck_number: truck.truck_number }, status: 'awaiting_execution' } as any) : prev));
+                setAlert({ visible: true, message: 'Truck assigned and booking moved to Awaiting Execution', type: 'success' });
+            } else {
+                const { error } = await (supabase.from('bookings').update as any)({ truck_id: null }).eq('id', booking.id);
+                if (error) throw error;
+                setBooking((prev) => (prev ? ({ ...prev, truck_id: null, truck: null } as any) : prev));
+                setAlert({ visible: true, message: 'Truck removed', type: 'success' });
+            }
+        } catch (err) {
+            console.error('Error assigning truck:', err);
+            setAlert({ visible: true, message: 'Could not assign truck', type: 'danger' });
         }
     };
 
@@ -977,31 +1050,163 @@ const BookingPreview = () => {
                                         </div>
 
                                         <div className="space-y-3">
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <span className="text-sm text-gray-600">Truck:</span>
-                                                <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <span className="text-sm text-gray-600">Driver:</span>
-                                                {booking.driver ? (
-                                                    <div className="text-right">
-                                                        <div className="font-medium">{booking.driver.name}</div>
-                                                        {(booking.driver as any).driver_number && (
-                                                            <div className="text-sm text-gray-500">
-                                                                <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
-                                                                    {(booking.driver as any).driver_number}
-                                                                </a>
+                                            {role === 'admin' ? (
+                                                booking && (booking.truck_id || booking.driver_id || booking.contractor_id) ? (
+                                                    <>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Truck:</span>
+                                                            <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Driver:</span>
+                                                            {booking.driver ? (
+                                                                <div className="text-right">
+                                                                    <div className="font-medium">{booking.driver.name}</div>
+                                                                    {(booking.driver as any).driver_number && (
+                                                                        <div className="text-sm text-gray-500">
+                                                                            <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
+                                                                                {(booking.driver as any).driver_number}
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Contractor:</span>
+                                                            <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                <label className="block text-sm text-gray-600 mb-2 font-medium">Truck</label>
+                                                                <TruckSelect
+                                                                    selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
+                                                                    onTruckSelect={(t) => setSelectedTruckAssign(t as any)}
+                                                                    onCreateNew={() => router.push('/fleet/add')}
+                                                                    className="w-full"
+                                                                />
+                                                                <div className="mt-2 text-sm text-gray-500">
+                                                                    <div>
+                                                                        Current: <span className="font-medium text-black dark:text-white">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        Selected: <span className="font-medium">{selectedTruckAssign?.truck_number || '—'}</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
+
+                                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                <label className="block text-sm text-gray-600 mb-2 font-medium">Assign Mode</label>
+                                                                <AssignmentModeSelectAdd value={assignMode} onChange={(v) => setAssignMode(v)} className="w-full" />
+
+                                                                {assignMode === 'driver' && (
+                                                                    <div className="mt-4">
+                                                                        <label className="block text-sm text-gray-600 mb-2">Driver</label>
+                                                                        <DriverSelect
+                                                                            selectedDriver={selectedDriverAssign as any}
+                                                                            onDriverSelect={(d) => setSelectedDriverAssign(d as any)}
+                                                                            onCreateNew={() => router.push('/drivers/add')}
+                                                                            className="w-full"
+                                                                        />
+                                                                    </div>
+                                                                )}
+
+                                                                {assignMode === 'contractor' && (
+                                                                    <div className="mt-4">
+                                                                        <label className="block text-sm text-gray-600 mb-2">Contractor</label>
+                                                                        <ContractorSelect
+                                                                            selectedContractor={selectedContractorAssign as any}
+                                                                            onContractorSelect={(c) => setSelectedContractorAssign(c as any)}
+                                                                            onCreateNew={() => router.push('/contractors/add')}
+                                                                            className="w-full"
+                                                                        />
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="mt-4 flex items-center justify-end gap-3">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-outline-danger"
+                                                                        onClick={() => {
+                                                                            // reset local selections to current persisted values
+                                                                            setSelectedTruckAssign(
+                                                                                booking.truck_id ? { id: booking.truck_id as string, truck_number: booking.truck?.truck_number } : null,
+                                                                            );
+                                                                            setSelectedDriverAssign(booking.driver_id ? { id: booking.driver_id as string, name: booking.driver?.name } : null);
+                                                                            setSelectedContractorAssign(
+                                                                                booking.contractor_id ? { id: booking.contractor_id as string, name: booking.contractor?.name } : null,
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        Reset
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-primary"
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                if (selectedTruckAssign) await handleTruckAssign(selectedTruckAssign as any);
+                                                                                if (assignMode === 'driver' && selectedDriverAssign) {
+                                                                                    await handleDriverAssign(
+                                                                                        selectedDriverAssign as any,
+                                                                                        (selectedTruckAssign && selectedTruckAssign.id) || booking.truck_id || null,
+                                                                                    );
+                                                                                }
+                                                                                if (assignMode === 'contractor' && selectedContractorAssign) {
+                                                                                    if (selectedTruckAssign) await handleTruckAssign(selectedTruckAssign as any);
+                                                                                    await handleContractorAssign(selectedContractorAssign as any);
+                                                                                }
+                                                                            } catch (e) {
+                                                                                console.error('Error applying assignment', e);
+                                                                                setAlert({ visible: true, message: 'Could not apply assignment', type: 'danger' });
+                                                                            }
+                                                                        }}
+                                                                        disabled={
+                                                                            assignMode === 'driver' ? !selectedDriverAssign && !selectedTruckAssign : !selectedContractorAssign && !selectedTruckAssign
+                                                                        }
+                                                                    >
+                                                                        Apply Assignment
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Truck:</span>
+                                                        <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Driver:</span>
+                                                        {booking.driver ? (
+                                                            <div className="text-right">
+                                                                <div className="font-medium">{booking.driver.name}</div>
+                                                                {(booking.driver as any).driver_number && (
+                                                                    <div className="text-sm text-gray-500">
+                                                                        <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
+                                                                            {(booking.driver as any).driver_number}
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
                                                         )}
                                                     </div>
-                                                ) : (
-                                                    <span className="font-medium">Not Assigned</span>
-                                                )}
-                                            </div>
-                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <span className="text-sm text-gray-600">Contractor:</span>
-                                                <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
-                                            </div>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Contractor:</span>
+                                                        <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
