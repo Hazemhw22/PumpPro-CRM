@@ -543,7 +543,7 @@ const ContractorPreview = () => {
                                                                 className={`badge ${
                                                                     booking.status === 'confirmed'
                                                                         ? 'badge-outline-success'
-                                                                        : booking.status === 'request'
+                                                                        : booking.status === 'awaiting_execution'
                                                                           ? 'badge-outline-warning'
                                                                           : booking.status === 'completed'
                                                                             ? 'badge-outline-info'
@@ -567,7 +567,7 @@ const ContractorPreview = () => {
                                                             </span>
                                                         </td>
                                                         <td className="text-center">
-                                                            {booking.status === 'request' && (
+                                                            {booking.status === 'awaiting_execution' && (
                                                                 <button onClick={() => handleConfirmBooking(booking.id)} className="btn btn-sm btn-success ltr:mr-2 rtl:ml-2" title="Confirm Booking">
                                                                     <IconCheck className="w-4 h-4" />
                                                                     Confirm

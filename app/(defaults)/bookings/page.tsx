@@ -17,6 +17,7 @@ import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import BookingsFilters, { BookingFilters as BookingFiltersType } from '@/components/bookings-filters/bookings-filters';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
+import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
 
 interface Booking {
     id: string;
@@ -27,7 +28,8 @@ interface Booking {
     service_address: string;
     scheduled_date: string;
     scheduled_time: string;
-    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    status: 'pending' | 'request' | 'awaiting_execution' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+
     service_type: string;
     contractor_id?: string | null;
     driver_id?: string | null;
@@ -441,7 +443,46 @@ const BookingsList = () => {
         try {
             const language: 'en' | 'he' | 'ar' = 'en';
 
-            const provider: any = (row as any).contractor || (row as any).driver || null;
+            const providerContractor = (row as any).contractor || null;
+            const providerDriver = (row as any).driver || null;
+
+            const providerNameFrom = (p: any) => {
+                if (!p) return undefined;
+                if (p.name && String(p.name).trim()) return String(p.name).trim();
+                if (p.driver_name && String(p.driver_name).trim()) return String(p.driver_name).trim();
+                if (p.first_name || p.last_name) return `${(p.first_name || '').trim()} ${(p.last_name || '').trim()}`.trim();
+                return undefined;
+            };
+
+            const provider: any = providerContractor || providerDriver || null;
+
+            // Fetch booking_services for this booking so the PDF includes all linked services
+            let bookingServices: any[] = [];
+            try {
+                // @ts-ignore
+                const { data: bsData } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, description').eq('booking_id', row.id);
+                if (bsData && bsData.length > 0) {
+                    const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
+                    // @ts-ignore
+                    const { data: svcData } = serviceIds.length > 0 ? await supabase.from('services').select('id, name, price_private, price_business').in('id', serviceIds) : { data: [] };
+                    const svcMap = new Map((svcData || []).map((s: any) => [s.id, s]));
+                    bookingServices = bsData.map((bsvc: any) => ({
+                        id: bsvc.id,
+                        service_id: bsvc.service_id,
+                        name: svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-',
+                        description: bsvc.description || null,
+                        quantity: typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1),
+                        unit_price: typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0),
+                        total:
+                            (typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0)) *
+                            (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
+                    }));
+                }
+            } catch (err) {
+                // If booking services fetch fails, continue without them
+                console.warn('Could not fetch booking services for PDF', err);
+                bookingServices = [];
+            }
 
             const data: any = {
                 company: {
@@ -449,7 +490,8 @@ const BookingsList = () => {
                     phone: '',
                     address: '',
                     tax_id: '',
-                    logo_url: '/assets/images/logo.png',
+                    // default PDF logo path — place your logo at public/assets/images/pdf-logo.png
+                    logo_url: '/assets/images/pdf-logo.png',
                 },
                 invoice: null,
                 booking: {
@@ -462,10 +504,16 @@ const BookingsList = () => {
                     contractor_id: (row as any).contractor_id,
                     driver_id: (row as any).driver_id,
                 },
-                contractor: provider
+                contractor: providerContractor
                     ? {
-                          name: provider.name,
-                          phone: provider.phone || undefined,
+                          name: providerNameFrom(providerContractor) || undefined,
+                          phone: providerContractor.phone || undefined,
+                      }
+                    : undefined,
+                driver: providerDriver
+                    ? {
+                          name: providerNameFrom(providerDriver) || undefined,
+                          driver_number: providerDriver.driver_number || providerDriver.phone || undefined,
                       }
                     : undefined,
                 customer: {
@@ -476,8 +524,11 @@ const BookingsList = () => {
                 service: {
                     name: (row as any).service_name || (row as any).service_type,
                 },
+                // include normalized booking services so the PDF generator will list them
+                booking_services: bookingServices.length > 0 ? bookingServices : undefined,
+                services: bookingServices.length > 0 ? bookingServices : undefined,
                 lang: language,
-                no_price: true,
+                no_price: role === 'driver' || role === 'contractor',
             };
 
             await InvoiceDealPDFGenerator.generatePDF(data, `booking-${(row as any).booking_number || row.id}.pdf`, 'invoice');
@@ -511,10 +562,7 @@ const BookingsList = () => {
             setItems((prev) => prev.map((b) => (b.id === row.id ? ({ ...b, status: 'confirmed' } as any) : b)) as any);
             setAlert({ visible: true, message: t('booking_confirmed') || 'Booking confirmed', type: 'success' });
 
-            // If the current user is the assigned contractor/driver, redirect to accounting
-            if ((role === 'driver' && row.driver_id === currentDriverId) || (role === 'contractor' && row.contractor_id === currentContractorId)) {
-                router.push('/bookings');
-            }
+            // Do not redirect the assigned provider so they can immediately download the provider PDF
         } catch (error) {
             console.error('Error confirming booking:', error);
             setAlert({ visible: true, message: t('error_confirming_booking') || 'Error confirming booking', type: 'danger' });
@@ -665,14 +713,15 @@ const BookingsList = () => {
                                                 )}
                                                 {((role === 'contractor' && row.contractor_id === currentContractorId) || (role === 'driver' && row.driver_id === currentDriverId)) && (
                                                     <>
-                                                        <button type="button" className="flex hover:text-info" onClick={() => handleDownloadBookingPdf(row)}>
-                                                            <IconPdf className="h-4.5 w-4.5" />
-                                                        </button>
-                                                        {row.status !== 'confirmed' && (
+                                                        {/* If booking awaiting assignment confirmation, show Confirm button to assigned provider */}
+                                                        {row.status === 'awaiting_execution' && (
                                                             <button type="button" className="flex hover:text-success" onClick={() => handleConfirmBooking(row)}>
                                                                 <IconCheck className="h-4.5 w-4.5" />
                                                             </button>
                                                         )}
+
+                                                        {/* After provider confirms (status === 'confirmed'), show PDF without prices */}
+                                                        {row.status === 'confirmed' && <ProviderPdfButton booking={row} provider={(row as any).contractor || (row as any).driver} role={role} />}
                                                     </>
                                                 )}
                                             </div>

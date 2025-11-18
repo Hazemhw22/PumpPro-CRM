@@ -249,6 +249,7 @@ export class InvoiceDealPDFGenerator {
 
         const serviceTypeName = (data.service as any)?.name || (bk as any).service_type || '-';
         const todayStr = this.formatDate(inv?.created_at);
+        // Default PDF logo — put your logo file at `public/assets/images/pdf-logo.png`
         const logoSrc = (company as any).logo_url || '/favicon.png';
 
         // Compute base href so that relative asset paths (like '/favicon.png')
@@ -269,12 +270,37 @@ export class InvoiceDealPDFGenerator {
         } catch (e) {
             baseHref = '';
         }
-        const servicesList =
-            data.services && data.services.length > 0
-                ? data.services
-                : serviceTypeName !== '-'
-                  ? [{ name: serviceTypeName, description: null, quantity: 1, unit_price: this.calculatePrice(data), total: this.calculatePrice(data) }]
-                  : [];
+        // Prefer explicitly passed `data.services`, then try `booking_services` or booking-level `services`.
+        let servicesList: Array<any> = [];
+        if (Array.isArray(data.services) && data.services.length > 0) {
+            servicesList = data.services.map((s: any) => ({
+                name: s.name || s.service_name || (s.service && s.service.name) || '-',
+                description: s.description || null,
+                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || s.count || 1),
+                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.price || s.unit_price || this.calculatePrice(data) || 0),
+                total: typeof s.total === 'number' ? s.total : typeof s.unit_price === 'number' && typeof s.quantity === 'number' ? s.unit_price * s.quantity : undefined,
+            }));
+        } else if (Array.isArray((data as any).booking_services) && (data as any).booking_services.length > 0) {
+            servicesList = (data as any).booking_services.map((s: any) => ({
+                name: s.name || s.service_name || '-',
+                description: s.description || null,
+                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || 1),
+                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.unit_price || s.unit_price || 0),
+                total: typeof s.total === 'number' ? s.total : s.unit_price && s.quantity ? s.unit_price * s.quantity : undefined,
+            }));
+        } else if (Array.isArray((data.booking as any)?.services) && (data.booking as any).services.length > 0) {
+            servicesList = (data.booking as any).services.map((s: any) => ({
+                name: s.name || s.service_name || '-',
+                description: s.description || null,
+                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || 1),
+                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.price || 0),
+                total: typeof s.total === 'number' ? s.total : s.unit_price && s.quantity ? s.unit_price * s.quantity : undefined,
+            }));
+        } else if (serviceTypeName !== '-') {
+            servicesList = [{ name: serviceTypeName, description: null, quantity: 1, unit_price: this.calculatePrice(data), total: this.calculatePrice(data) }];
+        } else {
+            servicesList = [];
+        }
 
         // Calculate total price as sum of all services
         const totalPrice = servicesList.reduce((sum: number, svc: any) => sum + (svc.total || 0), 0);

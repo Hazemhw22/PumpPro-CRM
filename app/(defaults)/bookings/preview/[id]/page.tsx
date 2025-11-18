@@ -36,7 +36,7 @@ interface Booking {
     service_address: string;
     scheduled_date: string;
     scheduled_time: string;
-    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'awaiting_execution';
     service_type: string;
     price?: number;
     profit?: number;
@@ -813,6 +813,10 @@ const BookingPreview = () => {
             setBooking((prev) => (prev ? ({ ...prev, status: 'confirmed' } as any) : prev));
             await fetchBookingTracks();
             setAlert({ visible: true, message: 'Booking confirmed', type: 'success' });
+            // redirect assigned contractor/driver to accounting
+            if ((role === 'driver' && booking.driver_id === currentDriverId) || (role === 'contractor' && booking.contractor_id === currentContractorId)) {
+                router.push('/accounting');
+            }
         } catch (err) {
             console.error('Error confirming booking:', err);
             setAlert({ visible: true, message: 'Error confirming booking', type: 'danger' });
@@ -976,7 +980,7 @@ const BookingPreview = () => {
                                                 <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
-                                                    {booking.status !== 'confirmed' &&
+                                                    {booking.status === 'awaiting_execution' &&
                                                         ((role === 'driver' && booking.driver_id === currentDriverId) || (role === 'contractor' && booking.contractor_id === currentContractorId)) && (
                                                             <button onClick={confirmBooking} className="btn btn-primary">
                                                                 Confirm Booking
