@@ -9,6 +9,7 @@ import IconPackage from '@/components/icon/icon-box';
 import { sortBy } from 'lodash';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 /* eslint-disable react-hooks/exhaustive-deps */
 import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
@@ -36,6 +37,7 @@ interface Booking {
 
 const BookingsList = () => {
     const { t } = getTranslation();
+    const router = useRouter();
     const [items, setItems] = useState<Booking[]>([]);
     const [role, setRole] = useState<string | null>(null);
     const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
@@ -92,9 +94,6 @@ const BookingsList = () => {
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
                         role = (profile as any)?.role || null;
                         setRole(role);
-                        // expose current driver/contractor ids to UI for permission checks
-                        setCurrentDriverId(driverId);
-                        setCurrentContractorId(contractorId);
                         if (role === 'contractor') {
                             // @ts-ignore
                             let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
@@ -123,6 +122,10 @@ const BookingsList = () => {
                                 driverId = (d2 as any)?.id || null;
                             }
                         }
+
+                        // expose resolved current driver/contractor ids to UI for permission checks
+                        setCurrentDriverId(driverId);
+                        setCurrentContractorId(contractorId);
                     }
                 } catch (e) {
                     // ignore
@@ -507,6 +510,11 @@ const BookingsList = () => {
 
             setItems((prev) => prev.map((b) => (b.id === row.id ? ({ ...b, status: 'confirmed' } as any) : b)) as any);
             setAlert({ visible: true, message: t('booking_confirmed') || 'Booking confirmed', type: 'success' });
+
+            // If the current user is the assigned contractor/driver, redirect to accounting
+            if ((role === 'driver' && row.driver_id === currentDriverId) || (role === 'contractor' && row.contractor_id === currentContractorId)) {
+                router.push('/bookings');
+            }
         } catch (error) {
             console.error('Error confirming booking:', error);
             setAlert({ visible: true, message: t('error_confirming_booking') || 'Error confirming booking', type: 'danger' });

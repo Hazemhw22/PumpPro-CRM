@@ -281,7 +281,7 @@ const AddBooking = () => {
             // Map UI-only statuses to DB-compatible enum values before saving.
             // NOTE: consider migrating the Postgres enum `booking_status` to include
             // 'request' and 'awaiting_execution' in production. See migration SQL below.
-            const statusToSave = form.status === 'request' || form.status === 'awaiting_execution' ? 'pending' : form.status;
+            const statusToSave = form.status === 'request' || form.status === 'awaiting_execution' ? 'request' : form.status;
 
             const bookingData = {
                 customer_type: form.customer_type,

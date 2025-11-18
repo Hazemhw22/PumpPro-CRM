@@ -29,7 +29,6 @@ import IconCash from '@/components/icon/icon-cash-banknotes';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconPdf from '@/components/icon/icon-pdf';
 
-
 interface DashboardStats {
     totalTrucks: number;
     totalBookings: number;
@@ -182,7 +181,9 @@ const HomePage = () => {
                 let contractorId: string | null = null;
                 let driverId: string | null = null;
                 try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    const {
+                        data: { user },
+                    } = await supabase.auth.getUser();
                     if (user) {
                         // @ts-ignore
                         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
@@ -194,7 +195,11 @@ const HomePage = () => {
                             contractorId = (c as any)?.id || null;
                             if (!contractorId && (user as any).email) {
                                 // @ts-ignore
-                                const { data: c2 } = await supabase.from('contractors').select('id').eq('email', (user as any).email).maybeSingle();
+                                const { data: c2 } = await supabase
+                                    .from('contractors')
+                                    .select('id')
+                                    .eq('email', (user as any).email)
+                                    .maybeSingle();
                                 contractorId = (c2 as any)?.id || null;
                             }
                         } else if (role === 'driver') {
@@ -203,28 +208,36 @@ const HomePage = () => {
                             driverId = (d as any)?.id || null;
                             if (!driverId && (user as any).email) {
                                 // @ts-ignore
-                                const { data: d2 } = await supabase.from('drivers').select('id').eq('email', (user as any).email).maybeSingle();
+                                const { data: d2 } = await supabase
+                                    .from('drivers')
+                                    .select('id')
+                                    .eq('email', (user as any).email)
+                                    .maybeSingle();
                                 driverId = (d2 as any)?.id || null;
                             }
                         }
                     }
-                } catch (e) { /* ignore */ }
+                } catch (e) {
+                    /* ignore */
+                }
 
                 // If contractor: compute filtered stats and return early
                 if (role === 'contractor') {
-                    if (!contractorId) { setStats(prev => ({ ...prev, loading: false })); return; }
-                    const [
-                        invRes,
-                        payRes,
-                        bookingsCountRes,
-                        recentInvRes,
-                        recentBookingsRes
-                    ] = await Promise.all([
+                    if (!contractorId) {
+                        setStats((prev) => ({ ...prev, loading: false }));
+                        return;
+                    }
+                    const [invRes, payRes, bookingsCountRes, recentInvRes, recentBookingsRes] = await Promise.all([
                         supabase.from('invoices').select('total_amount, remaining_amount, status, created_at').eq('contractor_id', contractorId),
                         supabase.from('payments').select(`*, invoices ( invoice_number, customers ( name ) )`).eq('contractor_id', contractorId).order('payment_date', { ascending: false }).limit(5),
                         supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('contractor_id', contractorId),
-                        supabase.from('invoices').select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)').eq('contractor_id', contractorId).order('created_at', { ascending: false }).limit(5),
-                        supabase.from('bookings').select('*').eq('contractor_id', contractorId).order('created_at', { ascending: false }).limit(10)
+                        supabase
+                            .from('invoices')
+                            .select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)')
+                            .eq('contractor_id', contractorId)
+                            .order('created_at', { ascending: false })
+                            .limit(5),
+                        supabase.from('bookings').select('*').eq('contractor_id', contractorId).order('created_at', { ascending: false }).limit(10),
                     ]);
 
                     const invs: any[] = (invRes.data as any[]) || [];
@@ -242,14 +255,14 @@ const HomePage = () => {
                         payment_method: p.payment_method || 'cash',
                         invoice_number: p.invoices?.invoice_number || 'N/A',
                     }));
-                    const recentInvoices = (recentInvRes.data as any[] || []).map((inv: any) => ({
+                    const recentInvoices = ((recentInvRes.data as any[]) || []).map((inv: any) => ({
                         invoice_number: inv.invoice_number,
                         customer_name: inv.customers?.name || 'Unknown',
                         total_amount: inv.total_amount || 0,
                         status: inv.status,
                     }));
 
-                    setStats(prev => ({
+                    setStats((prev) => ({
                         ...prev,
                         totalTrucks: 0,
                         totalBookings,
@@ -263,10 +276,12 @@ const HomePage = () => {
                         customersGrowth: 0,
                         revenueGrowth: 0,
                         loading: false,
-                        chartData: { months: prev.chartData.months, trucks: [0,0,0,0,0,0], bookings: [0,0,0,0,0,0], revenue: [0,0,0,0,0,0] },
+                        chartData: { months: prev.chartData.months, trucks: [0, 0, 0, 0, 0, 0], bookings: [0, 0, 0, 0, 0, 0], revenue: [0, 0, 0, 0, 0, 0] },
                         recentActivity: (recentBookingsRes.data as any[]) || [],
-                        bookingsByType: {}, trucksByStatus: {},
-                        pendingBookings: 0, confirmedBookings: 0,
+                        bookingsByType: {},
+                        trucksByStatus: {},
+                        pendingBookings: 0,
+                        confirmedBookings: 0,
                         totalDebts: remainingAmount,
                         paidInvoices,
                         recentPayments,
@@ -277,12 +292,15 @@ const HomePage = () => {
 
                 // If driver: show only own bookings KPIs and zero financials
                 if (role === 'driver') {
-                    if (!driverId) { setStats(prev => ({ ...prev, loading: false })); return; }
+                    if (!driverId) {
+                        setStats((prev) => ({ ...prev, loading: false }));
+                        return;
+                    }
                     const [bookingsCountRes, recentBookingsRes] = await Promise.all([
                         supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('driver_id', driverId),
                         supabase.from('bookings').select('*').eq('driver_id', driverId).order('created_at', { ascending: false }).limit(10),
                     ]);
-                    setStats(prev => ({
+                    setStats((prev) => ({
                         ...prev,
                         totalTrucks: 0,
                         totalBookings: bookingsCountRes.count || 0,
@@ -296,10 +314,12 @@ const HomePage = () => {
                         customersGrowth: 0,
                         revenueGrowth: 0,
                         loading: false,
-                        chartData: { months: prev.chartData.months, trucks: [0,0,0,0,0,0], bookings: [0,0,0,0,0,0], revenue: [0,0,0,0,0,0] },
+                        chartData: { months: prev.chartData.months, trucks: [0, 0, 0, 0, 0, 0], bookings: [0, 0, 0, 0, 0, 0], revenue: [0, 0, 0, 0, 0, 0] },
                         recentActivity: (recentBookingsRes.data as any[]) || [],
-                        bookingsByType: {}, trucksByStatus: {},
-                        pendingBookings: 0, confirmedBookings: 0,
+                        bookingsByType: {},
+                        trucksByStatus: {},
+                        pendingBookings: 0,
+                        confirmedBookings: 0,
                         totalDebts: 0,
                         paidInvoices: 0,
                         recentPayments: [],
@@ -395,49 +415,43 @@ const HomePage = () => {
                     supabase.from('invoices').select('total_amount, created_at').gte('created_at', sixMonthsAgo.toISOString()).not('total_amount', 'is', null),
 
                     // Bookings by service type with service names
-                    timeFilter === 'all' 
-                        ? supabase.from('bookings').select('service_type') 
-                        : supabase.from('bookings').select('service_type').gte('created_at', currentStart.toISOString()),
-                    
+                    timeFilter === 'all' ? supabase.from('bookings').select('service_type') : supabase.from('bookings').select('service_type').gte('created_at', currentStart.toISOString()),
+
                     // Fetch all services for mapping
                     supabase.from('services').select('id, name'),
 
                     // Trucks by status
-                    timeFilter === 'all' 
-                        ? supabase.from('trucks').select('status') 
-                        : supabase.from('trucks').select('status').gte('created_at', currentStart.toISOString()),
+                    timeFilter === 'all' ? supabase.from('trucks').select('status') : supabase.from('trucks').select('status').gte('created_at', currentStart.toISOString()),
 
                     // Recent activity - using bookings for recent activity
-                    supabase.from('bookings')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(10)
-                        .eq('status', 'confirmed'),
-                    
+                    supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(10).eq('status', 'confirmed'),
+
                     // New queries for additional dashboard data
                     // Pending bookings count
                     timeFilter === 'all'
-                        ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending')
-                        : supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending').gte('created_at', currentStart.toISOString()),
-                    
+                        ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'request')
+                        : supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'request').gte('created_at', currentStart.toISOString()),
+
                     // Confirmed bookings count
                     timeFilter === 'all'
                         ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'confirmed')
                         : supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'confirmed').gte('created_at', currentStart.toISOString()),
-                    
+
                     // Total debts (overdue invoices)
                     timeFilter === 'all'
                         ? supabase.from('invoices').select('total_amount, amount_paid').eq('status', 'overdue')
                         : supabase.from('invoices').select('total_amount, amount_paid').eq('status', 'overdue').gte('created_at', currentStart.toISOString()),
-                    
+
                     // Paid invoices count
                     timeFilter === 'all'
                         ? supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'paid')
                         : supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'paid').gte('created_at', currentStart.toISOString()),
-                    
+
                     // Recent payments
-                    supabase.from('payments')
-                        .select(`
+                    supabase
+                        .from('payments')
+                        .select(
+                            `
                             *,
                             invoices (
                                 invoice_number,
@@ -445,15 +459,13 @@ const HomePage = () => {
                                     name
                                 )
                             )
-                        `)
+                        `,
+                        )
                         .order('payment_date', { ascending: false })
                         .limit(5),
-                    
+
                     // Recent invoices
-                    supabase.from('invoices')
-                        .select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)')
-                        .order('created_at', { ascending: false })
-                        .limit(5),
+                    supabase.from('invoices').select('id, invoice_number, total_amount, status, created_at, customer_id, customers(name)').order('created_at', { ascending: false }).limit(5),
                 ]);
 
                 // Process results
@@ -543,16 +555,11 @@ const HomePage = () => {
                 const pendingBookings = pendingBookingsResult.count || 0;
                 const confirmedBookings = confirmedBookingsResult.count || 0;
                 const paidInvoices = paidInvoicesResult.count || 0;
-                
-                // Calculate total debts from all invoices (same as accounting page)
-                const { data: allInvoicesData, error: allInvoicesError } = await supabase
-                    .from('invoices')
-                    .select('*');
 
-                const totalDebts = (allInvoicesData || []).reduce(
-                    (sum: number, invoice: any) => sum + (invoice.remaining_amount || 0), 
-                    0
-                );
+                // Calculate total debts from all invoices (same as accounting page)
+                const { data: allInvoicesData, error: allInvoicesError } = await supabase.from('invoices').select('*');
+
+                const totalDebts = (allInvoicesData || []).reduce((sum: number, invoice: any) => sum + (invoice.remaining_amount || 0), 0);
 
                 // Process recent payments
                 const recentPayments = (recentPaymentsData || []).map((payment: any) => ({
@@ -616,11 +623,7 @@ const HomePage = () => {
 
     const handleDownloadInvoicePdf = async (invoiceId: string) => {
         try {
-            const { data: inv, error: invErr } = await supabase
-                .from('invoices')
-                .select('id, booking_id, invoice_number')
-                .eq('id', invoiceId)
-                .maybeSingle<any>();
+            const { data: inv, error: invErr } = await supabase.from('invoices').select('id, booking_id, invoice_number').eq('id', invoiceId).maybeSingle<any>();
 
             if (invErr || !inv) throw invErr || new Error('Invoice not found');
             if (!inv.booking_id) {
@@ -1035,9 +1038,7 @@ const HomePage = () => {
                     {/* Total Revenue */}
                     <div className="panel">
                         <div className="flex items-center justify-between dark:text-white-light">
-                            <div className="text-md font-semibold ltr:mr-1 rtl:ml-1">
-                                {role === 'contractor' || role === 'driver' ? (t('your_balance') || 'Your Balance') : t('total_revenue')}
-                            </div>
+                            <div className="text-md font-semibold ltr:mr-1 rtl:ml-1">{role === 'contractor' || role === 'driver' ? t('your_balance') || 'Your Balance' : t('total_revenue')}</div>
                             <div className="dropdown">
                                 <span className={`badge ${stats.revenueGrowth >= 0 ? 'badge-outline-success' : 'badge-outline-danger'}`}>
                                     {stats.revenueGrowth >= 0 ? '+' : ''}
@@ -1256,9 +1257,7 @@ const HomePage = () => {
                                 {t('view_all') || 'View All'}
                             </Link>
                         </div>
-                        <div className="text-3xl font-bold text-warning">
-                            {stats.pendingBookings || 0}
-                        </div>
+                        <div className="text-3xl font-bold text-warning">{stats.pendingBookings || 0}</div>
                         <p className="text-sm text-gray-500 mt-2">{t('awaiting_confirmation') || 'Awaiting confirmation'}</p>
                     </div>
 
@@ -1270,9 +1269,7 @@ const HomePage = () => {
                                 {t('view_all') || 'View All'}
                             </Link>
                         </div>
-                        <div className="text-3xl font-bold text-success">
-                            {stats.confirmedBookings || 0}
-                        </div>
+                        <div className="text-3xl font-bold text-success">{stats.confirmedBookings || 0}</div>
                         <p className="text-sm text-gray-500 mt-2">{t('ready_for_delivery') || 'Ready for delivery'}</p>
                     </div>
 
@@ -1294,9 +1291,7 @@ const HomePage = () => {
                                 {t('view_all') || 'View All'}
                             </Link>
                         </div>
-                        <div className="text-3xl font-bold text-success">
-                            {stats.paidInvoices || 0}
-                        </div>
+                        <div className="text-3xl font-bold text-success">{stats.paidInvoices || 0}</div>
                         <p className="text-sm text-gray-500 mt-2">{t('completed_payments') || 'Completed payments'}</p>
                     </div>
                 </div>
@@ -1337,9 +1332,7 @@ const HomePage = () => {
                                 </table>
                             </div>
                         ) : (
-                            <div className="text-center text-gray-500 py-8">
-                                {t('no_recent_payments') || 'No recent payments'}
-                            </div>
+                            <div className="text-center text-gray-500 py-8">{t('no_recent_payments') || 'No recent payments'}</div>
                         )}
                     </div>
 
@@ -1367,20 +1360,14 @@ const HomePage = () => {
                                             </div>
                                             <div className="text-right">
                                                 <p className="font-bold text-sm">
-                                                    {booking.scheduled_date
-                                                        ? new Date(booking.scheduled_date).toLocaleDateString('en-GB')
-                                                        : new Date(booking.created_at).toLocaleDateString('en-GB')}
+                                                    {booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : new Date(booking.created_at).toLocaleDateString('en-GB')}
                                                 </p>
-                                                <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">
-                                                    {booking.status || 'pending'}
-                                                </span>
+                                                <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">{booking.status || 'pending'}</span>
                                             </div>
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="text-center text-gray-500 py-8">
-                                        {t('no_recent_bookings') || 'No recent bookings'}
-                                    </div>
+                                    <div className="text-center text-gray-500 py-8">{t('no_recent_bookings') || 'No recent bookings'}</div>
                                 )}
                             </div>
                         </div>
@@ -1414,11 +1401,7 @@ const HomePage = () => {
                                                     <td>
                                                         <span
                                                             className={`badge badge-sm ${
-                                                                invoice.status === 'paid'
-                                                                    ? 'badge-outline-success'
-                                                                    : invoice.status === 'overdue'
-                                                                    ? 'badge-outline-danger'
-                                                                    : 'badge-outline-warning'
+                                                                invoice.status === 'paid' ? 'badge-outline-success' : invoice.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'
                                                             }`}
                                                         >
                                                             {invoice.status}
@@ -1426,11 +1409,7 @@ const HomePage = () => {
                                                     </td>
                                                     <td>{invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-GB') : '-'}</td>
                                                     <td>
-                                                        <button
-                                                            onClick={() => handleDownloadInvoicePdf(invoice.id)}
-                                                            className="inline-flex hover:text-primary"
-                                                            title={t('print') || 'Print'}
-                                                        >
+                                                        <button onClick={() => handleDownloadInvoicePdf(invoice.id)} className="inline-flex hover:text-primary" title={t('print') || 'Print'}>
                                                             <IconPdf className="h-5 w-5" />
                                                         </button>
                                                     </td>
@@ -1440,9 +1419,7 @@ const HomePage = () => {
                                     </table>
                                 </div>
                             ) : (
-                                <div className="text-center text-gray-500 py-8">
-                                    {t('no_recent_invoices') || 'No recent invoices'}
-                                </div>
+                                <div className="text-center text-gray-500 py-8">{t('no_recent_invoices') || 'No recent invoices'}</div>
                             )}
                         </div>
                     )}

@@ -416,7 +416,7 @@ const AccountingPage = () => {
     // Pending revenue: start with invoice-based pending amount
     // plus any bookings in 'pending' status that don't have an invoice yet (use booking.price if available)
     const bookingPendingFromNoInvoice = bookings
-        .filter((b) => String(b.status || '').toLowerCase() === 'pending')
+        .filter((b) => String(b.status || '').toLowerCase() === 'request')
         .filter((b) => !invoices.find((inv) => inv.booking_id === b.id))
         .reduce((sum, b) => sum + (Number((b as any).price) || 0), 0);
 
@@ -439,7 +439,7 @@ const AccountingPage = () => {
                         <IconTrendingUp className="h-8 w-8 text-success" />
                     </div>
                     <div className="text-4xl font-bold text-success">₪{totalRevenue.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500 mt-2">Receipts minus Invoice DEAL</div>
+                    <div className="text-xs text-gray-500 mt-2">Receipts</div>
                 </div>
                 <div className="panel">
                     <div className="flex items-center justify-between mb-3">

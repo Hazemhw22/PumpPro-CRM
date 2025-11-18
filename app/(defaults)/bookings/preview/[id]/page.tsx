@@ -508,8 +508,11 @@ const BookingPreview = () => {
         if (!selectedStatus || selectedStatus === booking.status) return;
 
         try {
+            // Map legacy/ui-only status values to DB enum values
+            const statusToSave = selectedStatus === 'pending' ? 'request' : selectedStatus;
+
             // Update booking status
-            const { error: updateError } = await (supabase.from('bookings').update as any)({ status: selectedStatus }).eq('id', booking.id);
+            const { error: updateError } = await (supabase.from('bookings').update as any)({ status: statusToSave }).eq('id', booking.id);
 
             if (updateError) throw updateError;
 
@@ -520,7 +523,7 @@ const BookingPreview = () => {
                     {
                         booking_id: booking.id,
                         old_status: booking.status,
-                        new_status: selectedStatus,
+                        new_status: statusToSave,
                         created_at: new Date().toISOString(),
                     },
                 ] as any)
