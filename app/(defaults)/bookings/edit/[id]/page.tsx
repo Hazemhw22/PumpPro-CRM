@@ -65,12 +65,14 @@ interface Booking {
     service_address: string;
     scheduled_date: string;
     scheduled_time: string;
-    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'awaiting_execution';
     service_type: string;
     price?: number;
     profit?: number;
     truck_id?: string;
     driver_id?: string;
+    contractor_price?: number | null;
+    contractor_name?: string | null;
     notes?: string;
 }
 
@@ -155,6 +157,7 @@ const EditBooking = () => {
                 if (data) {
                     const bookingData = data as any;
                     setBooking(bookingData);
+                    setAssignMode(bookingData.contractor_id ? 'contractor' : 'driver');
                     setForm({
                         customer_type: bookingData.customer_type || 'private',
                         customer_id: bookingData.customer_id || '',
@@ -173,6 +176,11 @@ const EditBooking = () => {
                         driver_id: bookingData.driver_id || '',
                         notes: bookingData.notes || '',
                     });
+                    setContractorPrice(
+                        typeof bookingData.contractor_price === 'number' && !Number.isNaN(bookingData.contractor_price)
+                            ? String(bookingData.contractor_price)
+                            : '',
+                    );
                     // Load contractor if assigned
                     if (bookingData.contractor_id) {
                         try {
@@ -363,6 +371,11 @@ const EditBooking = () => {
 
         if (!validateForm()) return;
 
+        if (selectedContractor && (!contractorPrice || Number(contractorPrice) <= 0)) {
+            addAlert('danger', 'Contractor price must be a positive number', 'Error');
+            return;
+        }
+
         setSaving(true);
         try {
             const bookingData = {
@@ -376,6 +389,8 @@ const EditBooking = () => {
                 status: form.status,
                 service_type: form.service_type.trim(),
                 contractor_id: selectedContractor ? selectedContractor.id : null,
+                contractor_name: selectedContractor ? selectedContractor.name : null,
+                contractor_price: selectedContractor ? Number(contractorPrice) : null,
                 // Remove contractor_price from notes; we record it on the contractor's balance instead.
                 notes: (form.notes || '' || '').replace(/\n?contractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,
             };
@@ -428,14 +443,7 @@ const EditBooking = () => {
             // Handle contractor balance adjustments when contractorPrice changed or contractor reassigned.
             try {
                 const newCp = parseFloat(contractorPrice || '') || 0;
-                // Parse old contractor_price from previous booking.notes if present
-                let oldCp = 0;
-                try {
-                    const m = booking?.notes ? /contractor_price:([0-9]+(?:\.[0-9]+)?)/.exec(booking.notes) : null;
-                    oldCp = m ? parseFloat(m[1]) : 0;
-                } catch (e) {
-                    oldCp = 0;
-                }
+                const oldCp = Number(booking?.contractor_price || 0);
 
                 const prevContractorId = (booking as any)?.contractor_id || null;
                 const newContractorId = selectedContractor ? selectedContractor.id : null;
@@ -445,8 +453,8 @@ const EditBooking = () => {
                     try {
                         const { data: prevContr, error: prevErr } = await supabase.from('contractors').select('balance').eq('id', prevContractorId).maybeSingle();
                         const prevBalance = (prevContr && (prevContr as any).balance) || 0;
-                        const { error: revertErr } = await supabase
-                            .from('contractors')
+                        const { error: revertErr } = await (supabase
+                            .from('contractors') as any)
                             .update({ balance: prevBalance + oldCp, updated_at: new Date().toISOString() })
                             .eq('id', prevContractorId);
                         if (revertErr) console.warn('Failed to revert previous contractor balance', revertErr);
@@ -464,7 +472,10 @@ const EditBooking = () => {
                         // If same contractor, apply delta (new - old), otherwise subtract full newCp
                         const delta = prevContractorId === newContractorId ? newCp - oldCp : newCp;
                         const newBalance = (currentBalance || 0) - delta;
-                        const { error: updateErr } = await supabase.from('contractors').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', newContractorId);
+                        const { error: updateErr } = await (supabase
+                            .from('contractors') as any)
+                            .update({ balance: newBalance, updated_at: new Date().toISOString() })
+                            .eq('id', newContractorId);
                         if (updateErr) console.warn('Failed to update contractor balance', updateErr);
                         else addAlert('success', `Recorded contractor adjustment ₪${delta.toFixed(2)} for contractor`, 'Success');
                     } catch (e) {
@@ -795,7 +806,8 @@ const EditBooking = () => {
                                                     setAssignMode(val);
                                                     if (val === 'contractor') {
                                                         setSelectedDriver(null);
-                                                        setForm((prev) => ({ ...prev, driver_id: '' }));
+                                                        setSelectedTruck(null);
+                                                        setForm((prev) => ({ ...prev, driver_id: '', truck_id: '' }));
                                                     } else if (val === 'driver') {
                                                         setSelectedContractor(null);
                                                         setContractorPrice('');
@@ -805,30 +817,32 @@ const EditBooking = () => {
                                             />
                                         </div>
                                         {/* Assign Truck (Always visible) */}
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('assign_truck') || 'Assign Truck'}</label>
-                                            <TruckSelect
-                                                selectedTruck={selectedTruck}
-                                                onTruckSelect={(truck) => {
-                                                    setSelectedTruck(truck);
-                                                    if (truck) {
-                                                        setForm((prev) => ({
-                                                            ...prev,
-                                                            truck_id: (truck as any).id,
-                                                            driver_id: assignMode === 'driver' && (truck as any).driver_id ? (truck as any).driver_id : prev.driver_id,
-                                                        }));
-                                                        if (assignMode === 'driver' && (truck as any).driver_id) {
-                                                            const driver = drivers.find((d) => d.id === (truck as any).driver_id);
-                                                            if (driver) setSelectedDriver(driver);
+                                        {assignMode === 'driver' && (
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('assign_truck') || 'Assign Truck'}</label>
+                                                <TruckSelect
+                                                    selectedTruck={selectedTruck}
+                                                    onTruckSelect={(truck) => {
+                                                        setSelectedTruck(truck);
+                                                        if (truck) {
+                                                            setForm((prev) => ({
+                                                                ...prev,
+                                                                truck_id: (truck as any).id,
+                                                                driver_id: assignMode === 'driver' && (truck as any).driver_id ? (truck as any).driver_id : prev.driver_id,
+                                                            }));
+                                                            if (assignMode === 'driver' && (truck as any).driver_id) {
+                                                                const driver = drivers.find((d) => d.id === (truck as any).driver_id);
+                                                                if (driver) setSelectedDriver(driver);
+                                                            }
+                                                        } else {
+                                                            setForm((prev) => ({ ...prev, truck_id: '' }));
                                                         }
-                                                    } else {
-                                                        setForm((prev) => ({ ...prev, truck_id: '' }));
-                                                    }
-                                                }}
-                                                onCreateNew={() => router.push('/fleet/add')}
-                                                className="form-select"
-                                            />
-                                        </div>
+                                                    }}
+                                                    onCreateNew={() => router.push('/fleet/add')}
+                                                    className="form-select"
+                                                />
+                                            </div>
+                                        )}
                                         {/* Driver Assignment */}
                                         {assignMode === 'driver' && (
                                             <div>
@@ -861,6 +875,9 @@ const EditBooking = () => {
                                                     selectedContractor={selectedContractor as any}
                                                     onContractorSelect={(c) => {
                                                         setSelectedContractor(c);
+                                                        if (!c) {
+                                                            setContractorPrice('');
+                                                        }
                                                     }}
                                                     onCreateNew={() => router.push('/contractors/add')}
                                                     className="form-select"

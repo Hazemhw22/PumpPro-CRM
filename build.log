@@ -1,0 +1,77 @@
+
+> pump-pro@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.13
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/33) ...
+   Generating static pages (8/33) 
+   Generating static pages (16/33) 
+   Generating static pages (24/33) 
+ ✓ Generating static pages (33/33)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    940 B           138 kB
+├ ƒ /_not-found                          153 B          87.7 kB
+├ ƒ /accounting                          5.83 kB         150 kB
+├ ƒ /api/bookings/assign-contractor      0 B                0 B
+├ ƒ /api/generate-contract-pdf           0 B                0 B
+├ ƒ /api/invoice-deals/create            0 B                0 B
+├ ƒ /api/users/create                    0 B                0 B
+├ ƒ /api/users/delete                    0 B                0 B
+├ ƒ /api/users/update-password           0 B                0 B
+├ ƒ /bookings                            7.42 kB         229 kB
+├ ƒ /bookings/add                        7.1 kB          199 kB
+├ ƒ /bookings/edit/[id]                  7.45 kB         217 kB
+├ ƒ /bookings/preview/[id]               13.3 kB         226 kB
+├ ƒ /contractors                         5.46 kB         222 kB
+├ ƒ /contractors/add                     6.42 kB         196 kB
+├ ƒ /contractors/edit/[id]               5.94 kB         208 kB
+├ ƒ /contractors/preview/[id]            8.96 kB         211 kB
+├ ƒ /customers                           4.65 kB         222 kB
+├ ƒ /customers/add                       4.87 kB         194 kB
+├ ƒ /customers/edit/[id]                 5.92 kB         208 kB
+├ ƒ /customers/preview/[id]              9.16 kB         216 kB
+├ ƒ /dashboard                           10.5 kB         203 kB
+├ ƒ /drivers                             7.66 kB         204 kB
+├ ƒ /drivers/add                         6 kB            200 kB
+├ ƒ /drivers/edit/[id]                   5.67 kB         208 kB
+├ ƒ /drivers/preview/[id]                4.75 kB         207 kB
+├ ƒ /fleet                               8.78 kB         205 kB
+├ ƒ /fleet/add                           5.37 kB         198 kB
+├ ƒ /fleet/edit/[id]                     5.38 kB         210 kB
+├ ƒ /fleet/preview/[id]                  4.31 kB         206 kB
+├ ○ /icon.png                            0 B                0 B
+├ ƒ /invoices                            4.4 kB          153 kB
+├ ƒ /invoices/add                        10.1 kB         206 kB
+├ ƒ /invoices/edit/[id]                  2.7 kB          198 kB
+├ ƒ /invoices/preview/[id]               6.45 kB         200 kB
+├ ƒ /login                               5.08 kB         212 kB
+├ ƒ /payments                            6.25 kB         195 kB
+├ ƒ /payments/add                        5.86 kB         195 kB
+├ ƒ /services                            7.35 kB         204 kB
+├ ƒ /services/add                        4.49 kB         194 kB
+├ ƒ /services/edit/[id]                  5.49 kB         207 kB
+├ ƒ /services/preview/[id]               4.47 kB         194 kB
+├ ƒ /settings                            44.7 kB         227 kB
+├ ƒ /users                               4.04 kB         221 kB
+├ ƒ /users/add                           5.07 kB         145 kB
+├ ƒ /users/edit/[id]                     6.32 kB         208 kB
+└ ƒ /users/preview/[id]                  5.65 kB         195 kB
++ First Load JS shared by all            87.5 kB
+  ├ chunks/7023-ce43ed0cb957275b.js      31.7 kB
+  ├ chunks/fd9d1056-c5a4be7ddb0185c0.js  53.6 kB
+  └ other shared chunks (total)          2.13 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

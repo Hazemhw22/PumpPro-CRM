@@ -14,7 +14,7 @@ export type TruckStatus = 'available' | 'in_use' | 'maintenance' | 'out_of_servi
 
 export type CustomerType = 'private' | 'business';
 
-export type BookingStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'awaiting_execution';
 
 export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'cancelled';
 
@@ -257,6 +257,47 @@ export interface Database {
                     updated_at?: string;
                 };
             };
+            contractor_payments: {
+                Row: {
+                    id: string;
+                    contractor_id: string;
+                    booking_id: string | null;
+                    amount: number;
+                    payment_method: string;
+                    payment_date: string;
+                    reference_number: string | null;
+                    notes: string | null;
+                    created_by: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    contractor_id: string;
+                    booking_id?: string | null;
+                    amount: number;
+                    payment_method: string;
+                    payment_date?: string;
+                    reference_number?: string | null;
+                    notes?: string | null;
+                    created_by?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    contractor_id?: string;
+                    booking_id?: string | null;
+                    amount?: number;
+                    payment_method?: string;
+                    payment_date?: string;
+                    reference_number?: string | null;
+                    notes?: string | null;
+                    created_by?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
             services: {
                 Row: {
                     id: string;
@@ -310,6 +351,8 @@ export interface Database {
                     created_by: string | null;
                     created_at: string;
                     updated_at: string;
+                    contractor_name: string | null;
+                    contractor_price: number | null;
                 };
                 Insert: {
                     id?: string;
@@ -331,6 +374,8 @@ export interface Database {
                     created_by?: string | null;
                     created_at?: string;
                     updated_at?: string;
+                    contractor_name?: string | null;
+                    contractor_price?: number | null;
                 };
                 Update: {
                     id?: string;
@@ -352,6 +397,8 @@ export interface Database {
                     created_by?: string | null;
                     created_at?: string;
                     updated_at?: string;
+                    contractor_name?: string | null;
+                    contractor_price?: number | null;
                 };
             };
             invoices: {

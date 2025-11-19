@@ -48,6 +48,8 @@ interface Booking {
     driver?: { name?: string };
     contractor_id?: string | null;
     contractor?: { id?: string; name?: string } | null;
+    contractor_price?: number | null;
+    contractor_name?: string | null;
     notes?: string;
 }
 
@@ -61,6 +63,8 @@ interface Invoice {
     status: string;
     due_date: string;
     created_at: string;
+    customer_name?: string | null;
+    subtotal_amount?: number | null;
 }
 
 interface InvoiceDeal {
@@ -73,6 +77,7 @@ interface InvoiceDeal {
     status: string;
     pdf_url?: string | null;
     created_at: string;
+    metadata?: any;
 }
 
 interface Payment {
@@ -84,6 +89,11 @@ interface Payment {
     transaction_id?: string;
     notes?: string;
     payment_date: string;
+    invoices?: {
+        customers?: {
+            name?: string | null;
+        } | null;
+    } | null;
 }
 
 interface BookingTrack {
@@ -95,6 +105,11 @@ interface BookingTrack {
     created_at?: string;
 }
 
+type ContractorOption = {
+    id: string;
+    name?: string | null;
+};
+
 const BookingPreview = () => {
     const { t } = getTranslation();
     const params = useParams();
@@ -105,11 +120,11 @@ const BookingPreview = () => {
     const [payments, setPayments] = useState<Payment[]>([]);
     const [bookingServices, setBookingServices] = useState<{ name: string; quantity: number; unit_price: number; total: number }[]>([]);
     const [bookingTracks, setBookingTracks] = useState<BookingTrack[]>([]);
-    const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
+    const [selectedContractor, setSelectedContractor] = useState<ContractorOption | null>(null);
     const [assignMode, setAssignMode] = useState<'driver' | 'contractor'>('driver');
     const [selectedTruckAssign, setSelectedTruckAssign] = useState<{ id: string; truck_number?: string } | null>(null);
     const [selectedDriverAssign, setSelectedDriverAssign] = useState<{ id: string; name?: string } | null>(null);
-    const [selectedContractorAssign, setSelectedContractorAssign] = useState<{ id: string; name?: string } | null>(null);
+    const [selectedContractorAssign, setSelectedContractorAssign] = useState<ContractorOption | null>(null);
     const [role, setRole] = useState<string | null>(null);
     const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
     const [currentContractorId, setCurrentContractorId] = useState<string | null>(null);
@@ -118,6 +133,8 @@ const BookingPreview = () => {
     const [creatingInvoiceDeal, setCreatingInvoiceDeal] = useState(false);
     const [generatingConfirmation, setGeneratingConfirmation] = useState<string | null>(null);
     const [contractorPaid, setContractorPaid] = useState<number>(0);
+    const [contractorPriceAssign, setContractorPriceAssign] = useState<string>('');
+    const [assigningContractor, setAssigningContractor] = useState(false);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' }>({
         visible: false,
         message: '',
@@ -130,6 +147,9 @@ const BookingPreview = () => {
         transaction_id: '',
         notes: '',
     });
+
+    const wantsContractorAssignment = assignMode === 'contractor' && Boolean(selectedContractorAssign);
+    const contractorPriceInvalid = wantsContractorAssignment && (!contractorPriceAssign || Number(contractorPriceAssign) <= 0);
 
     // determine current user's role and linked driver/contractor id so we can
     // show Confirm only to the assigned driver/contractor (admin shouldn't confirm)
@@ -301,6 +321,8 @@ const BookingPreview = () => {
 
                 setBooking(enrichedBooking as any);
                 setSelectedContractor(enrichedBooking.contractor || null);
+                setSelectedContractorAssign(enrichedBooking.contractor || null);
+                setContractorPriceAssign(typeof enrichedBooking.contractor_price === 'number' && !Number.isNaN(enrichedBooking.contractor_price) ? String(enrichedBooking.contractor_price) : '');
                 // contractor_price is no longer stored inside booking notes.
                 // The contractor's owed amount is reflected on the contractor's `balance`.
                 // For now clear any transient contractorPaid value here.
@@ -376,7 +398,7 @@ const BookingPreview = () => {
 
             setAlert({ visible: true, message: 'Invoice DEAL created successfully', type: 'success' });
             setInvoices((prev) => (newInvoice ? [newInvoice as any, ...prev] : prev));
-            router.push('/');
+            router.push('/app/(defaults)/bookings/preview/' + booking.id + '?tab=accounting');
         } catch (err) {
             console.error('Error creating invoice:', err);
             setAlert({ visible: true, message: 'Error creating Invoice DEAL', type: 'danger' });
@@ -530,6 +552,11 @@ const BookingPreview = () => {
         }
     }, [booking?.price]);
 
+    useEffect(() => {
+        if (!booking) return;
+        setContractorPriceAssign(typeof booking.contractor_price === 'number' && !Number.isNaN(booking.contractor_price) ? String(booking.contractor_price) : '');
+    }, [booking]);
+
     // selected status for editing
     const [selectedStatus, setSelectedStatus] = useState<string>('');
 
@@ -596,28 +623,74 @@ const BookingPreview = () => {
         }
     };
 
-    const handleContractorAssign = async (contractor: { id: string; name: string } | null) => {
+    const handleContractorAssign = async (contractor: ContractorOption | null) => {
         if (!booking) return;
-        setSelectedContractor(contractor);
-        try {
-            if (contractor) {
-                // persist contractor_id on booking
-                // @ts-ignore - supabase typing
-                const { error } = await supabase.from('bookings').update({ contractor_id: contractor.id }).eq('id', booking.id);
+
+        if (!contractor) {
+            try {
+                setAssigningContractor(true);
+                const { error } = await (supabase.from('bookings') as any).update({ contractor_id: null, contractor_name: null, contractor_price: null }).eq('id', booking.id);
                 if (error) throw error;
-                setBooking((prev) => (prev ? ({ ...prev, contractor_id: contractor.id, contractor: { id: contractor.id, name: contractor.name } } as any) : prev));
-                setAlert({ visible: true, message: 'Contractor assigned', type: 'success' });
-            } else {
-                // remove contractor
-                // @ts-ignore
-                const { error } = await supabase.from('bookings').update({ contractor_id: null }).eq('id', booking.id);
-                if (error) throw error;
-                setBooking((prev) => (prev ? ({ ...prev, contractor_id: null, contractor: null } as any) : prev));
+                setBooking((prev) => (prev ? ({ ...prev, contractor_id: null, contractor: null, contractor_price: null } as any) : prev));
+                setSelectedContractor(null);
+                setSelectedContractorAssign(null);
+                setContractorPriceAssign('');
                 setAlert({ visible: true, message: 'Contractor removed', type: 'success' });
+            } catch (err) {
+                console.error('Error removing contractor:', err);
+                setAlert({ visible: true, message: 'Could not remove contractor', type: 'danger' });
+            } finally {
+                setAssigningContractor(false);
             }
+            return;
+        }
+
+        const parsedPrice = Number(contractorPriceAssign);
+        if (!parsedPrice || parsedPrice <= 0) {
+            setAlert({ visible: true, message: 'Contractor price must be a positive number', type: 'danger' });
+            return;
+        }
+
+        try {
+            setAssigningContractor(true);
+            const res = await fetch('/api/bookings/assign-contractor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId: booking.id, contractorId: contractor.id, contractorPrice: parsedPrice }),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(payload?.message || 'Failed to assign contractor');
+            }
+
+            const updatedBooking = payload?.booking;
+            const updatedContractor = payload?.contractor;
+            const contractorName = updatedBooking?.contractor_name || contractor.name || updatedContractor?.name || '';
+
+            setBooking((prev) =>
+                prev
+                    ? ({
+                          ...prev,
+                          contractor_id: updatedBooking?.contractor_id,
+                          contractor: { id: contractor.id, name: contractorName },
+                          status: updatedBooking?.status || prev.status,
+                          contractor_price: updatedBooking?.contractor_price ?? parsedPrice,
+                      } as any)
+                    : prev,
+            );
+            setSelectedContractor({ id: contractor.id, name: contractorName });
+            setSelectedContractorAssign({ id: contractor.id, name: contractorName });
+            setContractorPriceAssign(typeof updatedBooking?.contractor_price === 'number' ? String(updatedBooking.contractor_price) : String(parsedPrice));
+            setAlert({
+                visible: true,
+                message: 'Contractor assigned and booking moved to Awaiting Execution',
+                type: 'success',
+            });
         } catch (err) {
             console.error('Error assigning contractor:', err);
-            setAlert({ visible: true, message: 'Could not assign contractor', type: 'danger' });
+            setAlert({ visible: true, message: (err as Error).message || 'Could not assign contractor', type: 'danger' });
+        } finally {
+            setAssigningContractor(false);
         }
     };
 
@@ -699,8 +772,7 @@ const BookingPreview = () => {
 
         const basePrice = currentBooking.price || 0;
         const subtotalAmount = basePrice;
-        const taxAmount = +(subtotalAmount * 0.18);
-        const totalWithTax = subtotalAmount + taxAmount;
+        const totalWithTax = subtotalAmount;
 
         const today = new Date();
         const invoiceDate = today.toISOString().split('T')[0];
@@ -723,7 +795,6 @@ const BookingPreview = () => {
             customer_phone: currentBooking.customer_phone,
             service_name: (currentBooking as any).service_name || currentBooking.service_type,
             service_description: null,
-            tax_amount: taxAmount,
             subtotal_amount: subtotalAmount,
             notes: currentBooking.notes || null,
             commission: currentBooking.profit ?? null,
@@ -738,7 +809,7 @@ const BookingPreview = () => {
         try {
             // Update status to confirmed
             // @ts-ignore
-            const { error: updateError } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', booking.id);
+            const { error: updateError } = await (supabase.from('bookings') as any).update({ status: 'confirmed' }).eq('id', booking.id);
             if (updateError) throw updateError;
 
             // Insert booking track
@@ -757,6 +828,49 @@ const BookingPreview = () => {
                 .maybeSingle();
 
             if (insertTrackError) console.error('Could not insert booking track:', insertTrackError);
+
+            // Generate Confirmation PDF (NO prices) when contractor confirms
+            try {
+                const confirmationData: any = {
+                    invoice: { id: booking.id, invoice_number: booking.booking_number, total_amount: booking.price },
+                    booking: booking,
+                    booking_services: bookingServices || [],
+                    services: bookingServices || [],
+                    contractor: (booking as any).contractor || null,
+                    driver: (booking as any).driver || null,
+                    customer: {
+                        name: booking.customer_name,
+                        phone: booking.customer_phone,
+                        address: booking.service_address,
+                        business_name: booking.customer_name,
+                    },
+                    service: { name: (booking as any).service_name || booking.service_type },
+                    lang: 'en',
+                    no_price: true, // CONFIRMATION hides prices
+                    companyInfo: { logo_url: '/assets/images/pdf-logo.png' },
+                };
+
+                await InvoiceDealPDFGenerator.generatePDF(confirmationData, `confirmation-${booking.booking_number || booking.id}.pdf`, 'invoice');
+
+                // Insert Confirmation record into invoice_deals table
+                const confirmationRecord = {
+                    invoice_number: `CONF-${booking.booking_number}`,
+                    booking_id: booking.id,
+                    total_amount: 0,
+                    paid_amount: 0,
+                    remaining_amount: 0,
+                    status: 'generated',
+                    pdf_url: `/api/bookings/${booking.id}/download?type=confirmation`,
+                    type: 'confirmation',
+                    created_at: new Date().toISOString(),
+                };
+
+                // @ts-ignore
+                const { error: insertConfError } = await supabase.from('invoice_deals').insert([confirmationRecord]);
+                if (insertConfError) console.warn('Could not insert confirmation record:', insertConfError);
+            } catch (e) {
+                console.warn('Error generating confirmation PDF on confirm:', e);
+            }
 
             // Create or enrich invoice with full details for this booking
             // @ts-ignore
@@ -819,7 +933,6 @@ const BookingPreview = () => {
                     customer_phone: invoiceData.customer_phone,
                     service_name: invoiceData.service_name,
                     service_description: invoiceData.service_description,
-                    tax_amount: invoiceData.tax_amount,
                     subtotal_amount: invoiceData.subtotal_amount,
                     notes: invoiceData.notes,
                     commission: invoiceData.commission,
@@ -846,7 +959,16 @@ const BookingPreview = () => {
 
             setBooking((prev) => (prev ? ({ ...prev, status: 'confirmed' } as any) : prev));
             await fetchBookingTracks();
-            setAlert({ visible: true, message: 'Booking confirmed', type: 'success' });
+            setAlert({ visible: true, message: 'Booking confirmed and PDFs generated', type: 'success' });
+
+            // Refresh invoice deals to show new records
+            try {
+                const { data: updatedDeals } = await supabase.from('invoice_deals').select('*').eq('booking_id', booking.id).order('created_at', { ascending: false });
+                if (updatedDeals) setInvoiceDeals(updatedDeals as any);
+            } catch (e) {
+                console.warn('Could not refresh invoice deals:', e);
+            }
+
             // redirect assigned contractor/driver to accounting
             if ((role === 'driver' && booking.driver_id === currentDriverId) || (role === 'contractor' && booking.contractor_id === currentContractorId)) {
                 router.push('/accounting');
@@ -991,7 +1113,22 @@ const BookingPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
                                 >
                                     <div className="flex items-center justify-center space-x-2">
-                                        <IconClipboardText className="w-5 h-5" />
+                                        <IconPdf className="w-5 h-5" />
+                                        <span className="text-sm font-medium">Confirmation</span>
+                                    </div>
+                                </button>
+                            )}
+                        </Tab>
+                       
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b-2 border-transparent p-4 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[2px] before:w-0 before:bg-primary before:transition-all before:duration-300 hover:text-primary hover:before:w-full h-16`}
+                                >
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <IconCalendar className="w-5 h-5" />
                                         <span className="text-sm font-medium">History</span>
                                     </div>
                                 </button>
@@ -1171,33 +1308,51 @@ const BookingPreview = () => {
                                                         </div>
                                                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                             <span className="text-sm text-gray-600">Contractor:</span>
-                                                            <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                            <span className="font-medium">
+                                                                {booking.contractor?.name || 'Not Assigned'}
+                                                                {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
+                                                            </span>
                                                         </div>
                                                     </>
                                                 ) : (
                                                     <div className="space-y-3">
                                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                                <label className="block text-sm text-gray-600 mb-2 font-medium">Truck</label>
-                                                                <TruckSelect
-                                                                    selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
-                                                                    onTruckSelect={(t) => setSelectedTruckAssign(t as any)}
-                                                                    onCreateNew={() => router.push('/fleet/add')}
-                                                                    className="w-full"
-                                                                />
-                                                                <div className="mt-2 text-sm text-gray-500">
-                                                                    <div>
-                                                                        Current: <span className="font-medium text-black dark:text-white">{booking.truck?.truck_number || 'Not Assigned'}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        Selected: <span className="font-medium">{selectedTruckAssign?.truck_number || '—'}</span>
+                                                            {assignMode === 'driver' && (
+                                                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                    <label className="block text-sm text-gray-600 mb-2 font-medium">Truck</label>
+                                                                    <TruckSelect
+                                                                        selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
+                                                                        onTruckSelect={(t) => setSelectedTruckAssign(t as any)}
+                                                                        onCreateNew={() => router.push('/fleet/add')}
+                                                                        className="w-full"
+                                                                    />
+                                                                    <div className="mt-2 text-sm text-gray-500">
+                                                                        <div>
+                                                                            Current: <span className="font-medium text-black dark:text-white">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            Selected: <span className="font-medium">{selectedTruckAssign?.truck_number || '—'}</span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
+                                                            )}
 
                                                             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                                 <label className="block text-sm text-gray-600 mb-2 font-medium">Assign Mode</label>
-                                                                <AssignmentModeSelectAdd value={assignMode} onChange={(v) => setAssignMode(v)} className="w-full" />
+                                                                <AssignmentModeSelectAdd
+                                                                    value={assignMode}
+                                                                    onChange={(v) => {
+                                                                        setAssignMode(v);
+                                                                        if (v === 'driver') {
+                                                                            setSelectedContractorAssign(null);
+                                                                            setContractorPriceAssign('');
+                                                                        } else {
+                                                                            setSelectedDriverAssign(null);
+                                                                            setSelectedTruckAssign(null);
+                                                                        }
+                                                                    }}
+                                                                    className="w-full"
+                                                                />
 
                                                                 {assignMode === 'driver' && (
                                                                     <div className="mt-4">
@@ -1216,10 +1371,33 @@ const BookingPreview = () => {
                                                                         <label className="block text-sm text-gray-600 mb-2">Contractor</label>
                                                                         <ContractorSelect
                                                                             selectedContractor={selectedContractorAssign as any}
-                                                                            onContractorSelect={(c) => setSelectedContractorAssign(c as any)}
+                                                                            onContractorSelect={(c) => {
+                                                                                setSelectedContractorAssign(c as any);
+                                                                                if (c && booking?.contractor_id === (c as any).id && booking.contractor_price) {
+                                                                                    setContractorPriceAssign(String(booking.contractor_price));
+                                                                                } else {
+                                                                                    setContractorPriceAssign('');
+                                                                                }
+                                                                            }}
                                                                             onCreateNew={() => router.push('/contractors/add')}
                                                                             className="w-full"
                                                                         />
+                                                                        {selectedContractorAssign && (
+                                                                            <div className="mt-3">
+                                                                                <label className="block text-sm text-gray-600 mb-2">Contractor Price</label>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    min={0}
+                                                                                    className="form-input"
+                                                                                    value={contractorPriceAssign}
+                                                                                    onChange={(e) => setContractorPriceAssign(e.target.value)}
+                                                                                    placeholder="Enter contractor price"
+                                                                                />
+                                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                                    This amount will be saved to the booking and deducted from the contractor balance.
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 )}
 
@@ -1236,6 +1414,7 @@ const BookingPreview = () => {
                                                                             setSelectedContractorAssign(
                                                                                 booking.contractor_id ? { id: booking.contractor_id as string, name: booking.contractor?.name } : null,
                                                                             );
+                                                                            setContractorPriceAssign(typeof booking.contractor_price === 'number' ? String(booking.contractor_price) : '');
                                                                         }}
                                                                     >
                                                                         Reset
@@ -1246,7 +1425,9 @@ const BookingPreview = () => {
                                                                         className="btn btn-primary"
                                                                         onClick={async () => {
                                                                             try {
-                                                                                if (selectedTruckAssign) await handleTruckAssign(selectedTruckAssign as any);
+                                                                                if (assignMode === 'driver' && selectedTruckAssign) {
+                                                                                    await handleTruckAssign(selectedTruckAssign as any);
+                                                                                }
                                                                                 if (assignMode === 'driver' && selectedDriverAssign) {
                                                                                     await handleDriverAssign(
                                                                                         selectedDriverAssign as any,
@@ -1254,7 +1435,14 @@ const BookingPreview = () => {
                                                                                     );
                                                                                 }
                                                                                 if (assignMode === 'contractor' && selectedContractorAssign) {
-                                                                                    if (selectedTruckAssign) await handleTruckAssign(selectedTruckAssign as any);
+                                                                                    if (contractorPriceInvalid) {
+                                                                                        setAlert({
+                                                                                            visible: true,
+                                                                                            message: 'Enter a positive contractor price before assigning.',
+                                                                                            type: 'danger',
+                                                                                        });
+                                                                                        return;
+                                                                                    }
                                                                                     await handleContractorAssign(selectedContractorAssign as any);
                                                                                 }
                                                                             } catch (e) {
@@ -1263,10 +1451,13 @@ const BookingPreview = () => {
                                                                             }
                                                                         }}
                                                                         disabled={
-                                                                            assignMode === 'driver' ? !selectedDriverAssign && !selectedTruckAssign : !selectedContractorAssign && !selectedTruckAssign
+                                                                            assigningContractor ||
+                                                                            (assignMode === 'driver'
+                                                                                ? !selectedDriverAssign && !selectedTruckAssign
+                                                                                : !selectedContractorAssign || contractorPriceInvalid)
                                                                         }
                                                                     >
-                                                                        Apply Assignment
+                                                                        {assigningContractor ? 'Assigning...' : 'Apply Assignment'}
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -1298,7 +1489,10 @@ const BookingPreview = () => {
                                                     </div>
                                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                                         <span className="text-sm text-gray-600">Contractor:</span>
-                                                        <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                        <span className="font-medium">
+                                                            {booking.contractor?.name || 'Not Assigned'}
+                                                            {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
+                                                        </span>
                                                     </div>
                                                 </>
                                             )}
@@ -1399,18 +1593,22 @@ const BookingPreview = () => {
                                 );
                             })()}
 
-                            {/* Recent Transactions (Invoices & Payments) */}
+                            {/* Recent Transactions (Invoices, Payments, Invoice Deals & Confirmations) */}
                             <div className="panel mt-6">
-                                <div className="mb-5">
+                                <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Recent Transactions</h3>
+                                    {role === 'admin' && booking.status !== 'confirmed' && (
+                                        <button onClick={handleCreateInvoiceDeal} disabled={creatingInvoiceDeal} className="btn btn-primary btn-sm">
+                                            {creatingInvoiceDeal ? 'Creating...' : 'Create Invoice Deal'}
+                                        </button>
+                                    )}
                                 </div>
-                                {(invoices && invoices.length > 0) || (payments && payments.length > 0) ? (
+                                {(invoices && invoices.length > 0) || (payments && payments.length > 0) || (invoiceDeals && invoiceDeals.length > 0) ? (
                                     <div className="table-responsive">
                                         <table className="table-bordered">
                                             <thead>
                                                 <tr>
                                                     <th>Reference</th>
-                                                    <th>Customer</th>
                                                     <th>Type</th>
                                                     <th>Amount</th>
                                                     <th>Status</th>
@@ -1424,36 +1622,68 @@ const BookingPreview = () => {
                                                         id: inv.id,
                                                         date: inv.created_at,
                                                         type: 'Invoice',
-                                                        customer: inv.customer_name || booking.customer_name || 'N/A',
                                                         reference: `#${inv.invoice_number}`,
                                                         amount: inv.subtotal_amount || inv.total_amount,
                                                         status: inv.status,
                                                         isInvoice: true,
+                                                        isInvoiceDeal: false,
+                                                        isConfirmation: false,
+                                                        dealType: null,
+                                                        pdf_url: undefined as any,
                                                     })),
                                                     ...payments.slice(0, 5).map((pay) => ({
                                                         id: pay.id,
                                                         date: pay.payment_date,
                                                         type: 'Payment',
-                                                        customer: pay.invoices?.customers?.name || booking.customer_name || 'N/A',
                                                         reference: `${(pay.payment_method || '').replace('_', ' ')}${pay.transaction_id ? ' • ' + pay.transaction_id : ''}`,
                                                         amount: pay.amount,
                                                         status: 'completed',
                                                         isInvoice: false,
+                                                        isInvoiceDeal: false,
+                                                        isConfirmation: false,
+                                                        dealType: null,
+                                                        pdf_url: undefined as any,
+                                                    })),
+                                                    ...invoiceDeals.slice(0, 5).map((deal) => ({
+                                                        id: deal.id,
+                                                        date: deal.created_at,
+                                                        type: (deal as any).type === 'invoice_deal' ? 'Invoice Deal' : 'Confirmation',
+                                                        reference: `#${deal.invoice_number}`,
+                                                        amount: (deal as any).type === 'invoice_deal' ? deal.total_amount || 0 : 0, // Confirmation shows 0
+                                                        status: deal.status || 'generated',
+                                                        isInvoice: false,
+                                                        isInvoiceDeal: true,
+                                                        isConfirmation: (deal as any).type === 'confirmation',
+                                                        dealType: (deal as any).type,
+                                                        pdf_url: deal.pdf_url,
                                                     })),
                                                 ]
                                                     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                                    .slice(0, 10)
+                                                    .slice(0, 15)
                                                     .map((transaction) => (
                                                         <tr key={transaction.id}>
                                                             <td className="font-semibold">{transaction.reference}</td>
-                                                            <td>{transaction.customer}</td>
-                                                            <td>
-                                                                <span className={`badge ${transaction.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>{transaction.type}</span>
-                                                            </td>
-                                                            <td className={transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>₪{transaction.amount?.toFixed(2) || 0}</td>
                                                             <td>
                                                                 <span
-                                                                    className={`badge badge-sm ${transaction.status === 'paid' || transaction.status === 'completed' ? 'badge-outline-success' : transaction.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'}`}
+                                                                    className={`badge ${
+                                                                        transaction.isInvoice
+                                                                            ? 'badge-outline-primary'
+                                                                            : transaction.isConfirmation
+                                                                              ? 'badge-outline-info'
+                                                                              : transaction.isInvoiceDeal
+                                                                                ? 'badge-outline-warning'
+                                                                                : 'badge-outline-success'
+                                                                    }`}
+                                                                >
+                                                                    {transaction.type}
+                                                                </span>
+                                                            </td>
+                                                            <td className={transaction.isInvoiceDeal || transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>
+                                                                {transaction.isConfirmation ? '—' : `₪${transaction.amount?.toFixed(2) || 0}`}
+                                                            </td>
+                                                            <td>
+                                                                <span
+                                                                    className={`badge badge-sm ${transaction.status === 'paid' || transaction.status === 'completed' || transaction.status === 'generated' ? 'badge-outline-success' : transaction.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'}`}
                                                                 >
                                                                     {transaction.status}
                                                                 </span>
@@ -1465,40 +1695,16 @@ const BookingPreview = () => {
                                                                         <IconEye className="h-5 w-5" />
                                                                     </Link>
                                                                 )}
-
-                                                                {transaction.isInvoice && (
-                                                                    <>
-                                                                        {invoiceDeals && invoiceDeals.length > 0 && invoiceDeals[0]?.pdf_url ? (
-                                                                            <button
-                                                                                onClick={() => window.open(invoiceDeals[0].pdf_url, '_blank')}
-                                                                                className="inline-flex hover:text-primary mr-2"
-                                                                                title="Download DEAL PDF"
-                                                                            >
-                                                                                <IconPdf className="h-5 w-5" />
-                                                                            </button>
-                                                                        ) : (
-                                                                            <button
-                                                                                onClick={handleCreateInvoiceDeal}
-                                                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 hover:bg-primary/30 rounded text-primary mr-2"
-                                                                                title="Create Invoice Deal"
-                                                                            >
-                                                                                <span>Create Deal</span>
-                                                                            </button>
-                                                                        )}
-
-                                                                        <button
-                                                                            onClick={() => handleGenerateConfirmationPdf(transaction.id)}
-                                                                            disabled={generatingConfirmation === transaction.id}
-                                                                            className="inline-flex items-center ml-2 hover:text-info"
-                                                                            title="Confirmation (no-price) PDF"
-                                                                        >
-                                                                            {generatingConfirmation === transaction.id ? (
-                                                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                                                                            ) : (
-                                                                                <IconPdf className="h-5 w-5" />
-                                                                            )}
-                                                                        </button>
-                                                                    </>
+                                                                {transaction.isInvoiceDeal && transaction.pdf_url && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (transaction.pdf_url) window.open(transaction.pdf_url, '_blank');
+                                                                        }}
+                                                                        className="inline-flex hover:text-primary mr-2"
+                                                                        title={`Download ${transaction.isConfirmation ? 'Confirmation' : 'Invoice Deal'} PDF`}
+                                                                    >
+                                                                        <IconPdf className="h-5 w-5" />
+                                                                    </button>
                                                                 )}
                                                             </td>
                                                         </tr>
@@ -1558,7 +1764,10 @@ const BookingPreview = () => {
                                                                     )}
                                                                     {deal.pdf_url ? (
                                                                         <button
-                                                                            onClick={() => window.open(deal.pdf_url as string, '_blank')}
+                                                                            onClick={() => {
+                                                                                if (!deal.pdf_url) return;
+                                                                                window.open(String(deal.pdf_url), '_blank');
+                                                                            }}
                                                                             className="inline-flex hover:text-primary"
                                                                             title="Open Deal PDF"
                                                                         >
@@ -1671,6 +1880,73 @@ const BookingPreview = () => {
                                 })()}
                             </div>
                         </Tab.Panel>
+
+                        {/* CONFIRMATION Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Confirmation Documents</h3>
+                                </div>
+                                {invoiceDeals.filter((deal) => deal.metadata?.type === 'confirmation').length === 0 ? (
+                                    <div className="text-center py-4 text-gray-500 text-sm">No confirmation documents for this booking</div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Type</th>
+                                                    <th>Customer</th>
+                                                    <th>Service</th>
+                                                    <th>Amount</th>
+                                                    <th>Status</th>
+                                                    <th>Date</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {invoiceDeals
+                                                    .filter((deal) => deal.metadata?.type === 'confirmation')
+                                                    .map((deal) => (
+                                                        <tr key={deal.id}>
+                                                            <td>
+                                                                <strong className="text-primary">{deal.invoice_number}</strong>
+                                                            </td>
+                                                            <td>
+                                                                <span className="badge badge-outline-info">Confirmation</span>
+                                                            </td>
+                                                            <td>{booking.customer_name || 'N/A'}</td>
+                                                            <td>{getServicesDisplay()}</td>
+                                                            <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
+                                                            <td>
+                                                                <span className="badge badge-outline-success">{deal.status?.toUpperCase()}</span>
+                                                            </td>
+                                                            <td>{new Date(deal.created_at).toLocaleDateString('en-GB')}</td>
+                                                            <td>
+                                                                {deal.pdf_url ? (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (!deal.pdf_url) return;
+                                                                            window.open(String(deal.pdf_url), '_blank');
+                                                                        }}
+                                                                        className="inline-flex hover:text-primary"
+                                                                        title="Open Confirmation PDF"
+                                                                    >
+                                                                        <IconPdf className="h-5 w-5" />
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-500">No PDF</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </Tab.Panel>
+
                         {/* السجل Tab */}
                         <Tab.Panel>
                             <div className="space-y-6">

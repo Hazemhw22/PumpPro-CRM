@@ -366,8 +366,8 @@ export class InvoiceDealPDFGenerator {
     <div class="kv">
       <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
       <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
-      ${servicesList[0].quantity || servicesList[0].unit_price ? `<div class="muted">Quantity / Unit Price</div><div>${servicesList[0].quantity || 1} / ${servicesList[0].unit_price ? this.formatCurrency(servicesList[0].unit_price) : '-'}</div>` : ''}
-      ${servicesList[0].total ? `<div class="muted">Total</div><div>${this.formatCurrency(servicesList[0].total)}</div>` : ''}
+      ${!noPrice && (servicesList[0].quantity || servicesList[0].unit_price) ? `<div class="muted">Quantity / Unit Price</div><div>${servicesList[0].quantity || 1} / ${servicesList[0].unit_price ? this.formatCurrency(servicesList[0].unit_price) : '-'}</div>` : ''}
+      ${!noPrice && servicesList[0].total ? `<div class="muted">Total</div><div>${this.formatCurrency(servicesList[0].total)}</div>` : ''}
     </div>
   </div>
   `
@@ -383,8 +383,8 @@ export class InvoiceDealPDFGenerator {
         ${svc.description ? `<div class="muted">Description</div><div>${svc.description}</div>` : ''}
         <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
         <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
-        ${svc.quantity || svc.unit_price ? `<div class="muted">Quantity / Unit Price</div><div>${svc.quantity || 1} / ${svc.unit_price ? this.formatCurrency(svc.unit_price) : '-'}</div>` : ''}
-        ${svc.total ? `<div class="muted">Total</div><div>${this.formatCurrency(svc.total)}</div>` : ''}
+        ${!noPrice && (svc.quantity || svc.unit_price) ? `<div class="muted">Quantity / Unit Price</div><div>${svc.quantity || 1} / ${svc.unit_price ? this.formatCurrency(svc.unit_price) : '-'}</div>` : ''}
+        ${!noPrice && svc.total ? `<div class="muted">Total</div><div>${this.formatCurrency(svc.total)}</div>` : ''}
       </div>
     </div>
     `,

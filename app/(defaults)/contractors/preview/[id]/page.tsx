@@ -40,21 +40,31 @@ interface Booking {
     service_address: string;
     scheduled_date: string;
     price: number;
+    contractor_price?: number | null;
     status: string;
     payment_status: string;
     contractor_id?: string;
 }
 
-interface Payment {
+interface ContractorPayment {
     id: string;
-    booking_id: string;
+    contractor_id: string;
+    booking_id?: string | null;
     amount: number;
     payment_method: string;
-    transaction_id?: string;
-    notes?: string;
     payment_date: string;
-    contractor_id?: string;
+    reference_number?: string | null;
+    notes?: string | null;
+    bookings?: {
+        id: string;
+        booking_number?: string;
+    } | null;
 }
+
+const getContractorAmount = (booking?: Booking | null) => {
+    if (!booking) return 0;
+    return Number(booking.contractor_price ?? booking.price ?? 0);
+};
 
 const ContractorPreview = () => {
     const { t } = getTranslation();
@@ -62,14 +72,14 @@ const ContractorPreview = () => {
     const router = useRouter();
     const [contractor, setContractor] = useState<Contractor | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);
-    const [payments, setPayments] = useState<Payment[]>([]);
+    const [payments, setPayments] = useState<ContractorPayment[]>([]);
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
         booking_id: '',
         amount: '',
         payment_method: 'cash' as 'cash' | 'credit_card' | 'bank_transfer' | 'check',
-        transaction_id: '',
+        reference_number: '',
         notes: '',
     });
 
@@ -99,13 +109,16 @@ const ContractorPreview = () => {
                 }
 
                 // Fetch payments for this contractor
-                // @ts-ignore
-                const { data: paymentsData, error: paymentsError } = await supabase.from('payments').select('*').eq('contractor_id', contractorId).order('payment_date', { ascending: false });
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .from('contractor_payments')
+                    .select('*, bookings:bookings!contractor_payments_booking_id_fkey (id, booking_number)')
+                    .eq('contractor_id', contractorId)
+                    .order('payment_date', { ascending: false });
 
                 if (paymentsError) {
-                    console.error('Error fetching payments:', paymentsError);
+                    console.error('Error fetching contractor payments:', paymentsError);
                 } else {
-                    setPayments(paymentsData || []);
+                    setPayments((paymentsData as any) || []);
                 }
             } catch (err) {
                 console.error('Error loading data:', err);
@@ -141,7 +154,8 @@ const ContractorPreview = () => {
             // Adjust contractor balance by subtracting the booking price
             const confirmed = bookings.find((b) => b.id === bookingId);
             if (confirmed && contractor?.id) {
-                const newBalance = (contractor.balance || 0) - (confirmed.price || 0);
+                const owedAmount = getContractorAmount(confirmed);
+                const newBalance = (contractor.balance || 0) - owedAmount;
                 // @ts-ignore
                 const { error: contractorUpdateError } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', contractor.id);
 
@@ -149,6 +163,44 @@ const ContractorPreview = () => {
 
                 // Update UI balance
                 setContractor({ ...contractor, balance: newBalance });
+            }
+
+            // Create Invoice Deal and Confirmation records for this booking
+            try {
+                const bookingRec = bookings.find((b) => b.id === bookingId) as Booking | undefined;
+                const totalAmount = bookingRec ? Number(bookingRec.price || 0) : 0;
+
+                const invoiceDealRecord = {
+                    invoice_number: `DEAL-${bookingRec?.booking_number || bookingId}`,
+                    booking_id: bookingId,
+                    total_amount: totalAmount,
+                    paid_amount: 0,
+                    remaining_amount: totalAmount,
+                    status: 'generated',
+                    pdf_url: `/api/bookings/${bookingId}/download?type=invoice_deal`,
+                    metadata: { type: 'invoice_deal' },
+                    created_at: new Date().toISOString(),
+                } as any;
+
+                const confirmationRecord = {
+                    invoice_number: `CONF-${bookingRec?.booking_number || bookingId}`,
+                    booking_id: bookingId,
+                    total_amount: 0,
+                    paid_amount: 0,
+                    remaining_amount: 0,
+                    status: 'generated',
+                    pdf_url: `/api/bookings/${bookingId}/download?type=confirmation`,
+                    metadata: { type: 'confirmation' },
+                    created_at: new Date().toISOString(),
+                } as any;
+
+                const { data: dealData, error: dealError } = await (supabase as any).from('invoice_deals').insert([invoiceDealRecord]).select().maybeSingle();
+                if (dealError) console.error('Error inserting invoice_deal (contractor confirm):', dealError);
+
+                const { data: confData, error: confError } = await (supabase as any).from('invoice_deals').insert([confirmationRecord]).select().maybeSingle();
+                if (confError) console.error('Error inserting confirmation (contractor confirm):', confError);
+            } catch (e) {
+                console.error('Error creating invoice_deals on contractor confirm:', e);
             }
 
             // Update UI
@@ -537,7 +589,7 @@ const ContractorPreview = () => {
                                                         <td className="font-semibold text-primary">#{booking.booking_number}</td>
                                                         <td>{booking.service_type}</td>
                                                         <td>{new Date(booking.scheduled_date).toLocaleDateString()}</td>
-                                                        <td className="text-right font-bold">₪{booking.price.toLocaleString()}</td>
+                                                        <td className="text-right font-bold">₪{getContractorAmount(booking).toLocaleString()}</td>
                                                         <td className="text-center">
                                                             <span
                                                                 className={`badge ${
@@ -633,7 +685,8 @@ const ContractorPreview = () => {
                                         ₪{contractor.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
                                     </p>
                                     <p className="text-sm text-gray-500 mt-2">
-                                        Total Bookings: ₪{bookings.reduce((sum, b) => sum + b.price, 0).toFixed(2)} | Total Payments: ₪{payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                                        Total Bookings: ₪{bookings.reduce((sum, b) => sum + getContractorAmount(b), 0).toFixed(2)} | Total Payments: ₪
+                                        {payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
                                     </p>
                                 </div>
                             </div>
@@ -659,7 +712,7 @@ const ContractorPreview = () => {
                             onSubmit={async (e) => {
                                 e.preventDefault();
 
-                                if (!paymentForm.booking_id) {
+                                if (!paymentForm.booking_id || !contractor) {
                                     alert('Please select a booking');
                                     return;
                                 }
@@ -667,20 +720,16 @@ const ContractorPreview = () => {
                                 try {
                                     const paymentAmount = parseFloat(paymentForm.amount);
 
-                                    // Create payment record
-                                    // Database trigger will automatically update contractor balance
-                                    // @ts-ignore
-                                    const { error: paymentError } = await (supabase.from('payments') as any).insert([
-                                        {
-                                            booking_id: paymentForm.booking_id,
-                                            contractor_id: contractor?.id,
-                                            amount: paymentAmount,
-                                            payment_method: paymentForm.payment_method,
-                                            transaction_id: paymentForm.transaction_id || null,
-                                            notes: paymentForm.notes || null,
-                                            payment_date: new Date().toISOString(),
-                                        },
-                                    ] as any);
+                                    // Create contractor payment record
+                                    const { error: paymentError } = await (supabase.from('contractor_payments') as any).insert({
+                                        booking_id: paymentForm.booking_id,
+                                        contractor_id: contractor?.id || '',
+                                        amount: paymentAmount,
+                                        payment_method: paymentForm.payment_method,
+                                        payment_date: new Date().toISOString(),
+                                        reference_number: paymentForm.reference_number || null,
+                                        notes: paymentForm.notes || null,
+                                    });
 
                                     if (paymentError) {
                                         console.error('Payment creation error:', paymentError);
@@ -718,7 +767,7 @@ const ContractorPreview = () => {
                                             setPaymentForm({
                                                 ...paymentForm,
                                                 booking_id: e.target.value,
-                                                amount: String(booking?.price || 0),
+                                                amount: String(getContractorAmount(booking || undefined)),
                                             });
                                         }}
                                         className="form-select"
@@ -729,7 +778,7 @@ const ContractorPreview = () => {
                                             .filter((b) => b.payment_status !== 'paid')
                                             .map((booking) => (
                                                 <option key={booking.id} value={booking.id}>
-                                                    #{booking.booking_number} - ₪{booking.price}
+                                                    #{booking.booking_number} - ₪{getContractorAmount(booking)}
                                                 </option>
                                             ))}
                                     </select>
@@ -761,10 +810,15 @@ const ContractorPreview = () => {
                                     />
                                 </div>
 
-                                {/* Transaction ID */}
+                                {/* Reference Number */}
                                 <div>
-                                    <label className="block text-sm font-bold mb-2">Transaction ID (Optional)</label>
-                                    <input type="text" value={paymentForm.transaction_id} onChange={(e) => setPaymentForm({ ...paymentForm, transaction_id: e.target.value })} className="form-input" />
+                                    <label className="block text-sm font-bold mb-2">Reference (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={paymentForm.reference_number}
+                                        onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })}
+                                        className="form-input"
+                                    />
                                 </div>
 
                                 {/* Notes */}

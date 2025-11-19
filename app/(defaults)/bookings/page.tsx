@@ -672,11 +672,9 @@ const BookingsList = () => {
                                         <td>
                                             <div className="flex items-center gap-2">
                                                 <strong className="text-info">#{row.booking_number || row.id}</strong>
-                                                {role !== 'contractor' && role !== 'driver' && (
-                                                    <Link href={`/bookings/preview/${row.id}`} className="flex hover:text-info" title={t('view')}>
-                                                        <IconEye className="h-4 w-4" />
-                                                    </Link>
-                                                )}
+                                                <Link href={`/bookings/preview/${row.id}`} className="flex hover:text-info" title={t('view')}>
+                                                    <IconEye className="h-4 w-4" />
+                                                </Link>
                                             </div>
                                         </td>
                                         <td className="font-semibold">{row.customer_name}</td>
