@@ -13,6 +13,7 @@ import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconEye from '@/components/icon/icon-eye';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
+import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -115,6 +116,7 @@ const BookingPreview = () => {
     const [loading, setLoading] = useState(true);
     const [creatingInvoice, setCreatingInvoice] = useState(false);
     const [creatingInvoiceDeal, setCreatingInvoiceDeal] = useState(false);
+    const [generatingConfirmation, setGeneratingConfirmation] = useState<string | null>(null);
     const [contractorPaid, setContractorPaid] = useState<number>(0);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' }>({
         visible: false,
@@ -299,14 +301,10 @@ const BookingPreview = () => {
 
                 setBooking(enrichedBooking as any);
                 setSelectedContractor(enrichedBooking.contractor || null);
-                // parse contractor_price from notes if present
-                try {
-                    const notesText = (enrichedBooking as any)?.notes || '';
-                    const m = /contractor_price:([0-9]+(?:\.[0-9]+)?)/.exec(notesText);
-                    setContractorPaid(m ? parseFloat(m[1]) : 0);
-                } catch (e) {
-                    setContractorPaid(0);
-                }
+                // contractor_price is no longer stored inside booking notes.
+                // The contractor's owed amount is reflected on the contractor's `balance`.
+                // For now clear any transient contractorPaid value here.
+                setContractorPaid(0);
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
                 }
@@ -378,7 +376,7 @@ const BookingPreview = () => {
 
             setAlert({ visible: true, message: 'Invoice DEAL created successfully', type: 'success' });
             setInvoices((prev) => (newInvoice ? [newInvoice as any, ...prev] : prev));
-            router.push('/invoices');
+            router.push('/');
         } catch (err) {
             console.error('Error creating invoice:', err);
             setAlert({ visible: true, message: 'Error creating Invoice DEAL', type: 'danger' });
@@ -437,6 +435,42 @@ const BookingPreview = () => {
             setAlert({ visible: true, message: 'Error creating Invoice DEAL', type: 'danger' });
         } finally {
             setCreatingInvoiceDeal(false);
+        }
+    };
+
+    const handleGenerateConfirmationPdf = async (invoiceId: string) => {
+        if (!booking) return;
+        try {
+            setGeneratingConfirmation(invoiceId);
+
+            const inv = invoices.find((i) => i.id === invoiceId);
+            if (!inv) throw new Error('Invoice not found');
+
+            const data: any = {
+                invoice: inv,
+                booking: booking,
+                booking_services: bookingServices || [],
+                services: bookingServices || [],
+                contractor: (booking as any).contractor || null,
+                driver: (booking as any).driver || null,
+                customer: {
+                    name: booking.customer_name,
+                    phone: booking.customer_phone,
+                    address: booking.service_address,
+                    business_name: booking.customer_name,
+                },
+                service: { name: (booking as any).service_name || booking.service_type },
+                lang: 'en',
+                no_price: true,
+                companyInfo: { logo_url: '/assets/images/pdf-logo.png' },
+            };
+
+            await InvoiceDealPDFGenerator.generatePDF(data, `confirmation-${inv.invoice_number || inv.id}.pdf`, 'invoice');
+        } catch (e: any) {
+            console.error('Error generating confirmation PDF:', e);
+            window.alert(e?.message || 'Failed to generate confirmation PDF');
+        } finally {
+            setGeneratingConfirmation(null);
         }
     };
 
@@ -1364,6 +1398,118 @@ const BookingPreview = () => {
                                     </div>
                                 );
                             })()}
+
+                            {/* Recent Transactions (Invoices & Payments) */}
+                            <div className="panel mt-6">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Recent Transactions</h3>
+                                </div>
+                                {(invoices && invoices.length > 0) || (payments && payments.length > 0) ? (
+                                    <div className="table-responsive">
+                                        <table className="table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Reference</th>
+                                                    <th>Customer</th>
+                                                    <th>Type</th>
+                                                    <th>Amount</th>
+                                                    <th>Status</th>
+                                                    <th>Date</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {[
+                                                    ...invoices.slice(0, 5).map((inv) => ({
+                                                        id: inv.id,
+                                                        date: inv.created_at,
+                                                        type: 'Invoice',
+                                                        customer: inv.customer_name || booking.customer_name || 'N/A',
+                                                        reference: `#${inv.invoice_number}`,
+                                                        amount: inv.subtotal_amount || inv.total_amount,
+                                                        status: inv.status,
+                                                        isInvoice: true,
+                                                    })),
+                                                    ...payments.slice(0, 5).map((pay) => ({
+                                                        id: pay.id,
+                                                        date: pay.payment_date,
+                                                        type: 'Payment',
+                                                        customer: pay.invoices?.customers?.name || booking.customer_name || 'N/A',
+                                                        reference: `${(pay.payment_method || '').replace('_', ' ')}${pay.transaction_id ? ' • ' + pay.transaction_id : ''}`,
+                                                        amount: pay.amount,
+                                                        status: 'completed',
+                                                        isInvoice: false,
+                                                    })),
+                                                ]
+                                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                    .slice(0, 10)
+                                                    .map((transaction) => (
+                                                        <tr key={transaction.id}>
+                                                            <td className="font-semibold">{transaction.reference}</td>
+                                                            <td>{transaction.customer}</td>
+                                                            <td>
+                                                                <span className={`badge ${transaction.isInvoice ? 'badge-outline-primary' : 'badge-outline-success'}`}>{transaction.type}</span>
+                                                            </td>
+                                                            <td className={transaction.isInvoice ? 'font-bold' : 'font-bold text-success'}>₪{transaction.amount?.toFixed(2) || 0}</td>
+                                                            <td>
+                                                                <span
+                                                                    className={`badge badge-sm ${transaction.status === 'paid' || transaction.status === 'completed' ? 'badge-outline-success' : transaction.status === 'overdue' ? 'badge-outline-danger' : 'badge-outline-warning'}`}
+                                                                >
+                                                                    {transaction.status}
+                                                                </span>
+                                                            </td>
+                                                            <td>{new Date(transaction.date).toLocaleDateString('en-GB')}</td>
+                                                            <td>
+                                                                {transaction.isInvoice && (
+                                                                    <Link href={`/invoices/preview/${transaction.id}`} className="inline-flex hover:text-primary mr-2" title="View">
+                                                                        <IconEye className="h-5 w-5" />
+                                                                    </Link>
+                                                                )}
+
+                                                                {transaction.isInvoice && (
+                                                                    <>
+                                                                        {invoiceDeals && invoiceDeals.length > 0 && invoiceDeals[0]?.pdf_url ? (
+                                                                            <button
+                                                                                onClick={() => window.open(invoiceDeals[0].pdf_url, '_blank')}
+                                                                                className="inline-flex hover:text-primary mr-2"
+                                                                                title="Download DEAL PDF"
+                                                                            >
+                                                                                <IconPdf className="h-5 w-5" />
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={handleCreateInvoiceDeal}
+                                                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 hover:bg-primary/30 rounded text-primary mr-2"
+                                                                                title="Create Invoice Deal"
+                                                                            >
+                                                                                <span>Create Deal</span>
+                                                                            </button>
+                                                                        )}
+
+                                                                        <button
+                                                                            onClick={() => handleGenerateConfirmationPdf(transaction.id)}
+                                                                            disabled={generatingConfirmation === transaction.id}
+                                                                            className="inline-flex items-center ml-2 hover:text-info"
+                                                                            title="Confirmation (no-price) PDF"
+                                                                        >
+                                                                            {generatingConfirmation === transaction.id ? (
+                                                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                                                            ) : (
+                                                                                <IconPdf className="h-5 w-5" />
+                                                                            )}
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-4 text-gray-500 text-sm">No recent transactions</div>
+                                )}
+                            </div>
 
                             {/* Invoice DEAL details for this booking */}
                             <div className="panel mt-6">

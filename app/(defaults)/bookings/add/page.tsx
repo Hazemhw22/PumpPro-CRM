@@ -299,7 +299,8 @@ const AddBooking = () => {
                 truck_id: null,
                 driver_id: null,
                 contractor_id: null,
-                notes: ((form.notes || '') + (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')).trim() || null,
+                // Do NOT store contractor_price inside notes. We'll record it on the contractor's balance instead.
+                notes: (form.notes || '').trim() || null,
                 // Save a DB-compatible status (avoid writing unknown enum values)
                 status: statusToSave,
             };
@@ -351,6 +352,27 @@ const AddBooking = () => {
                 }
             } catch (e) {
                 console.error('Error inserting booking_services rows:', e);
+            }
+
+            // If a contractor and a contractorPrice were provided, deduct that amount
+            // from the contractor's balance (recorded as a negative credit for them).
+            try {
+                const cp = parseFloat(contractorPrice || '') || 0;
+                if (selectedContractor && cp > 0) {
+                    // Try to get current balance from contractors table
+                    const { data: contrData, error: contrError } = await supabase.from('contractors').select('balance').eq('id', selectedContractor.id).maybeSingle();
+                    if (contrError) {
+                        console.warn('Failed to fetch contractor balance', contrError);
+                    }
+                    const currentBalance = (contrData && (contrData as any).balance) || 0;
+                    const newBalance = (currentBalance || 0) - cp;
+                    // @ts-ignore
+                    const { error: updateError } = await supabase.from('contractors').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', selectedContractor.id);
+                    if (updateError) console.warn('Failed to update contractor balance', updateError);
+                    else addAlert('success', `Recorded ₪${cp.toFixed(2)} as credit for contractor ${selectedContractor.name}`);
+                }
+            } catch (err) {
+                console.error('Error updating contractor balance:', err);
             }
 
             addAlert('success', t('booking_added_successfully') || 'Booking created successfully', 'Success');

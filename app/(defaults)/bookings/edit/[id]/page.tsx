@@ -376,7 +376,8 @@ const EditBooking = () => {
                 status: form.status,
                 service_type: form.service_type.trim(),
                 contractor_id: selectedContractor ? selectedContractor.id : null,
-                notes: ((form.notes || '') + (selectedContractor && contractorPrice ? `\ncontractor_price:${contractorPrice}` : '')).trim() || null,
+                // Remove contractor_price from notes; we record it on the contractor's balance instead.
+                notes: (form.notes || '' || '').replace(/\n?contractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,
             };
 
             // @ts-ignore - Supabase type inference issue
@@ -422,6 +423,56 @@ const EditBooking = () => {
                 }
             } catch (e) {
                 console.error('Error updating booking_services rows:', e);
+            }
+
+            // Handle contractor balance adjustments when contractorPrice changed or contractor reassigned.
+            try {
+                const newCp = parseFloat(contractorPrice || '') || 0;
+                // Parse old contractor_price from previous booking.notes if present
+                let oldCp = 0;
+                try {
+                    const m = booking?.notes ? /contractor_price:([0-9]+(?:\.[0-9]+)?)/.exec(booking.notes) : null;
+                    oldCp = m ? parseFloat(m[1]) : 0;
+                } catch (e) {
+                    oldCp = 0;
+                }
+
+                const prevContractorId = (booking as any)?.contractor_id || null;
+                const newContractorId = selectedContractor ? selectedContractor.id : null;
+
+                // If contractor changed and there was an old contractor price applied, revert it from previous contractor
+                if (prevContractorId && prevContractorId !== newContractorId && oldCp > 0) {
+                    try {
+                        const { data: prevContr, error: prevErr } = await supabase.from('contractors').select('balance').eq('id', prevContractorId).maybeSingle();
+                        const prevBalance = (prevContr && (prevContr as any).balance) || 0;
+                        const { error: revertErr } = await supabase
+                            .from('contractors')
+                            .update({ balance: prevBalance + oldCp, updated_at: new Date().toISOString() })
+                            .eq('id', prevContractorId);
+                        if (revertErr) console.warn('Failed to revert previous contractor balance', revertErr);
+                    } catch (e) {
+                        console.warn('Error reverting previous contractor balance', e);
+                    }
+                }
+
+                // Apply new contractor price to currently selected contractor
+                if (newContractorId && newCp > 0) {
+                    try {
+                        const { data: contrData, error: contrErr } = await supabase.from('contractors').select('balance').eq('id', newContractorId).maybeSingle();
+                        const currentBalance = (contrData && (contrData as any).balance) || 0;
+
+                        // If same contractor, apply delta (new - old), otherwise subtract full newCp
+                        const delta = prevContractorId === newContractorId ? newCp - oldCp : newCp;
+                        const newBalance = (currentBalance || 0) - delta;
+                        const { error: updateErr } = await supabase.from('contractors').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', newContractorId);
+                        if (updateErr) console.warn('Failed to update contractor balance', updateErr);
+                        else addAlert('success', `Recorded contractor adjustment ₪${delta.toFixed(2)} for contractor`, 'Success');
+                    } catch (e) {
+                        console.warn('Error updating contractor balance', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Error handling contractor balance adjustments:', e);
             }
 
             addAlert('success', t('booking_updated_successfully') || 'Booking updated successfully', 'Success');
