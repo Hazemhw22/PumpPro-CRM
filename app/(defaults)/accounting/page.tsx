@@ -639,7 +639,6 @@ const AccountingPage = () => {
                                                     </Link>
                                                 )}
                                                 {transaction.isInvoice &&
-                                                    transaction.bookingStatus === 'confirmed' &&
                                                     (hasDealForInvoice(transaction.id) ? (
                                                         <button onClick={() => handleDownloadInvoicePdf(transaction.id)} className="inline-flex hover:text-primary" title="Download PDF">
                                                             <IconPdf className="h-5 w-5" />
