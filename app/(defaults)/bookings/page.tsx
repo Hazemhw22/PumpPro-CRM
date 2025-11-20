@@ -707,6 +707,8 @@ const BookingsList = () => {
                                                         <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
                                                             <IconTrashLines />
                                                         </button>
+
+                                                        {row.status === 'confirmed' && <ProviderPdfButton booking={row} provider={(row as any).contractor || (row as any).driver} role={role} />}
                                                     </>
                                                 )}
                                                 {((role === 'contractor' && row.contractor_id === currentContractorId) || (role === 'driver' && row.driver_id === currentDriverId)) && (
