@@ -14,6 +14,7 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconEye from '@/components/icon/icon-eye';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
+import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -1119,7 +1120,7 @@ const BookingPreview = () => {
                                 </button>
                             )}
                         </Tab>
-                       
+
                         <Tab as="div" className="flex-1">
                             {({ selected }) => (
                                 <button
@@ -1157,6 +1158,9 @@ const BookingPreview = () => {
                                                                 Confirm Booking
                                                             </button>
                                                         )}
+                                                    {booking.status === 'confirmed' && role === 'admin' && (
+                                                        <ProviderPdfButton booking={booking} provider={(booking as any).contractor || (booking as any).driver} role={role} />
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="space-y-3">
@@ -1593,7 +1597,7 @@ const BookingPreview = () => {
                                 );
                             })()}
 
-                            {/* Recent Transactions (Invoices, Payments, Invoice Deals & Confirmations) */}
+                            {/* Recent Transactions (Invoices & Payments) */}
                             <div className="panel mt-6">
                                 <div className="mb-5 flex items-center justify-between">
                                     <h3 className="text-lg font-semibold">Recent Transactions</h3>
@@ -1643,19 +1647,6 @@ const BookingPreview = () => {
                                                         isConfirmation: false,
                                                         dealType: null,
                                                         pdf_url: undefined as any,
-                                                    })),
-                                                    ...invoiceDeals.slice(0, 5).map((deal) => ({
-                                                        id: deal.id,
-                                                        date: deal.created_at,
-                                                        type: (deal as any).type === 'invoice_deal' ? 'Invoice Deal' : 'Confirmation',
-                                                        reference: `#${deal.invoice_number}`,
-                                                        amount: (deal as any).type === 'invoice_deal' ? deal.total_amount || 0 : 0, // Confirmation shows 0
-                                                        status: deal.status || 'generated',
-                                                        isInvoice: false,
-                                                        isInvoiceDeal: true,
-                                                        isConfirmation: (deal as any).type === 'confirmation',
-                                                        dealType: (deal as any).type,
-                                                        pdf_url: deal.pdf_url,
                                                     })),
                                                 ]
                                                     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -1925,12 +1916,118 @@ const BookingPreview = () => {
                                                             <td>
                                                                 {deal.pdf_url ? (
                                                                     <button
-                                                                        onClick={() => {
-                                                                            if (!deal.pdf_url) return;
-                                                                            window.open(String(deal.pdf_url), '_blank');
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                setGeneratingConfirmation(deal.id);
+
+                                                                                // Fetch booking services
+                                                                                let bookingServices: any[] = [];
+                                                                                try {
+                                                                                    // @ts-ignore
+                                                                                    const { data: bsData } = await supabase
+                                                                                        .from('booking_services')
+                                                                                        .select('id, service_id, quantity, unit_price, description')
+                                                                                        .eq('booking_id', booking.id);
+                                                                                    if (bsData && bsData.length > 0) {
+                                                                                        const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
+                                                                                        // @ts-ignore
+                                                                                        const { data: svcData } =
+                                                                                            serviceIds.length > 0
+                                                                                                ? await supabase.from('services').select('id, name, price_private, price_business').in('id', serviceIds)
+                                                                                                : { data: [] };
+                                                                                        const svcMap = new Map((svcData || []).map((s: any) => [s.id, s]));
+                                                                                        bookingServices = bsData.map((bsvc: any) => ({
+                                                                                            id: bsvc.id,
+                                                                                            service_id: bsvc.service_id,
+                                                                                            name: svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-',
+                                                                                            description: bsvc.description || null,
+                                                                                            quantity: typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1),
+                                                                                            unit_price:
+                                                                                                typeof bsvc.unit_price === 'number'
+                                                                                                    ? bsvc.unit_price
+                                                                                                    : Number(
+                                                                                                          svcMap.get(bsvc.service_id)?.price_private ||
+                                                                                                              svcMap.get(bsvc.service_id)?.price_business ||
+                                                                                                              0,
+                                                                                                      ),
+                                                                                            total:
+                                                                                                (typeof bsvc.unit_price === 'number'
+                                                                                                    ? bsvc.unit_price
+                                                                                                    : Number(
+                                                                                                          svcMap.get(bsvc.service_id)?.price_private ||
+                                                                                                              svcMap.get(bsvc.service_id)?.price_business ||
+                                                                                                              0,
+                                                                                                      )) * (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
+                                                                                        }));
+                                                                                    }
+                                                                                } catch (err) {
+                                                                                    console.warn('Could not fetch booking services for provider PDF', err);
+                                                                                }
+
+                                                                                const providerContractor = booking.contractor || null;
+                                                                                const providerDriver = booking.driver || null;
+                                                                                const providerName = providerContractor?.name || providerDriver?.name || undefined;
+
+                                                                                const data: any = {
+                                                                                    company: {
+                                                                                        name: 'PumpPro CRM',
+                                                                                        phone: '',
+                                                                                        address: '',
+                                                                                        tax_id: '',
+                                                                                        logo_url: '/favicon.png',
+                                                                                    },
+                                                                                    invoice: null,
+                                                                                    booking: {
+                                                                                        booking_number: booking.booking_number,
+                                                                                        service_type: booking.service_type,
+                                                                                        service_address: booking.service_address,
+                                                                                        scheduled_date: booking.scheduled_date,
+                                                                                        scheduled_time: booking.scheduled_time,
+                                                                                        notes: booking.notes,
+                                                                                        contractor_id: booking.contractor_id,
+                                                                                        driver_id: booking.driver_id,
+                                                                                    },
+                                                                                    contractor: providerContractor
+                                                                                        ? {
+                                                                                              name: providerContractor.name || providerName || undefined,
+                                                                                              phone: (providerContractor as any)?.phone || undefined,
+                                                                                          }
+                                                                                        : undefined,
+                                                                                    driver: providerDriver
+                                                                                        ? {
+                                                                                              name: providerDriver.name || providerName || undefined,
+                                                                                              driver_number: (providerDriver as any)?.driver_number || (providerDriver as any)?.phone || undefined,
+                                                                                          }
+                                                                                        : undefined,
+                                                                                    customer: {
+                                                                                        name: booking.customer_name,
+                                                                                        phone: booking.customer_phone,
+                                                                                        address: booking.service_address,
+                                                                                    },
+                                                                                    service: {
+                                                                                        name: (booking as any).service_name || booking.service_type,
+                                                                                    },
+                                                                                    booking_services: bookingServices.length > 0 ? bookingServices : undefined,
+                                                                                    services: bookingServices.length > 0 ? bookingServices : undefined,
+                                                                                    lang: 'en',
+                                                                                    no_price: true,
+                                                                                };
+
+                                                                                await InvoiceDealPDFGenerator.generatePDF(
+                                                                                    data,
+                                                                                    `booking-${booking.booking_number || booking.id}-provider.pdf`,
+                                                                                    'invoice',
+                                                                                );
+                                                                            } catch (e: any) {
+                                                                                console.error('Provider PDF error', e);
+                                                                                window.alert((e && e.message) || 'Error generating PDF');
+                                                                            } finally {
+                                                                                setGeneratingConfirmation(null);
+                                                                            }
                                                                         }}
-                                                                        className="inline-flex hover:text-primary"
-                                                                        title="Open Confirmation PDF"
+                                                                        className={`inline-flex hover:text-info ${generatingConfirmation === deal.id ? 'opacity-60 pointer-events-none' : ''}`}
+                                                                        title="Download Provider PDF"
+                                                                        disabled={generatingConfirmation === deal.id}
                                                                     >
                                                                         <IconPdf className="h-5 w-5" />
                                                                     </button>
