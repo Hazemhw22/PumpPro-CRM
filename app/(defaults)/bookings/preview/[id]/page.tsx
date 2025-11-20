@@ -1876,6 +1876,7 @@ const BookingPreview = () => {
                         <Tab.Panel>
                             {booking.status === 'confirmed' ? (
                                 <div className="panel">
+                                    <h3 className="text-lg font-semibold mb-5">Confirmation Documents</h3>
                                     <div className="table-responsive">
                                         <table className="table-bordered">
                                             <thead>
@@ -1912,9 +1913,34 @@ const BookingPreview = () => {
                                                             <td>
                                                                 {deal.pdf_url ? (
                                                                     <button
-                                                                        onClick={() => deal.pdf_url && window.open(deal.pdf_url, '_blank')}
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                const confirmationData: any = {
+                                                                                    invoice: { id: booking.id, invoice_number: booking.booking_number, total_amount: booking.price },
+                                                                                    booking: booking,
+                                                                                    booking_services: bookingServices || [],
+                                                                                    services: bookingServices || [],
+                                                                                    contractor: (booking as any).contractor || null,
+                                                                                    driver: (booking as any).driver || null,
+                                                                                    customer: {
+                                                                                        name: booking.customer_name,
+                                                                                        phone: booking.customer_phone,
+                                                                                        address: booking.service_address,
+                                                                                        business_name: booking.customer_name,
+                                                                                    },
+                                                                                    service: { name: (booking as any).service_name || booking.service_type },
+                                                                                    lang: 'en',
+                                                                                    no_price: true,
+                                                                                    companyInfo: { logo_url: '/assets/images/pdf-logo.png' },
+                                                                                };
+                                                                                await InvoiceDealPDFGenerator.generatePDF(confirmationData, `confirmation-${booking.booking_number}.pdf`, 'invoice');
+                                                                            } catch (e: any) {
+                                                                                console.error('Error generating confirmation PDF:', e);
+                                                                                window.alert(e?.message || 'Failed to generate confirmation PDF');
+                                                                            }
+                                                                        }}
                                                                         className="inline-flex hover:text-primary"
-                                                                        title="Download PDF"
+                                                                        title="Download Confirmation Document"
                                                                     >
                                                                         <IconPdf className="h-5 w-5" />
                                                                     </button>
