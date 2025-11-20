@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AssignmentModeSelectAdd from '@/components/assignment-mode-select/assignment-mode-select-add';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -253,7 +253,7 @@ const EditBooking = () => {
     }, [bookingId, t]);
 
     // Auto-calculate total price from services and extra services
-    const calculateTotalPrice = () => {
+    const calculateTotalPrice = useCallback(() => {
         let total = 0;
 
         // Add main service price
@@ -277,13 +277,13 @@ const EditBooking = () => {
         });
 
         return total;
-    };
+    }, [form.service_type, form.customer_type, extraServices, services]);
 
     // Recalculate price when service type, customer type, or extra services change
     useEffect(() => {
         const newPrice = calculateTotalPrice();
         setForm((prev) => ({ ...prev, price: newPrice ? newPrice.toString() : '' }));
-    }, [form.service_type, form.customer_type, extraServices, services, calculateTotalPrice]);
+    }, [calculateTotalPrice]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
