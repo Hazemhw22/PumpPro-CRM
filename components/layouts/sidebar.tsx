@@ -142,7 +142,20 @@ const Sidebar = () => {
                                                     </div>
                                                 </Link>
                                             </li>
-                                            
+                                            <h2 className="-mx-4 mb-2 mt-6 flex items-center bg-white-light/30 px-7 py-3 text-xs font-extrabold uppercase tracking-wider dark:bg-dark dark:bg-opacity-[0.08]">
+                                                <IconMinus className="hidden h-5 w-4 flex-none" />
+                                                <span>{t('accounting') || 'Accounting'}</span>
+                                            </h2>
+                                            <li className="nav-item">
+                                                <Link href="/accounting" className="group">
+                                                    <div className="flex items-center py-2">
+                                                        <IconMenuInvoice className="h-5 w-5 shrink-0 group-hover:!text-primary" />
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('accounting') || 'Accounting'}
+                                                        </span>
+                                                    </div>
+                                                </Link>
+                                            </li>
                                         </>
                                     )}
 
@@ -171,7 +184,7 @@ const Sidebar = () => {
                                         </>
                                     )}
 
-                                    {(role !== 'contractor' && role !== 'driver') && (
+                                    {role !== 'contractor' && role !== 'driver' && (
                                         <>
                                             {/* Default full menu for admins/managers or when role not set */}
                                             <h2 className="-mx-4 mb-2 mt-4 flex items-center bg-white-light/30 px-7 py-3 text-xs font-extrabold uppercase tracking-wider dark:bg-dark dark:bg-opacity-[0.08]">
@@ -182,7 +195,9 @@ const Sidebar = () => {
                                                 <Link href="/" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuDashboard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('dashboard') || 'Dashboard'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('dashboard') || 'Dashboard'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -190,7 +205,9 @@ const Sidebar = () => {
                                                 <Link href="/bookings" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconCalendar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('bookings') || 'Bookings'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('bookings') || 'Bookings'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -198,7 +215,9 @@ const Sidebar = () => {
                                                 <Link href="/fleet" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuCar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('fleet') || 'Fleet'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('fleet') || 'Fleet'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -214,7 +233,9 @@ const Sidebar = () => {
                                                 <Link href="/drivers" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconUser className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('drivers') || 'Drivers'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('drivers') || 'Drivers'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -222,7 +243,9 @@ const Sidebar = () => {
                                                 <Link href="/customers" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuUsers className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('customers') || 'Customers'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('customers') || 'Customers'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -230,7 +253,9 @@ const Sidebar = () => {
                                                 <Link href="/services" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuService className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('services') || 'Services'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('services') || 'Services'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -238,7 +263,9 @@ const Sidebar = () => {
                                                 <Link href="/users" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuUsers className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('users') || 'Users'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('users') || 'Users'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -250,7 +277,9 @@ const Sidebar = () => {
                                                 <Link href="/accounting" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuInvoice className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('accounting') || 'Accounting'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('accounting') || 'Accounting'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -258,7 +287,9 @@ const Sidebar = () => {
                                                 <Link href="/invoices" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconClipboardText className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('invoices') || 'Invoices'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('invoices') || 'Invoices'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -266,7 +297,9 @@ const Sidebar = () => {
                                                 <Link href="/payments" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconCreditCard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('payments') || 'Payments'}</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('payments') || 'Payments'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>

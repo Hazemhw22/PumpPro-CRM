@@ -73,6 +73,7 @@ const ContractorPreview = () => {
     const [contractor, setContractor] = useState<Contractor | null>(null);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [payments, setPayments] = useState<ContractorPayment[]>([]);
+    const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
@@ -119,6 +120,13 @@ const ContractorPreview = () => {
                     console.error('Error fetching contractor payments:', paymentsError);
                 } else {
                     setPayments((paymentsData as any) || []);
+                }
+
+                // Fetch active services so we can show human-readable names
+                // @ts-ignore
+                const { data: servicesData, error: servicesError } = await supabase.from('services').select('*').eq('active', true);
+                if (!servicesError && servicesData) {
+                    setServices(servicesData as any);
                 }
             } catch (err) {
                 console.error('Error loading data:', err);
@@ -220,6 +228,15 @@ const ContractorPreview = () => {
         } catch (e) {
             return '-';
         }
+    };
+
+    const getServiceName = (serviceType?: string) => {
+        if (!serviceType) return '-';
+        const svc = services.find((s) => s.id === serviceType);
+        if (svc && svc.name) return svc.name;
+        return String(serviceType)
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
     if (loading) {
@@ -587,7 +604,7 @@ const ContractorPreview = () => {
                                                 {bookings.map((booking) => (
                                                     <tr key={booking.id}>
                                                         <td className="font-semibold text-primary">#{booking.booking_number}</td>
-                                                        <td>{booking.service_type}</td>
+                                                        <td>{getServiceName(booking.service_type)}</td>
                                                         <td>{new Date(booking.scheduled_date).toLocaleDateString()}</td>
                                                         <td className="text-right font-bold">₪{getContractorAmount(booking).toLocaleString()}</td>
                                                         <td className="text-center">
@@ -650,6 +667,7 @@ const ContractorPreview = () => {
                                         <thead>
                                             <tr>
                                                 <th>Date</th>
+                                                <th>Type</th>
                                                 <th>Booking #</th>
                                                 <th>Method</th>
                                                 <th className="text-right">Amount</th>
@@ -657,21 +675,51 @@ const ContractorPreview = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {payments.map((payment) => (
-                                                <tr key={payment.id}>
-                                                    <td>{new Date(payment.payment_date).toLocaleDateString()}</td>
-                                                    <td className="font-semibold text-primary">{bookings.find((b) => b.id === payment.booking_id)?.booking_number || '-'}</td>
-                                                    <td>
-                                                        <span className="badge badge-outline-info">{payment.payment_method}</span>
-                                                    </td>
-                                                    <td className="text-right font-bold text-success">+₪{payment.amount.toLocaleString()}</td>
-                                                    <td className="text-sm text-gray-600">{payment.notes || '-'}</td>
-                                                </tr>
-                                            ))}
-                                            {payments.length === 0 && (
+                                            {(
+                                                [
+                                                    // bookings as negative rows
+                                                    ...(bookings || []).map((b) => ({
+                                                        id: `booking-${b.id}`,
+                                                        date: b.scheduled_date,
+                                                        type: 'Booking',
+                                                        booking_number: b.booking_number,
+                                                        service: getServiceName(b.service_type),
+                                                        method: null,
+                                                        amount: -getContractorAmount(b),
+                                                        notes: b.status,
+                                                    })),
+                                                    // payments as positive rows
+                                                    ...(payments || []).map((p) => ({
+                                                        id: `payment-${p.id}`,
+                                                        date: p.payment_date,
+                                                        type: 'Payment',
+                                                        booking_number: (bookings.find((b) => b.id === p.booking_id) || { booking_number: '-' }).booking_number,
+                                                        service: getServiceName((bookings.find((b) => b.id === p.booking_id) || { service_type: '-' }).service_type),
+                                                        method: p.payment_method,
+                                                        amount: p.amount,
+                                                        notes: p.notes || '-',
+                                                    })),
+                                                ] as any
+                                            )
+                                                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                .map((row: any) => (
+                                                    <tr key={row.id}>
+                                                        <td>{row.date ? new Date(row.date).toLocaleDateString('en-GB') : '-'}</td>
+                                                        <td>
+                                                            <span className={`badge ${row.type === 'Booking' ? 'badge-outline-warning' : 'badge-outline-success'}`}>{row.type}</span>
+                                                        </td>
+                                                        <td className="font-semibold text-primary">{row.booking_number || '-'}</td>
+                                                        <td>{row.method ? <span className="badge badge-outline-info">{row.method}</span> : '-'}</td>
+                                                        <td className={`text-right font-bold ${row.type === 'Booking' ? 'text-danger' : 'text-success'}`}>
+                                                            {row.type === 'Booking' ? `-₪${Math.abs(row.amount || 0).toFixed(2)}` : `+₪${(row.amount || 0).toLocaleString()}`}
+                                                        </td>
+                                                        <td className="text-sm text-gray-600">{row.notes || '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            {(bookings && bookings.length) || (payments && payments.length) ? null : (
                                                 <tr>
-                                                    <td colSpan={5} className="text-center text-gray-500 py-10">
-                                                        No payments recorded yet
+                                                    <td colSpan={6} className="text-center text-gray-500 py-10">
+                                                        No bookings or payments recorded yet
                                                     </td>
                                                 </tr>
                                             )}
