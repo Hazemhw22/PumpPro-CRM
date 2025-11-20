@@ -91,6 +91,7 @@ const EditBooking = () => {
     const [drivers, setDrivers] = useState<any[]>([]);
 
     const [form, setForm] = useState({
+        booking_number: '',
         customer_type: 'private' as 'private' | 'business',
         customer_id: '',
         customer_name: '',
@@ -159,6 +160,7 @@ const EditBooking = () => {
                     setBooking(bookingData);
                     setAssignMode(bookingData.contractor_id ? 'contractor' : 'driver');
                     setForm({
+                        booking_number: bookingData.booking_number || '',
                         customer_type: bookingData.customer_type || 'private',
                         customer_id: bookingData.customer_id || '',
                         customer_name: bookingData.customer_name || '',
@@ -378,22 +380,7 @@ const EditBooking = () => {
 
         setSaving(true);
         try {
-            const bookingData = {
-                customer_type: form.customer_type,
-                customer_id: form.customer_id || null,
-                customer_name: form.customer_name.trim(),
-                customer_phone: form.customer_phone.trim(),
-                service_address: form.service_address.trim(),
-                scheduled_date: form.scheduled_date,
-                scheduled_time: form.scheduled_time,
-                status: form.status,
-                service_type: form.service_type.trim(),
-                contractor_id: selectedContractor ? selectedContractor.id : null,
-                contractor_name: selectedContractor ? selectedContractor.name : null,
-                contractor_price: selectedContractor ? Number(contractorPrice) : null,
-                // Remove contractor_price from notes; we record it on the contractor's balance instead.
-                notes: (form.notes || '' || '').replace(/\n?contractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,
-            };
+            const bookingData = {\n                booking_number: form.booking_number.trim() || null,\n                customer_type: form.customer_type,\n                customer_id: form.customer_id || null,\n                customer_name: form.customer_name.trim(),\n                customer_phone: form.customer_phone.trim(),\n                service_address: form.service_address.trim(),\n                scheduled_date: form.scheduled_date,\n                scheduled_time: form.scheduled_time,\n                status: form.status,\n                service_type: form.service_type.trim(),\n                contractor_id: selectedContractor ? selectedContractor.id : null,\n                contractor_name: selectedContractor ? selectedContractor.name : null,\n                contractor_price: selectedContractor ? Number(contractorPrice) : null,\n                // Remove contractor_price from notes; we record it on the contractor's balance instead.\n                notes: (form.notes || '' || '').replace(/\n?contractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,\n            };
 
             // @ts-ignore - Supabase type inference issue
             const { error } = await supabase.from('bookings').update(bookingData).eq('id', bookingId);
@@ -595,6 +582,22 @@ const EditBooking = () => {
                             <div className="panel">
                                 <form onSubmit={handleSubmit} className="space-y-5">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {/* Booking Number */}
+                                        <div>
+                                            <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                {t('booking_number') || 'Booking Number'} (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="booking_number"
+                                                name="booking_number"
+                                                value={form.booking_number}
+                                                onChange={handleInputChange}
+                                                className="form-input"
+                                                placeholder="Enter booking number (e.g., BK-2025-001)"
+                                            />
+                                        </div>
+
                                         {/* Customer Name */}
                                         <div>
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">

@@ -52,6 +52,7 @@ const AddBooking = () => {
     const [services, setServices] = useState<Service[]>([]);
 
     const [form, setForm] = useState({
+        booking_number: '',
         customer_type: 'private' as 'private' | 'business',
         customer_id: '',
         customer_name: '',
@@ -284,6 +285,7 @@ const AddBooking = () => {
             const statusToSave = form.status === 'request' || form.status === 'awaiting_execution' ? 'request' : form.status;
 
             const bookingData = {
+                booking_number: form.booking_number.trim() || null,
                 customer_type: form.customer_type,
                 customer_id: form.customer_id || null,
                 customer_name: form.customer_name.trim(),
@@ -427,6 +429,22 @@ const AddBooking = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Booking Number */}
+                        <div>
+                            <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                Booking Number (Optional)
+                            </label>
+                            <input
+                                type="text"
+                                id="booking_number"
+                                name="booking_number"
+                                value={form.booking_number}
+                                onChange={handleInputChange}
+                                className="form-input"
+                                placeholder="Enter booking number (e.g., BK-2025-001)"
+                            />
+                        </div>
+
                         {/* Customer Type */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">

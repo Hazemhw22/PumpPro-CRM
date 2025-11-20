@@ -86,7 +86,7 @@ export default function ProviderPdfButton({ booking, provider, role }: Props) {
                 service: {
                     name: booking.service_name || booking.service_type,
                 },
-                // include booking services
+                // include booking services (ALL services, not just the main one)
                 booking_services: bookingServices.length > 0 ? bookingServices : undefined,
                 services: bookingServices.length > 0 ? bookingServices : undefined,
                 lang: 'en',

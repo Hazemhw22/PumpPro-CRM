@@ -1928,6 +1928,7 @@ const BookingPreview = () => {
                                                                                         .from('booking_services')
                                                                                         .select('id, service_id, quantity, unit_price, description')
                                                                                         .eq('booking_id', booking.id);
+                                                                                    console.log('[PDF Handler] bsData length=', bsData ? bsData.length : 0, 'bsData=', bsData);
                                                                                     if (bsData && bsData.length > 0) {
                                                                                         const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
                                                                                         // @ts-ignore
@@ -1959,6 +1960,12 @@ const BookingPreview = () => {
                                                                                                               0,
                                                                                                       )) * (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
                                                                                         }));
+                                                                                        console.log(
+                                                                                            '[PDF Handler] after mapping, bookingServices length=',
+                                                                                            bookingServices.length,
+                                                                                            'names=',
+                                                                                            bookingServices.map((s: any) => s.name),
+                                                                                        );
                                                                                     }
                                                                                 } catch (err) {
                                                                                     console.warn('Could not fetch booking services for provider PDF', err);

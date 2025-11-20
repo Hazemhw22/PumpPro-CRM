@@ -218,7 +218,14 @@ export class InvoiceDealPDFGenerator {
         const sellerName = (data.contractor as any)?.name || '-';
         const providerTitle = sellerType === 'driver' ? t.driver : sellerType === 'contractor' ? t.contractor : t.seller;
 
-        // Get seller info (contractor or driver)
+        console.log(
+            '[generateHTML] no_price=',
+            (data as any).no_price,
+            'data.services len=',
+            Array.isArray(data.services) ? data.services.length : 'N/A',
+            'data.booking_services len=',
+            Array.isArray((data as any).booking_services) ? (data as any).booking_services.length : 'N/A',
+        );
         let finalSellerName = '-';
         let finalSellerPhone = '-';
         let finalProviderTitle = t.seller;
@@ -227,7 +234,7 @@ export class InvoiceDealPDFGenerator {
 
         if (sellerType === 'contractor' && data.contractor) {
             finalSellerName = data.contractor.name || '-';
-            finalSellerPhone = data.contractor.phone || '-';
+            finalSellerPhone = (data.contractor as any).phone || (data.contractor as any).phone_number || (data.contractor as any).number || '-';
             finalProviderTitle = t.contractor;
         } else if (sellerType === 'driver' && data.driver) {
             // Driver name is already formatted as "firstName lastName" from API
@@ -272,6 +279,14 @@ export class InvoiceDealPDFGenerator {
         }
         // Prefer explicitly passed `data.services`, then try `booking_services` or booking-level `services`.
         let servicesList: Array<any> = [];
+        console.log(
+            '[servicesList init] data.services=',
+            Array.isArray(data.services) ? data.services.length : typeof data.services,
+            'data.booking_services=',
+            Array.isArray((data as any).booking_services) ? (data as any).booking_services.length : typeof (data as any).booking_services,
+            'data.booking.services=',
+            Array.isArray((data.booking as any)?.services) ? (data.booking as any).services.length : typeof (data.booking as any)?.services,
+        );
         if (Array.isArray(data.services) && data.services.length > 0) {
             servicesList = data.services.map((s: any) => ({
                 name: s.name || s.service_name || (s.service && s.service.name) || '-',
@@ -304,6 +319,8 @@ export class InvoiceDealPDFGenerator {
 
         // Calculate total price as sum of all services
         const totalPrice = servicesList.reduce((sum: number, svc: any) => sum + (svc.total || 0), 0);
+
+        console.log('[InvoiceDealPDFGenerator] servicesList length=', servicesList.length, 'services=', servicesList.map((s: any) => s.name).join(', '));
 
         return `<!DOCTYPE html>
 <html>
@@ -345,11 +362,6 @@ export class InvoiceDealPDFGenerator {
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-    <div class="panel" style="background:#DBEAFE;">
-      <div style="font-weight:700;margin-bottom:6px;">${finalProviderTitle}</div>
-      <div><span class="muted">Name:</span> ${finalSellerName}</div>
-      <div><span class="muted">${t.phone}:</span> ${finalSellerPhone}</div>
-    </div>
     <div class="panel" style="background:#DCFCE7;">
       <div style="font-weight:700;margin-bottom:6px;">${t.customer}</div>
       <div><span class="muted">${t.company}:</span> ${customerCompany}</div>
@@ -359,41 +371,101 @@ export class InvoiceDealPDFGenerator {
   </div>
 
   ${
-      servicesList.length === 1
+      !noPrice
           ? `
-  <div class="panel" style="margin-bottom:12px;background:#FCE7F3;">
-    <div style="font-weight:700;margin-bottom:6px;">🚗 ${servicesList[0].name || '-'}</div>
-    <div class="kv">
-      <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
-      <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
-      ${!noPrice && (servicesList[0].quantity || servicesList[0].unit_price) ? `<div class="muted">Quantity / Unit Price</div><div>${servicesList[0].quantity || 1} / ${servicesList[0].unit_price ? this.formatCurrency(servicesList[0].unit_price) : '-'}</div>` : ''}
-      ${!noPrice && servicesList[0].total ? `<div class="muted">Total</div><div>${this.formatCurrency(servicesList[0].total)}</div>` : ''}
-    </div>
+  <div style="margin-bottom:6px;text-align:center;">
+    <h3 style="margin:0;font-size:14px;font-weight:700;color:#1D4ED8;">Invoice Deal</h3>
+  </div>
+  <div class="panel" style="margin-bottom:12px;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;direction:rtl;">
+      <thead>
+        <tr style="background:#f3f4f6;font-weight:700;">
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;">تفاصيل الخدمة</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">التاريخ</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">الوقت</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">الكمية</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">الإجمالي</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${servicesList
+            .map(
+                (svc: any) => `
+        <tr>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;font-weight:700;">${svc.name || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(bk.scheduled_date)}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${bk.scheduled_time || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${svc.quantity || 1}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">${svc.total ? this.formatCurrency(svc.total) : '-'}</td>
+        </tr>
+        `,
+            )
+            .join('')}
+        <tr style="font-weight:700;background:#f3f4f6;">
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;">الإجمالي قبل الضريبة</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">${this.formatCurrency(totalPrice)}</td>
+        </tr>
+        <tr style="font-weight:700;">
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;">الضريبة (18%)</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">${this.formatCurrency(totalPrice * 0.18)}</td>
+        </tr>
+        <tr style="font-weight:700;background:#DBEAFE;">
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;">الإجمالي شامل الضريبة</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;"></td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">${this.formatCurrency(totalPrice * 1.18)}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
   `
-          : servicesList.length > 1
-            ? `
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-    ${servicesList
-        .map(
-            (svc: any) => `
-    <div class="panel" style="background:#FCE7F3;">
-      <div style="font-weight:700;margin-bottom:6px;">🚗 ${svc.name || '-'}</div>
-      <div class="kv">
-        ${svc.description ? `<div class="muted">Description</div><div>${svc.description}</div>` : ''}
-        <div class="muted">${t.service_date} / ${t.service_time}</div><div>${InvoiceDealPDFGenerator.formatDate(bk.scheduled_date)}${bk.scheduled_time ? ' - ' + bk.scheduled_time : ''}</div>
-        <div class="muted">${t.service_address}</div><div>${bk.service_address || '-'}</div>
-        ${!noPrice && (svc.quantity || svc.unit_price) ? `<div class="muted">Quantity / Unit Price</div><div>${svc.quantity || 1} / ${svc.unit_price ? this.formatCurrency(svc.unit_price) : '-'}</div>` : ''}
-        ${!noPrice && svc.total ? `<div class="muted">Total</div><div>${this.formatCurrency(svc.total)}</div>` : ''}
-      </div>
-    </div>
-    `,
-        )
-        .join('')}
+          : `
+  <div style="margin-bottom:6px;text-align:center;">
+    <h3 style="margin:0;font-size:14px;font-weight:700;color:#1D4ED8;">Confirmation Documents</h3>
+  </div>
+  <div class="panel" style="margin-bottom:12px;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;direction:rtl;">
+      <thead>
+        <tr style="background:#f3f4f6;font-weight:700;">
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;">تفاصيل الخدمة</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">التاريخ</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">الوقت</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">الكمية</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${servicesList
+            .map(
+                (svc: any) => `
+        <tr>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:right;font-weight:700;">${svc.name || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(bk.scheduled_date)}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${bk.scheduled_time || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${svc.quantity || 1}</td>
+        </tr>
+        `,
+            )
+            .join('')}
+      </tbody>
+    </table>
   </div>
   `
-            : ''
   }
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+    <div class="panel" style="background:#DBEAFE;">
+      <div style="font-weight:700;margin-bottom:6px;">${finalProviderTitle}</div>
+      <div><span class="muted">Name:</span> ${finalSellerName}</div>
+      <div><span class="muted">${t.phone}:</span> ${finalSellerPhone}</div>
+    </div>
+  </div>
 
   ${
       bk.notes
@@ -401,31 +473,6 @@ export class InvoiceDealPDFGenerator {
   <div class="panel" style="margin-bottom:12px;background:#FEF3C7;">
     <div style="font-weight:700;margin-bottom:6px;">📝 ${t.notes}</div>
     <div>${bk.notes}</div>
-  </div>
-  `
-          : ''
-  }
-
-  ${
-      !noPrice
-          ? `
-  <div class="panel" style="margin-bottom:12px;">
-    <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💲 ${t.price}</div>
-    <div class="purchase-amount">${this.formatCurrency(totalPrice)}</div>
-  </div>
-  `
-          : ''
-  }
-
-  ${
-      includeAmount && !noPrice
-          ? `
-  <div class="panel" style="margin-bottom:12px;">
-    <div class="panel-title" style="font-weight:700;margin-bottom:6px;">💳 ${t.purchase_details}</div>
-    <div class="kv">
-      <div class="muted">${t.purchase_amount}</div><div>${amount}</div>
-      <div class="muted">${t.payment_method}</div><div>${paymentMethod}</div>
-    </div>
   </div>
   `
           : ''
@@ -458,6 +505,13 @@ export class InvoiceDealPDFGenerator {
 
     static async generatePDF(data: any, filename: string, docType?: 'invoice' | 'receipt') {
         try {
+            console.log(
+                '[InvoiceDealPDFGenerator.generatePDF] data.booking_services length=',
+                Array.isArray(data.booking_services) ? data.booking_services.length : 'not-array',
+                'data.services length=',
+                Array.isArray(data.services) ? data.services.length : 'not-array',
+            );
+
             const company = data.companyInfo || data.company || {};
             const pdfData: any = {
                 invoice: data.invoice || {

@@ -10,6 +10,15 @@ export async function POST(req: Request) {
         const pdfData = body?.pdfData;
         const docType = body?.docType as 'invoice' | 'receipt' | undefined;
 
+        console.log(
+            '[generate-contract-pdf] received pdfData.services length=',
+            Array.isArray(pdfData?.services) ? pdfData.services.length : 'N/A',
+            'pdfData.booking_services length=',
+            Array.isArray(pdfData?.booking_services) ? pdfData.booking_services.length : 'N/A',
+            'pdfData.no_price=',
+            pdfData?.no_price,
+        );
+
         let html: string | null = null;
 
         if (pdfData) {
