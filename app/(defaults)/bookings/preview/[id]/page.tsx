@@ -1905,7 +1905,7 @@ const BookingPreview = () => {
                                                             </td>
                                                             <td>{booking.customer_name}</td>
                                                             <td>{(booking as any).service_name || booking.service_type}</td>
-                                                            <td>₪{deal.total_amount.toFixed(2)}</td>
+                                                            <td>₪0.00</td>
                                                             <td>
                                                                 <span className="badge badge-outline-success">{deal.status}</span>
                                                             </td>
