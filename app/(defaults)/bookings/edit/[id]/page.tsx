@@ -178,11 +178,7 @@ const EditBooking = () => {
                         driver_id: bookingData.driver_id || '',
                         notes: bookingData.notes || '',
                     });
-                    setContractorPrice(
-                        typeof bookingData.contractor_price === 'number' && !Number.isNaN(bookingData.contractor_price)
-                            ? String(bookingData.contractor_price)
-                            : '',
-                    );
+                    setContractorPrice(typeof bookingData.contractor_price === 'number' && !Number.isNaN(bookingData.contractor_price) ? String(bookingData.contractor_price) : '');
                     // Load contractor if assigned
                     if (bookingData.contractor_id) {
                         try {
@@ -254,7 +250,7 @@ const EditBooking = () => {
         if (bookingId) {
             loadData();
         }
-    }, [bookingId]);
+    }, [bookingId, t]);
 
     // Auto-calculate total price from services and extra services
     const calculateTotalPrice = () => {
@@ -287,7 +283,7 @@ const EditBooking = () => {
     useEffect(() => {
         const newPrice = calculateTotalPrice();
         setForm((prev) => ({ ...prev, price: newPrice ? newPrice.toString() : '' }));
-    }, [form.service_type, form.customer_type, extraServices, services]);
+    }, [form.service_type, form.customer_type, extraServices, services, calculateTotalPrice]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -380,7 +376,23 @@ const EditBooking = () => {
 
         setSaving(true);
         try {
-            const bookingData = {\n                booking_number: form.booking_number.trim() || null,\n                customer_type: form.customer_type,\n                customer_id: form.customer_id || null,\n                customer_name: form.customer_name.trim(),\n                customer_phone: form.customer_phone.trim(),\n                service_address: form.service_address.trim(),\n                scheduled_date: form.scheduled_date,\n                scheduled_time: form.scheduled_time,\n                status: form.status,\n                service_type: form.service_type.trim(),\n                contractor_id: selectedContractor ? selectedContractor.id : null,\n                contractor_name: selectedContractor ? selectedContractor.name : null,\n                contractor_price: selectedContractor ? Number(contractorPrice) : null,\n                // Remove contractor_price from notes; we record it on the contractor's balance instead.\n                notes: (form.notes || '' || '').replace(/\n?contractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,\n            };
+            const bookingData = {
+                booking_number: form.booking_number.trim() || null,
+                customer_type: form.customer_type,
+                customer_id: form.customer_id || null,
+                customer_name: form.customer_name.trim(),
+                customer_phone: form.customer_phone.trim(),
+                service_address: form.service_address.trim(),
+                scheduled_date: form.scheduled_date,
+                scheduled_time: form.scheduled_time,
+                status: form.status,
+                service_type: form.service_type.trim(),
+                contractor_id: selectedContractor ? selectedContractor.id : null,
+                contractor_name: selectedContractor ? selectedContractor.name : null,
+                contractor_price: selectedContractor ? Number(contractorPrice) : null,
+                // Remove contractor_price from notes; we record it on the contractor's balance instead.
+                notes: (form.notes || '').replace(/\ncontractor_price:\s*[0-9]+(?:\.[0-9]+)?/g, '').trim() || null,
+            };
 
             // @ts-ignore - Supabase type inference issue
             const { error } = await supabase.from('bookings').update(bookingData).eq('id', bookingId);
@@ -440,8 +452,7 @@ const EditBooking = () => {
                     try {
                         const { data: prevContr, error: prevErr } = await supabase.from('contractors').select('balance').eq('id', prevContractorId).maybeSingle();
                         const prevBalance = (prevContr && (prevContr as any).balance) || 0;
-                        const { error: revertErr } = await (supabase
-                            .from('contractors') as any)
+                        const { error: revertErr } = await (supabase.from('contractors') as any)
                             .update({ balance: prevBalance + oldCp, updated_at: new Date().toISOString() })
                             .eq('id', prevContractorId);
                         if (revertErr) console.warn('Failed to revert previous contractor balance', revertErr);
@@ -459,10 +470,7 @@ const EditBooking = () => {
                         // If same contractor, apply delta (new - old), otherwise subtract full newCp
                         const delta = prevContractorId === newContractorId ? newCp - oldCp : newCp;
                         const newBalance = (currentBalance || 0) - delta;
-                        const { error: updateErr } = await (supabase
-                            .from('contractors') as any)
-                            .update({ balance: newBalance, updated_at: new Date().toISOString() })
-                            .eq('id', newContractorId);
+                        const { error: updateErr } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', newContractorId);
                         if (updateErr) console.warn('Failed to update contractor balance', updateErr);
                         else addAlert('success', `Recorded contractor adjustment ₪${delta.toFixed(2)} for contractor`, 'Success');
                     } catch (e) {

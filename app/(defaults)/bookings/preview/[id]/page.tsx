@@ -1874,13 +1874,8 @@ const BookingPreview = () => {
 
                         {/* CONFIRMATION Tab */}
                         <Tab.Panel>
-                            <div className="panel">
-                                <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Confirmation Documents</h3>
-                                </div>
-                                {invoiceDeals.filter((deal) => deal.metadata?.type === 'confirmation').length === 0 ? (
-                                    <div className="text-center py-4 text-gray-500 text-sm">No confirmation documents for this booking</div>
-                                ) : (
+                            {booking.status === 'confirmed' ? (
+                                <div className="panel">
                                     <div className="table-responsive">
                                         <table className="table-bordered">
                                             <thead>
@@ -1896,158 +1891,71 @@ const BookingPreview = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {invoiceDeals
-                                                    .filter((deal) => deal.metadata?.type === 'confirmation')
-                                                    .map((deal) => (
+                                                {invoiceDeals && invoiceDeals.length > 0 ? (
+                                                    invoiceDeals.map((deal) => (
                                                         <tr key={deal.id}>
                                                             <td>
-                                                                <strong className="text-primary">{deal.invoice_number}</strong>
+                                                                <a href="#" className="text-primary hover:underline font-semibold">
+                                                                    {deal.invoice_number}
+                                                                </a>
                                                             </td>
                                                             <td>
-                                                                <span className="badge badge-outline-info">Confirmation</span>
+                                                                <span className="badge badge-outline-primary">Confirmation</span>
                                                             </td>
-                                                            <td>{booking.customer_name || 'N/A'}</td>
-                                                            <td>{getServicesDisplay()}</td>
-                                                            <td>₪{(deal.total_amount || 0).toFixed(2)}</td>
+                                                            <td>{booking.customer_name}</td>
+                                                            <td>{(booking as any).service_name || booking.service_type}</td>
+                                                            <td>₪{deal.total_amount.toFixed(2)}</td>
                                                             <td>
-                                                                <span className="badge badge-outline-success">{deal.status?.toUpperCase()}</span>
+                                                                <span className="badge badge-outline-success">{deal.status}</span>
                                                             </td>
                                                             <td>{new Date(deal.created_at).toLocaleDateString('en-GB')}</td>
                                                             <td>
                                                                 {deal.pdf_url ? (
                                                                     <button
-                                                                        onClick={async () => {
-                                                                            try {
-                                                                                setGeneratingConfirmation(deal.id);
-
-                                                                                // Fetch booking services
-                                                                                let bookingServices: any[] = [];
-                                                                                try {
-                                                                                    // @ts-ignore
-                                                                                    const { data: bsData } = await supabase
-                                                                                        .from('booking_services')
-                                                                                        .select('id, service_id, quantity, unit_price, description')
-                                                                                        .eq('booking_id', booking.id);
-                                                                                    console.log('[PDF Handler] bsData length=', bsData ? bsData.length : 0, 'bsData=', bsData);
-                                                                                    if (bsData && bsData.length > 0) {
-                                                                                        const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
-                                                                                        // @ts-ignore
-                                                                                        const { data: svcData } =
-                                                                                            serviceIds.length > 0
-                                                                                                ? await supabase.from('services').select('id, name, price_private, price_business').in('id', serviceIds)
-                                                                                                : { data: [] };
-                                                                                        const svcMap = new Map((svcData || []).map((s: any) => [s.id, s]));
-                                                                                        bookingServices = bsData.map((bsvc: any) => ({
-                                                                                            id: bsvc.id,
-                                                                                            service_id: bsvc.service_id,
-                                                                                            name: svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-',
-                                                                                            description: bsvc.description || null,
-                                                                                            quantity: typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1),
-                                                                                            unit_price:
-                                                                                                typeof bsvc.unit_price === 'number'
-                                                                                                    ? bsvc.unit_price
-                                                                                                    : Number(
-                                                                                                          svcMap.get(bsvc.service_id)?.price_private ||
-                                                                                                              svcMap.get(bsvc.service_id)?.price_business ||
-                                                                                                              0,
-                                                                                                      ),
-                                                                                            total:
-                                                                                                (typeof bsvc.unit_price === 'number'
-                                                                                                    ? bsvc.unit_price
-                                                                                                    : Number(
-                                                                                                          svcMap.get(bsvc.service_id)?.price_private ||
-                                                                                                              svcMap.get(bsvc.service_id)?.price_business ||
-                                                                                                              0,
-                                                                                                      )) * (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
-                                                                                        }));
-                                                                                        console.log(
-                                                                                            '[PDF Handler] after mapping, bookingServices length=',
-                                                                                            bookingServices.length,
-                                                                                            'names=',
-                                                                                            bookingServices.map((s: any) => s.name),
-                                                                                        );
-                                                                                    }
-                                                                                } catch (err) {
-                                                                                    console.warn('Could not fetch booking services for provider PDF', err);
-                                                                                }
-
-                                                                                const providerContractor = booking.contractor || null;
-                                                                                const providerDriver = booking.driver || null;
-                                                                                const providerName = providerContractor?.name || providerDriver?.name || undefined;
-
-                                                                                const data: any = {
-                                                                                    company: {
-                                                                                        name: 'PumpPro CRM',
-                                                                                        phone: '',
-                                                                                        address: '',
-                                                                                        tax_id: '',
-                                                                                        logo_url: '/favicon.png',
-                                                                                    },
-                                                                                    invoice: null,
-                                                                                    booking: {
-                                                                                        booking_number: booking.booking_number,
-                                                                                        service_type: booking.service_type,
-                                                                                        service_address: booking.service_address,
-                                                                                        scheduled_date: booking.scheduled_date,
-                                                                                        scheduled_time: booking.scheduled_time,
-                                                                                        notes: booking.notes,
-                                                                                        contractor_id: booking.contractor_id,
-                                                                                        driver_id: booking.driver_id,
-                                                                                    },
-                                                                                    contractor: providerContractor
-                                                                                        ? {
-                                                                                              name: providerContractor.name || providerName || undefined,
-                                                                                              phone: (providerContractor as any)?.phone || undefined,
-                                                                                          }
-                                                                                        : undefined,
-                                                                                    driver: providerDriver
-                                                                                        ? {
-                                                                                              name: providerDriver.name || providerName || undefined,
-                                                                                              driver_number: (providerDriver as any)?.driver_number || (providerDriver as any)?.phone || undefined,
-                                                                                          }
-                                                                                        : undefined,
-                                                                                    customer: {
-                                                                                        name: booking.customer_name,
-                                                                                        phone: booking.customer_phone,
-                                                                                        address: booking.service_address,
-                                                                                    },
-                                                                                    service: {
-                                                                                        name: (booking as any).service_name || booking.service_type,
-                                                                                    },
-                                                                                    booking_services: bookingServices.length > 0 ? bookingServices : undefined,
-                                                                                    services: bookingServices.length > 0 ? bookingServices : undefined,
-                                                                                    lang: 'en',
-                                                                                    no_price: true,
-                                                                                };
-
-                                                                                await InvoiceDealPDFGenerator.generatePDF(
-                                                                                    data,
-                                                                                    `booking-${booking.booking_number || booking.id}-provider.pdf`,
-                                                                                    'invoice',
-                                                                                );
-                                                                            } catch (e: any) {
-                                                                                console.error('Provider PDF error', e);
-                                                                                window.alert((e && e.message) || 'Error generating PDF');
-                                                                            } finally {
-                                                                                setGeneratingConfirmation(null);
-                                                                            }
-                                                                        }}
-                                                                        className={`inline-flex hover:text-info ${generatingConfirmation === deal.id ? 'opacity-60 pointer-events-none' : ''}`}
-                                                                        title="Download Provider PDF"
-                                                                        disabled={generatingConfirmation === deal.id}
+                                                                        onClick={() => deal.pdf_url && window.open(deal.pdf_url, '_blank')}
+                                                                        className="inline-flex hover:text-primary"
+                                                                        title="Download PDF"
                                                                     >
                                                                         <IconPdf className="h-5 w-5" />
                                                                     </button>
                                                                 ) : (
-                                                                    <span className="text-xs text-gray-500">No PDF</span>
+                                                                    <span className="text-xs text-gray-500">-</span>
                                                                 )}
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={8} className="text-center text-gray-500 py-6">
+                                                            No confirmation documents yet
+                                                        </td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
-                                )}
+                                </div>
+                            ) : (
+                                <div className="panel">
+                                    <div className="text-center py-10">
+                                        <div className="text-5xl mb-4">⏳</div>
+                                        <h3 className="text-lg font-semibold text-gray-600 mb-2">Booking Not Confirmed Yet</h3>
+                                        <p className="text-sm text-gray-500">Confirmation details will appear here once the booking is confirmed.</p>
+                                        <p className="text-xs text-gray-400 mt-4">
+                                            Current Status: <span className="badge badge-outline-warning">{booking.status}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </Tab.Panel>
+
+                        {/* History Tab */}
+                        <Tab.Panel>
+                            <div className="space-y-6">
+                                <div className="panel">
+                                    <h5 className="font-semibold mb-4">Booking History</h5>
+                                    <p className="text-sm text-gray-600">No history available yet</p>
+                                </div>
                             </div>
                         </Tab.Panel>
 
