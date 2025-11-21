@@ -1,12 +1,5 @@
 'use client';
-import IconEdit from '@/components/icon/icon-edit';
-import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
-import IconTrashLines from '@/components/icon/icon-trash-lines';
-import IconPdf from '@/components/icon/icon-pdf';
-import IconCheck from '@/components/icon/icon-check';
-import IconPackage from '@/components/icon/icon-box';
-import { sortBy } from 'lodash';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,9 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
-import BookingsFilters, { BookingFilters as BookingFiltersType } from '@/components/bookings-filters/bookings-filters';
-import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
-import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
+import BookingsCard from '@/components/bookings/bookings-card';
+import Tabs from '@/components/ui/tabs';
 
 interface Booking {
     id: string;
@@ -29,13 +21,18 @@ interface Booking {
     scheduled_date: string;
     scheduled_time: string;
     status: 'pending' | 'request' | 'awaiting_execution' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
-
     service_type: string;
     contractor_id?: string | null;
     driver_id?: string | null;
     contractor?: { id?: string; name?: string } | null;
     driver?: { id?: string; name?: string } | null;
+    price?: number;
+    profit?: number;
+    payment_status?: string;
+    truck?: { truck_number?: string } | null;
 }
+
+type TabType = 'pending' | 'request' | 'awaiting_execution' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 
 const BookingsList = () => {
     const { t } = getTranslation();
@@ -45,44 +42,21 @@ const BookingsList = () => {
     const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
     const [currentContractorId, setCurrentContractorId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-
-    const [page, setPage] = useState(1);
-    const PAGE_SIZES = [10, 20, 30, 50, 100];
-    const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
-    const [initialRecords, setInitialRecords] = useState<Booking[]>([]);
-    const [records, setRecords] = useState<Booking[]>([]);
-    const [selectedRecords, setSelectedRecords] = useState<Booking[]>([]);
-
-    const [filters, setFilters] = useState<BookingFiltersType>({ search: '', status: '', serviceType: '', dateFrom: '', dateTo: '' });
-    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-    const [sortStatus, setSortStatus] = useState<{ columnAccessor: keyof Booking | 'created_at'; direction: 'asc' | 'desc' }>({
-        columnAccessor: 'created_at',
-        direction: 'desc',
-    });
-
-    // Modal and alert states
+    const [activeTab, setActiveTab] = useState<TabType>('pending');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(20);
+    const [searchTerm, setSearchTerm] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
-    const [showServiceModal, setShowServiceModal] = useState(false);
-    const [bookingForService, setBookingForService] = useState<Booking | null>(null);
-    const [services, setServices] = useState<any[]>([]);
-    const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-    const [serviceQuantity, setServiceQuantity] = useState<number>(1);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
         message: '',
         type: 'success',
     });
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const fetchBookings = async () => {
             try {
-                // Fetch services for service modal
-                // @ts-ignore
-                const { data: servicesData } = await supabase.from('services').select('id, name, price_private, price_business, active').eq('active', true);
-                if (servicesData) setServices(servicesData);
-
                 // Determine role and related ids
                 let role: string | null = null;
                 let contractorId: string | null = null;
@@ -100,7 +74,6 @@ const BookingsList = () => {
                             // @ts-ignore
                             let { data: c } = await supabase.from('contractors').select('id, email').eq('user_id', user.id).maybeSingle();
                             contractorId = (c as any)?.id || null;
-                            // Fallback by email if user_id not linked
                             if (!contractorId && (user as any).email) {
                                 // @ts-ignore
                                 const { data: c2 } = await supabase
@@ -125,7 +98,6 @@ const BookingsList = () => {
                             }
                         }
 
-                        // expose resolved current driver/contractor ids to UI for permission checks
                         setCurrentDriverId(driverId);
                         setCurrentContractorId(contractorId);
                     }
@@ -136,13 +108,11 @@ const BookingsList = () => {
                 // Enforce role-based filtering strictly
                 if (role === 'contractor' && !contractorId) {
                     setItems([] as any);
-                    setInitialRecords([] as any);
                     setLoading(false);
                     return;
                 }
                 if (role === 'driver' && !driverId) {
                     setItems([] as any);
-                    setInitialRecords([] as any);
                     setLoading(false);
                     return;
                 }
@@ -156,13 +126,13 @@ const BookingsList = () => {
 
                 if (bookingsError) throw bookingsError;
 
-                // Fetch related data separately
+                // Fetch related data
                 const truckIds = Array.from(new Set(bookingsData?.map((b: any) => b.truck_id).filter(Boolean)));
                 const driverIds = Array.from(new Set(bookingsData?.map((b: any) => b.driver_id).filter(Boolean)));
                 const serviceIds = Array.from(new Set(bookingsData?.map((b: any) => b.service_type).filter(Boolean)));
                 const contractorIds = Array.from(new Set(bookingsData?.map((b: any) => b.contractor_id).filter(Boolean)));
 
-                // Fetch invoices for these bookings to know which ones already have an invoice
+                // Fetch invoices for these bookings
                 const bookingIds = Array.from(new Set(bookingsData?.map((b: any) => b.id).filter(Boolean)));
                 let invoiceBookingSet = new Set<string>();
                 if (bookingIds.length > 0) {
@@ -211,159 +181,45 @@ const BookingsList = () => {
         fetchBookings();
     }, []);
 
-    useEffect(() => {
-        setPage(1);
-    }, [pageSize]);
+    const filteredBookings = useMemo(() => {
+        let filtered = items;
 
-    useEffect(() => {
-        const data = sortBy(initialRecords, (x) => {
-            const key = sortStatus.columnAccessor as string;
-            if (key === 'created_at') return new Date((x as any)[key]).getTime();
-            const v = (x as any)[key];
-            return typeof v === 'string' ? v.toLowerCase() : v;
-        });
-        const sortedData = sortStatus.direction === 'desc' ? data.reverse() : data;
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize;
-        setRecords(sortedData.slice(from, to));
-    }, [page, pageSize, sortStatus, initialRecords]);
+        // Filter by status
+        filtered = items.filter((booking) => booking.status === activeTab);
 
-    useEffect(() => {
-        setInitialRecords(
-            items.filter((item) => {
-                // status filter
-                if (filters.status && item.status !== filters.status) return false;
-
-                // service type filter
-                if (filters.serviceType && !(item.service_type || '').toLowerCase().includes(filters.serviceType.toLowerCase())) return false;
-
-                // search filter
-                const q = (filters.search || '').toLowerCase();
-                if (q) {
-                    const matches =
-                        (item.booking_number || '').toLowerCase().includes(q) ||
-                        (item.customer_name || '').toLowerCase().includes(q) ||
-                        (item.customer_phone || '').toLowerCase().includes(q) ||
-                        (item.service_address || '').toLowerCase().includes(q) ||
-                        (item.service_type || '').toLowerCase().includes(q) ||
-                        (item.status || '').toLowerCase().includes(q);
-                    if (!matches) return false;
-                }
-
-                // date range filter (use scheduled_date if available)
-                if (filters.dateFrom || filters.dateTo) {
-                    const itemDate = item.scheduled_date ? new Date(item.scheduled_date) : new Date(item.created_at);
-                    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null;
-                    const dateTo = filters.dateTo ? new Date(filters.dateTo) : null;
-                    if (dateFrom && itemDate < dateFrom) return false;
-                    if (dateTo && itemDate > dateTo) return false;
-                }
-
-                return true;
-            }),
-        );
-    }, [items, filters]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [pageSize]);
-
-    const toggleSelectAllOnPage = () => {
-        const pageIds = new Set(records.map((r) => r.id));
-        const allSelected = records.every((r) => selectedRecords.some((s) => s.id === r.id));
-        if (allSelected) {
-            setSelectedRecords((prev) => prev.filter((s) => !pageIds.has(s.id)));
-        } else {
-            const byId = new Set(selectedRecords.map((s) => s.id));
-            const merged = [...selectedRecords];
-            records.forEach((r) => {
-                if (!byId.has(r.id)) merged.push(r);
-            });
-            setSelectedRecords(merged);
+        // Filter by search term
+        if (searchTerm) {
+            filtered = filtered.filter(
+                (booking) =>
+                    booking.booking_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    booking.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    booking.customer_phone?.includes(searchTerm),
+            );
         }
+
+        return filtered;
+    }, [items, activeTab, searchTerm]);
+
+    // Pagination logic
+    const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedBookings = useMemo(() => filteredBookings.slice(startIndex, endIndex), [filteredBookings, startIndex, endIndex]);
+
+    const handleTabChange = (tabId: string) => {
+        setActiveTab(tabId as TabType);
+        setCurrentPage(1);
     };
 
-    const toggleRow = (row: Booking) => {
-        setSelectedRecords((prev) => {
-            const exists = prev.some((s) => s.id === row.id);
-            if (exists) return prev.filter((s) => s.id !== row.id);
-            return [...prev, row];
-        });
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
     };
 
-    const isAllPageSelected = useMemo(() => records.length > 0 && records.every((r) => selectedRecords.some((s) => s.id === r.id)), [records, selectedRecords]);
-
-    const statusBadge = (status?: string) => {
-        switch (status) {
-            case 'confirmed':
-                return 'badge-outline-success';
-            case 'in_progress':
-                return 'badge-outline-info';
-            case 'completed':
-                return 'badge-outline-primary';
-            case 'cancelled':
-                return 'badge-outline-danger';
-            default:
-                return 'badge-outline-warning';
-        }
-    };
-
-    const deleteRow = (id: string | null = null) => {
-        if (id) {
-            const booking = items.find((b) => b.id === id);
-            if (booking) {
-                setBookingToDelete(booking);
-                setShowConfirmModal(true);
-            }
-        }
-    };
-
-    const createInvoiceFromBooking = async (bookingId: string) => {
-        try {
-            // Check if invoice already exists
-            const { data: existingInvoice } = await supabase.from('invoices').select('id').eq('booking_id', bookingId).maybeSingle();
-
-            if (existingInvoice) {
-                setAlert({ visible: true, message: t('invoice_already_exists'), type: 'danger' });
-                return;
-            }
-
-            // Get booking details
-            const booking = items.find((b) => b.id === bookingId);
-            if (!booking) {
-                setAlert({ visible: true, message: t('booking_not_found'), type: 'danger' });
-                return;
-            }
-
-            // Create invoice
-            const invoiceData = {
-                booking_id: bookingId,
-                customer_id: (booking as any).customer_id || null,
-                customer_name: booking.customer_name,
-                customer_phone: booking.customer_phone,
-                service_name: (booking as any).service_name || booking.service_type,
-                total_amount: (booking as any).price || 0,
-                paid_amount: 0,
-                remaining_amount: (booking as any).price || 0,
-                status: 'pending',
-                invoice_type: 'tax_invoice',
-                invoice_date: new Date().toISOString().split('T')[0],
-                due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-            };
-
-            // @ts-ignore - supabase types are loose in this project
-            const { data: newInvoice, error } = await supabase.from('invoices').insert([invoiceData]).select().single();
-
-            if (error) throw error;
-
-            setAlert({ visible: true, message: t('invoice_created_successfully'), type: 'success' });
-
-            // Refresh the bookings list
-            const updatedItems = items.map((item) => (item.id === bookingId ? { ...item, has_invoice: true } : item));
-            setItems(updatedItems as any);
-        } catch (error) {
-            console.error('Error creating invoice:', error);
-            setAlert({ visible: true, message: t('error_creating_invoice'), type: 'danger' });
+    const handleDelete = (id: string) => {
+        const booking = items.find((b) => b.id === id);
+        if (booking) {
+            setBookingToDelete(booking);
+            setShowConfirmModal(true);
         }
     };
 
@@ -385,171 +241,18 @@ const BookingsList = () => {
         }
     };
 
-    const openServiceModal = (booking: Booking) => {
-        setBookingForService(booking);
-        setSelectedServiceId('');
-        setServiceQuantity(1);
-        setShowServiceModal(true);
-    };
-
-    const closeServiceModal = () => {
-        setShowServiceModal(false);
-        setBookingForService(null);
-        setSelectedServiceId('');
-        setServiceQuantity(1);
-    };
-
-    const handleAddService = async () => {
-        if (!bookingForService || !selectedServiceId) {
-            setAlert({ visible: true, message: t('select_service') || 'Please select a service', type: 'danger' });
-            return;
-        }
-
+    const handleConfirmBooking = async (booking: Booking) => {
+        if (booking.status === 'confirmed') return;
         try {
-            const selectedService = services.find((s) => s.id === selectedServiceId);
-            if (!selectedService) {
-                setAlert({ visible: true, message: t('service_not_found'), type: 'danger' });
-                return;
-            }
-
-            // Get the customer type to determine the price
-            const customer = items.find((b) => b.id === bookingForService.id);
-            const customerType = (customer as any)?.customer_type || 'private';
-
-            const unitPrice = customerType === 'private' ? selectedService.price_private : selectedService.price_business;
-
-            // Insert into booking_services
             // @ts-ignore
-            const { error } = await supabase.from('booking_services').insert([
-                {
-                    booking_id: bookingForService.id,
-                    service_id: selectedServiceId,
-                    quantity: serviceQuantity,
-                    unit_price: unitPrice || 0,
-                },
-            ]);
-
-            if (error) throw error;
-
-            setAlert({ visible: true, message: t('service_added_successfully') || 'Service added successfully', type: 'success' });
-            closeServiceModal();
-        } catch (error) {
-            console.error('Error adding service:', error);
-            setAlert({ visible: true, message: t('error_adding_service') || 'Error adding service', type: 'danger' });
-        }
-    };
-
-    const handleDownloadBookingPdf = async (row: Booking) => {
-        try {
-            const language: 'en' | 'he' | 'ar' = 'en';
-
-            const providerContractor = (row as any).contractor || null;
-            const providerDriver = (row as any).driver || null;
-
-            const providerNameFrom = (p: any) => {
-                if (!p) return undefined;
-                if (p.name && String(p.name).trim()) return String(p.name).trim();
-                if (p.driver_name && String(p.driver_name).trim()) return String(p.driver_name).trim();
-                if (p.first_name || p.last_name) return `${(p.first_name || '').trim()} ${(p.last_name || '').trim()}`.trim();
-                return undefined;
-            };
-
-            const provider: any = providerContractor || providerDriver || null;
-
-            // Fetch booking_services for this booking so the PDF includes all linked services
-            let bookingServices: any[] = [];
-            try {
-                // @ts-ignore
-                const { data: bsData } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, description').eq('booking_id', row.id);
-                if (bsData && bsData.length > 0) {
-                    const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
-                    // @ts-ignore
-                    const { data: svcData } = serviceIds.length > 0 ? await supabase.from('services').select('id, name, price_private, price_business').in('id', serviceIds) : { data: [] };
-                    const svcMap = new Map((svcData || []).map((s: any) => [s.id, s]));
-                    bookingServices = bsData.map((bsvc: any) => ({
-                        id: bsvc.id,
-                        service_id: bsvc.service_id,
-                        name: svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-',
-                        description: bsvc.description || null,
-                        quantity: typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1),
-                        unit_price: typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0),
-                        total:
-                            (typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0)) *
-                            (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
-                    }));
-                }
-            } catch (err) {
-                // If booking services fetch fails, continue without them
-                console.warn('Could not fetch booking services for PDF', err);
-                bookingServices = [];
-            }
-
-            const data: any = {
-                company: {
-                    name: 'PumpPro CRM',
-                    phone: '',
-                    address: '',
-                    tax_id: '',
-                    // default PDF logo path — place your logo at public/assets/images/pdf-logo.png
-                    logo_url: '/assets/images/pdf-logo.png',
-                },
-                invoice: null,
-                booking: {
-                    booking_number: (row as any).booking_number,
-                    service_type: (row as any).service_type,
-                    service_address: (row as any).service_address,
-                    scheduled_date: (row as any).scheduled_date,
-                    scheduled_time: (row as any).scheduled_time,
-                    notes: (row as any).notes,
-                    contractor_id: (row as any).contractor_id,
-                    driver_id: (row as any).driver_id,
-                },
-                contractor: providerContractor
-                    ? {
-                          name: providerNameFrom(providerContractor) || undefined,
-                          phone: providerContractor.phone || undefined,
-                      }
-                    : undefined,
-                driver: providerDriver
-                    ? {
-                          name: providerNameFrom(providerDriver) || undefined,
-                          driver_number: providerDriver.driver_number || providerDriver.phone || undefined,
-                      }
-                    : undefined,
-                customer: {
-                    name: (row as any).customer_name,
-                    phone: (row as any).customer_phone,
-                    address: (row as any).service_address,
-                },
-                service: {
-                    name: (row as any).service_name || (row as any).service_type,
-                },
-                // include normalized booking services so the PDF generator will list them
-                booking_services: bookingServices.length > 0 ? bookingServices : undefined,
-                services: bookingServices.length > 0 ? bookingServices : undefined,
-                lang: language,
-                no_price: role === 'driver' || role === 'contractor',
-            };
-
-            await InvoiceDealPDFGenerator.generatePDF(data, `booking-${(row as any).booking_number || row.id}.pdf`, 'invoice');
-        } catch (error) {
-            console.error('Error generating booking PDF:', error);
-            setAlert({ visible: true, message: t('error_generating_pdf') || 'Error generating PDF', type: 'danger' });
-        }
-    };
-
-    const handleConfirmBooking = async (row: Booking) => {
-        if (row.status === 'confirmed') return;
-        try {
-            // @ts-ignore - relax supabase typing for bookings update
-            const { error: updateError } = await (supabase as any).from('bookings').update({ status: 'confirmed' }).eq('id', row.id);
+            const { error: updateError } = await (supabase as any).from('bookings').update({ status: 'confirmed' }).eq('id', booking.id);
             if (updateError) throw updateError;
 
             // @ts-ignore
             const { error: trackError } = await supabase.from('booking_tracks').insert([
                 {
-                    booking_id: row.id,
-                    old_status: (row as any).status,
+                    booking_id: booking.id,
+                    old_status: booking.status,
                     new_status: 'confirmed',
                     created_at: new Date().toISOString(),
                 },
@@ -559,33 +262,43 @@ const BookingsList = () => {
                 console.error('Could not insert booking track:', trackError);
             }
 
-            setItems((prev) => prev.map((b) => (b.id === row.id ? ({ ...b, status: 'confirmed' } as any) : b)) as any);
+            setItems((prev) => prev.map((b) => (b.id === booking.id ? ({ ...b, status: 'confirmed' } as any) : b)) as any);
             setAlert({ visible: true, message: t('booking_confirmed') || 'Booking confirmed', type: 'success' });
-
-            // Do not redirect the assigned provider so they can immediately download the provider PDF
         } catch (error) {
             console.error('Error confirming booking:', error);
             setAlert({ visible: true, message: t('error_confirming_booking') || 'Error confirming booking', type: 'danger' });
         }
     };
 
-    const setSort = (columnAccessor: 'created_at' | 'booking_number' | 'customer_name' | 'service_address' | 'customer_phone') => {
-        setSortStatus((curr) => {
-            if (curr.columnAccessor === columnAccessor) {
-                return { columnAccessor, direction: curr.direction === 'asc' ? 'desc' : 'asc' };
-            }
-            return { columnAccessor, direction: 'asc' };
-        });
-    };
+    // Tab items with counts
+    const tabItems = [
+        {
+            id: 'request',
+            label: `Request (${items.filter((o) => o.status === 'request').length})`,
+        },
+        {
+            id: 'awaiting_execution',
+            label: `Awaiting Execution (${items.filter((o) => o.status === 'awaiting_execution').length})`,
+        },
+        {
+            id: 'confirmed',
+            label: `Confirmed (${items.filter((o) => o.status === 'confirmed').length})`,
+        },
+    ] as any;
 
-    const totalRecords = initialRecords.length;
-    const from = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
-    const to = Math.min(page * pageSize, totalRecords);
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
 
     return (
-        <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+        <div className="space-y-6">
+            {/* Alert */}
             {alert.visible && (
-                <div className="mb-4 ml-4 max-w-96">
+                <div className="max-w-96">
                     <Alert
                         type={alert.type}
                         title={alert.type === 'success' ? t('success') : t('error')}
@@ -594,173 +307,127 @@ const BookingsList = () => {
                     />
                 </div>
             )}
-            <div className="invoice-table">
-                <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
-                    <div className="flex items-center gap-2">
-                        {role === 'admin' && (
-                            <>
-                                <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0}>
-                                    <IconTrashLines />
-                                    {t('delete')}
-                                </button>
-                                <Link href="/bookings/add" className="btn btn-primary gap-2">
-                                    <IconPlus />
-                                    {t('add_new_booking')}
-                                </Link>
-                            </>
-                        )}
-                    </div>
-                    <div className="flex-grow">
-                        <BookingsFilters
-                            onFilterChange={setFilters}
-                            onClearFilters={() =>
-                                setFilters({
-                                    search: '',
-                                    status: '',
-                                    serviceType: '',
-                                    dateFrom: '',
-                                    dateTo: '',
-                                })
-                            }
-                            viewMode={viewMode}
-                            onViewModeChange={setViewMode}
-                        />
+
+            {/* Header */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Bookings</h1>
+                    <p className="text-gray-500 dark:text-gray-400">Manage and track all your bookings</p>
+                </div>
+                {role === 'admin' && (
+                    <Link href="/bookings/add" className="btn btn-primary gap-2">
+                        <IconPlus className="h-4 w-4" />
+                        Add New Booking
+                    </Link>
+                )}
+            </div>
+
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Bookings</p>
+                            <p className="text-2xl font-bold text-primary mt-1">{items.length}</p>
+                        </div>
+                        <div className="text-3xl opacity-20">📋</div>
                     </div>
                 </div>
-
-                <div className="relative px-5 pb-5">
-                    <div className="overflow-x-auto overflow-y-hidden rounded-md">
-                        <table className="table-hover whitespace-nowrap rtl-table-headers">
-                            <thead>
-                                <tr>
-                                    <th className="w-10">
-                                        <input type="checkbox" className="form-checkbox outline-primary" checked={isAllPageSelected} onChange={toggleSelectAllOnPage} />
-                                    </th>
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('booking_number')}>
-                                        Booking # {sortStatus.columnAccessor === 'booking_number' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('customer_name')}>
-                                        Customer {sortStatus.columnAccessor === 'customer_name' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('service_address')}>
-                                        Address {sortStatus.columnAccessor === 'service_address' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-                                    <th className="cursor-pointer select-none">{t('service') || 'Service'}</th>
-                                    <th className="cursor-pointer select-none" onClick={() => setSort('created_at')}>
-                                        Date & Time {sortStatus.columnAccessor === 'created_at' && (sortStatus.direction === 'asc' ? '↑' : '↓')}
-                                    </th>
-                                    <th>Price</th>
-                                    <th>Profit</th>
-                                    <th>Payment</th>
-                                    <th>Truck</th>
-                                    <th>Service</th>
-                                    <th>Handler</th>
-                                    <th>Contractor</th>
-                                    <th>Driver</th>
-                                    <th>Status</th>
-                                    <th className="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* Empty-state row intentionally removed to avoid showing "No records" placeholder */}
-                                {records.map((row) => (
-                                    <tr key={row.id}>
-                                        <td>
-                                            <input type="checkbox" className="form-checkbox outline-primary" checked={selectedRecords.some((s) => s.id === row.id)} onChange={() => toggleRow(row)} />
-                                        </td>
-                                        <td>
-                                            <div className="flex items-center gap-2">
-                                                <strong className="text-info">#{row.booking_number || row.id}</strong>
-                                                <Link href={`/bookings/preview/${row.id}`} className="flex hover:text-info" title={t('view')}>
-                                                    <IconEye className="h-4 w-4" />
-                                                </Link>
-                                            </div>
-                                        </td>
-                                        <td className="font-semibold">{row.customer_name}</td>
-                                        <td className="max-w-xs truncate">{row.service_address || '-'}</td>
-                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
-                                        <td>{row.scheduled_date && row.scheduled_time ? `${new Date(row.scheduled_date).toLocaleDateString('en-GB')} ${row.scheduled_time}` : '-'}</td>
-                                        <td>${(row as any).price || 0}</td>
-                                        <td>${(row as any).profit || 0}</td>
-                                        <td>
-                                            <span className="badge badge-outline-info">{(row as any).payment_status || 'Pending'}</span>
-                                        </td>
-                                        <td>{(row as any).truck?.truck_number || '-'}</td>
-                                        <td>{(row as any).service_name || (row as any).service_type || '-'}</td>
-                                        <td>{(row as any).contractor ? 'Contractor' : (row as any).driver ? 'Driver' : '-'}</td>
-                                        <td>{(row as any).contractor?.name || '-'}</td>
-                                        <td>{(row as any).driver?.name || '-'}</td>
-                                        <td>
-                                            <span className={`badge ${statusBadge(row.status)}`}>{row.status?.replace('_', ' ') || 'pending'}</span>
-                                        </td>
-                                        <td>
-                                            <div className="mx-auto flex w-max items-center gap-2">
-                                                {role === 'admin' && (
-                                                    <>
-                                                        {!(row as any).has_invoice && (
-                                                            <Link href={`/bookings/edit/${row.id}`} className="flex hover:text-info">
-                                                                <IconEdit className="h-4.5 w-4.5" />
-                                                            </Link>
-                                                        )}
-
-                                                        <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(row.id)}>
-                                                            <IconTrashLines />
-                                                        </button>
-
-                                                        {row.status === 'confirmed' && <ProviderPdfButton booking={row} provider={(row as any).contractor || (row as any).driver} role={role} />}
-                                                    </>
-                                                )}
-                                                {((role === 'contractor' && row.contractor_id === currentContractorId) || (role === 'driver' && row.driver_id === currentDriverId)) && (
-                                                    <>
-                                                        {/* If booking awaiting assignment confirmation, show Confirm button to assigned provider */}
-                                                        {row.status === 'awaiting_execution' && (
-                                                            <button type="button" className="flex hover:text-success" onClick={() => handleConfirmBooking(row)}>
-                                                                <IconCheck className="h-4.5 w-4.5" />
-                                                            </button>
-                                                        )}
-
-                                                        {/* After provider confirms (status === 'confirmed'), show PDF without prices */}
-                                                        {row.status === 'confirmed' && <ProviderPdfButton booking={row} provider={(row as any).contractor || (row as any).driver} role={role} />}
-                                                    </>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                <div className="panel bg-gradient-to-br from-yellow-500/10 to-yellow-600/10">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Request</p>
+                            <p className="text-2xl font-bold text-warning mt-1">{items.filter((o) => o.status === 'request').length}</p>
+                        </div>
+                        <div className="text-3xl opacity-20">📝</div>
                     </div>
+                </div>
+                <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Awaiting Execution</p>
+                            <p className="text-2xl font-bold text-orange-500 mt-1">{items.filter((o) => o.status === 'awaiting_execution').length}</p>
+                        </div>
+                        <div className="text-3xl opacity-20">⏳</div>
+                    </div>
+                </div>
+                <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Confirmed</p>
+                            <p className="text-2xl font-bold text-success mt-1">{items.filter((o) => o.status === 'confirmed').length}</p>
+                        </div>
+                        <div className="text-3xl opacity-20">✅</div>
+                    </div>
+                </div>
+            </div>
 
-                    <div className="mt-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-sm opacity-80">
-                            <span>
-                                {t('showing') || 'Showing'} {from} {t('to') || 'to'} {to} {t('of') || 'of'} {totalRecords} {t('entries') || 'entries'}
-                            </span>
-                            <select className="form-select w-20 py-1 text-sm" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-                                {PAGE_SIZES.map((size) => (
-                                    <option key={size} value={size}>
-                                        {size}
-                                    </option>
-                                ))}
-                            </select>
+            {/* Main Content Panel */}
+            <div className="panel">
+                {/* Tab Navigation */}
+                <div className="mb-6 border-b border-white-light dark:border-[#191e3a]">
+                    <Tabs items={tabItems} activeTab={activeTab} onTabChange={handleTabChange} />
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-6">
+                    <input
+                        type="text"
+                        placeholder="Search by booking number, customer name, or phone..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        className="form-input w-full"
+                    />
+                </div>
+
+                {/* Bookings Cards */}
+                <div className="space-y-4 mb-6">
+                    {paginatedBookings.length > 0 ? (
+                        paginatedBookings.map((booking) => (
+                            <BookingsCard
+                                key={booking.id}
+                                booking={booking}
+                                userRole={role}
+                                currentContractorId={currentContractorId}
+                                currentDriverId={currentDriverId}
+                                onDelete={handleDelete}
+                                onConfirm={handleConfirmBooking}
+                                hasInvoice={(booking as any).has_invoice}
+                            />
+                        ))
+                    ) : (
+                        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                            <p>No {activeTab.replace(/_/g, ' ')} bookings found</p>
+                            <p className="text-sm mt-2">{searchTerm ? 'Try adjusting your search terms' : 'Bookings will appear here when available'}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-white-light dark:border-[#191e3a] pt-6">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Showing {startIndex + 1} to {Math.min(endIndex, filteredBookings.length)} of {filteredBookings.length} bookings
                         </div>
                         <div className="flex items-center gap-2">
-                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                            <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)}>
                                 Previous
                             </button>
                             <div className="flex items-center gap-1">
-                                {Array.from({ length: Math.ceil(totalRecords / pageSize) }, (_, i) => i + 1)
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
                                     .filter((p) => {
-                                        if (Math.ceil(totalRecords / pageSize) <= 5) return true;
-                                        if (p === 1 || p === Math.ceil(totalRecords / pageSize)) return true;
-                                        if (p >= page - 1 && p <= page + 1) return true;
+                                        if (totalPages <= 5) return true;
+                                        if (p === 1 || p === totalPages) return true;
+                                        if (p >= currentPage - 1 && p <= currentPage + 1) return true;
                                         return false;
                                     })
                                     .map((p, i, arr) => (
                                         <React.Fragment key={p}>
                                             {i > 0 && arr[i - 1] !== p - 1 && <span className="px-1">...</span>}
-                                            <button type="button" className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setPage(p)}>
+                                            <button type="button" className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => handlePageChange(p)}>
                                                 {p}
                                             </button>
                                         </React.Fragment>
@@ -769,18 +436,17 @@ const BookingsList = () => {
                             <button
                                 type="button"
                                 className="btn btn-sm btn-outline-primary disabled:opacity-50"
-                                disabled={page === Math.ceil(totalRecords / pageSize)}
-                                onClick={() => setPage(page + 1)}
+                                disabled={currentPage === totalPages}
+                                onClick={() => handlePageChange(currentPage + 1)}
                             >
                                 Next
                             </button>
                         </div>
                     </div>
-
-                    {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-black-dark-light/60" />}
-                </div>
+                )}
             </div>
 
+            {/* Delete Confirmation Modal */}
             <ConfirmModal
                 isOpen={showConfirmModal}
                 title={t('confirm_deletion')}
@@ -794,44 +460,6 @@ const BookingsList = () => {
                 cancelLabel={t('cancel')}
                 size="sm"
             />
-
-            {/* Add Service Modal */}
-            {showServiceModal && bookingForService && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg dark:bg-slate-800">
-                        <h3 className="mb-4 text-lg font-semibold">{t('add_service') || 'Add Service'}</h3>
-                        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                            Booking: <strong>#{bookingForService.booking_number || bookingForService.id}</strong>
-                        </p>
-
-                        <div className="mb-4">
-                            <label className="mb-2 block font-semibold">{t('select_service') || 'Select Service'}</label>
-                            <select value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)} className="form-select w-full">
-                                <option value="">{t('choose_service') || 'Choose a service...'}</option>
-                                {services.map((svc) => (
-                                    <option key={svc.id} value={svc.id}>
-                                        {svc.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="mb-6">
-                            <label className="mb-2 block font-semibold">{t('quantity') || 'Quantity'}</label>
-                            <input type="number" min="1" value={serviceQuantity} onChange={(e) => setServiceQuantity(Math.max(1, Number(e.target.value)))} className="form-input w-full" />
-                        </div>
-
-                        <div className="flex gap-2">
-                            <button type="button" className="btn btn-primary flex-1" onClick={handleAddService}>
-                                {t('add') || 'Add'}
-                            </button>
-                            <button type="button" className="btn btn-outline-secondary flex-1" onClick={closeServiceModal}>
-                                {t('cancel') || 'Cancel'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

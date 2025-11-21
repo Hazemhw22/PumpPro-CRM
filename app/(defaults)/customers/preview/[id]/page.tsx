@@ -206,6 +206,20 @@ const CustomerPreview = () => {
         return service ? service.name : serviceType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
+    // Calculate customer balance: UNPAID bookings = negative, payments = positive
+    const calculateBalance = () => {
+        // Sum of UNPAID bookings (negative balance = debt)
+        const unpaidDebt = bookings.filter((b) => b.payment_status === 'unpaid').reduce((sum, b) => sum + (b.price || 0), 0);
+
+        // Sum of payments (positive balance = credits)
+        const totalPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+        // Balance = payments - debt (negative if customer owes, positive if overpaid)
+        return totalPayments - unpaidDebt;
+    };
+
+    const balanceAmount = calculateBalance();
+
     return (
         <div>
             {/* Header */}
@@ -261,14 +275,16 @@ const CustomerPreview = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
+                    <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/20">
-                                <IconCreditCard className="h-6 w-6 text-success" />
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20">
+                                <IconClipboardText className="h-6 w-6 text-orange-500" />
                             </div>
                             <div>
-                                <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
-                                <div className="text-xs text-gray-500">Total Payments</div>
+                                <div className={`text-2xl font-bold ${balanceAmount >= 0 ? 'text-success' : 'text-danger'}`}>
+                                    {balanceAmount < 0 ? '-' : ''}₪{Math.abs(balanceAmount).toFixed(2)}
+                                </div>
+                                <div className="text-xs text-gray-500">Balance</div>
                             </div>
                         </div>
                     </div>
@@ -278,19 +294,21 @@ const CustomerPreview = () => {
                                 <IconDollarSign className="h-6 w-6 text-purple-500" />
                             </div>
                             <div>
-                                <div className={`text-2xl font-bold ${(customer?.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>₪{(customer?.balance || 0).toFixed(2)}</div>
-                                <div className="text-xs text-gray-500">Current Balance</div>
+                                <div className={`text-2xl font-bold ${balanceAmount >= 0 ? 'text-success' : 'text-danger'}`}>
+                                    {balanceAmount < 0 ? '-' : ''}₪{Math.abs(balanceAmount).toFixed(2)}
+                                </div>
+                                <div className="text-xs text-gray-500">Balance</div>
                             </div>
                         </div>
                     </div>
-                    <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
+                    <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20">
-                                <IconClipboardText className="h-6 w-6 text-orange-500" />
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/20">
+                                <IconCreditCard className="h-6 w-6 text-success" />
                             </div>
                             <div>
-                                <div className="text-2xl font-bold">₪{invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0).toFixed(2)}</div>
-                                <div className="text-xs text-gray-500">Total Invoices</div>
+                                <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
+                                <div className="text-xs text-gray-500">Total Payments</div>
                             </div>
                         </div>
                     </div>
@@ -828,6 +846,8 @@ const CustomerPreview = () => {
 
                                     // Create payment
                                     console.log('Creating payment...');
+                                    const paymentAmount = parseFloat(paymentForm.amount);
+
                                     const { error: paymentError } = await supabase
                                         .from('payments')
                                         // @ts-ignore
@@ -835,7 +855,7 @@ const CustomerPreview = () => {
                                             invoice_id: invoiceId,
                                             booking_id: paymentForm.booking_id,
                                             customer_id: customer?.id,
-                                            amount: parseFloat(paymentForm.amount),
+                                            amount: paymentAmount,
                                             payment_method: paymentForm.payment_method,
                                             transaction_id: paymentForm.transaction_id || null,
                                             notes: paymentForm.notes || null,
@@ -845,6 +865,26 @@ const CustomerPreview = () => {
                                     if (paymentError) {
                                         console.error('Payment creation error:', paymentError);
                                         throw paymentError;
+                                    }
+
+                                    // Get the booking to check if fully paid
+                                    const selectedBookingData = bookings.find((b) => b.id === paymentForm.booking_id);
+                                    if (selectedBookingData) {
+                                        const bookingPrice = selectedBookingData.price || 0;
+                                        const newPaymentStatus = paymentAmount >= bookingPrice ? 'paid' : 'unpaid';
+
+                                        // Update booking payment status if fully paid
+                                        if (newPaymentStatus === 'paid') {
+                                            const { error: updateError } = await supabase
+                                                .from('bookings')
+                                                // @ts-ignore
+                                                .update({ payment_status: 'paid' })
+                                                .eq('id', paymentForm.booking_id);
+
+                                            if (updateError) {
+                                                console.warn('Could not update booking payment status:', updateError);
+                                            }
+                                        }
                                     }
 
                                     console.log('Payment recorded successfully');
