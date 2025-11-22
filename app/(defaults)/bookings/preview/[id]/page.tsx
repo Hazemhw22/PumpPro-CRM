@@ -241,6 +241,7 @@ const BookingPreview = () => {
                 // Fetch all booking services (main + extras) and resolve names & prices
                 // we'll compute a servicesTotal and prefer it as the booking price when available
                 let servicesTotal = 0;
+                let detailedServices: any[] = [];
                 try {
                     const { data: bookingServicesData, error: bookingServicesError } = await supabase
                         .from('booking_services')
@@ -265,7 +266,7 @@ const BookingPreview = () => {
 
                         const customerType = (booking as any).customer_type || 'private';
 
-                        const detailed = rows.map((r: any) => {
+                        detailedServices = rows.map((r: any) => {
                             const svc = servicesMap.get(r.service_id) as any | undefined;
                             const resolvedName = (svc && svc.name) || (r.service_id === booking.service_type ? serviceRecord?.name : null);
 
@@ -295,9 +296,9 @@ const BookingPreview = () => {
                         });
 
                         // compute total for all booking services
-                        servicesTotal = detailed.reduce((sum, it) => sum + (it.total || 0), 0);
+                        servicesTotal = detailedServices.reduce((sum, it) => sum + (it.total || 0), 0);
 
-                        setBookingServices(detailed);
+                        setBookingServices(detailedServices);
                     } else {
                         setBookingServices([]);
                     }
@@ -324,6 +325,7 @@ const BookingPreview = () => {
                     truck: truckRes.data,
                     driver: driverRes.data,
                     service_name: serviceRecord?.name,
+                    booking_services: detailedServices && detailedServices.length > 0 ? detailedServices : undefined,
                 };
 
                 // If booking has booking_services rows, prefer their summed total as the booking price.

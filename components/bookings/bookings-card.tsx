@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import IconEye from '@/components/icon/icon-eye';
 import IconEdit from '@/components/icon/icon-edit';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
@@ -8,6 +8,7 @@ import IconCheck from '@/components/icon/icon-check';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconCaretUp from '@/components/icon/icon-carets-down';
 import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
+import { supabase } from '@/lib/supabase/client';
 
 interface BookingsCardProps {
     booking: any;
@@ -21,6 +22,76 @@ interface BookingsCardProps {
 
 export default function BookingsCard({ booking, userRole, currentContractorId, currentDriverId, onDelete, onConfirm, hasInvoice }: BookingsCardProps) {
     const [isCollapsed, setIsCollapsed] = useState(true);
+    const [localServices, setLocalServices] = useState<any[]>([]);
+
+    useEffect(() => {
+        let mounted = true;
+        const loadServices = async () => {
+            try {
+                // if booking already includes booking_services or services, skip fetch
+                if ((booking?.booking_services && booking.booking_services.length > 0) || (booking?.services && booking.services.length > 0)) {
+                    setLocalServices([]);
+                    return;
+                }
+
+                if (!booking?.id) return;
+
+                const { data, error } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, total_price, created_at').eq('booking_id', booking.id);
+
+                if (!mounted) return;
+
+                if (error) {
+                    console.error('Error fetching booking_services for booking', booking?.id, error);
+                    setLocalServices([]);
+                    return;
+                }
+
+                if (data && Array.isArray(data) && data.length > 0) {
+                    // resolve service names by fetching services table for service_ids
+                    const rowsRaw = data as any[];
+                    const uniqueServiceIds = Array.from(new Set(rowsRaw.map((r) => r.service_id).filter(Boolean)));
+                    let servicesMap = new Map<string, any>();
+                    if (uniqueServiceIds.length > 0) {
+                        try {
+                            const { data: svcList, error: svcError } = await supabase
+                                .from('services')
+                                .select('id, name')
+                                .in('id', uniqueServiceIds as any);
+                            if (!svcError && svcList) {
+                                svcList.forEach((s: any) => servicesMap.set(s.id, s));
+                            }
+                        } catch (e) {
+                            console.warn('Could not fetch services for booking_services mapping:', e);
+                        }
+                    }
+
+                    const rows = rowsRaw.map((r) => ({
+                        id: r.id,
+                        name: (servicesMap.get(r.service_id) as any)?.name || r.service_name || r.name || '-',
+                        service_id: r.service_id || null,
+                        quantity: r.quantity || 1,
+                        unit_price: r.unit_price || 0,
+                        total_price: r.total_price ?? r.totalPrice ?? (r.unit_price || 0) * (r.quantity || 1),
+                        description: r.description || null,
+                        created_at: r.created_at || null,
+                        scheduled_date: r.scheduled_date || null,
+                        scheduled_time: r.scheduled_time || null,
+                    }));
+                    setLocalServices(rows);
+                } else {
+                    setLocalServices([]);
+                }
+            } catch (e) {
+                console.warn('Could not load booking_services in BookingsCard:', e);
+                setLocalServices([]);
+            }
+        };
+
+        loadServices();
+        return () => {
+            mounted = false;
+        };
+    }, [booking?.id, booking?.booking_services, booking?.services]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -52,85 +123,183 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
         >
             <div className="p-5">
                 {/* Header Row - Booking # and Status */}
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-bold text-lg text-primary">#{booking.booking_number || booking.id.slice(0, 8)}</h3>
+                <div className="mb-4">
+                    {/* Top Row: Booking Number and Status Badge */}
+                    <div className="flex items-start justify-between mb-4">
+                        <h3 className="font-bold text-lg text-primary">#{booking.booking_number || booking.id.slice(0, 8)}</h3>
+                        {/* Action Buttons Row - Always visible */}
+                        <div className="flex items-center gap-2 flex-wrap mb-4">
                             <span className={`badge px-3 py-1 rounded-full font-semibold text-xs ${getStatusColor(booking.status)}`}>{getStatusLabel(booking.status)}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {new Date(booking.scheduled_date).toLocaleDateString('en-GB')} at {booking.scheduled_time || 'TBD'}
-                        </p>
-                        {isCollapsed && <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">₪{booking.price || 0}</p>}
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                        <button
-                            type="button"
-                            className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                            }}
-                            title="View"
-                        >
-                            <Link href={`/bookings/preview/${booking.id}`} className="flex items-center gap-1">
-                                <IconEye className="h-4 w-4" />
-                                Preview
-                            </Link>
-                        </button>
-
-                        <button
-                            type="button"
-                            className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsCollapsed(!isCollapsed);
-                            }}
-                        >
-                            {isCollapsed ? (
-                                <>
-                                    <IconCaretDown className="h-4 w-4" />
-                                    Expand
-                                </>
-                            ) : (
-                                <>
-                                    <IconCaretUp className="h-4 w-4" />
-                                    Collapse
-                                </>
-                            )}
-                        </button>
-
-                        {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
                             <button
                                 type="button"
                                 className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                 }}
-                                title="Edit"
+                                title="View"
                             >
-                                <Link href={`/bookings/edit/${booking.id}`} className="flex items-center gap-1">
-                                    <IconEdit className="h-4 w-4" />
-                                    Edit
+                                <Link href={`/bookings/preview/${booking.id}`} className="flex items-center gap-1">
+                                    <IconEye className="h-4 w-4" />
+                                    Preview
                                 </Link>
                             </button>
-                        )}
 
-                        {userRole === 'admin' && (
                             <button
                                 type="button"
-                                className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-danger/10 text-danger hover:bg-danger/20 dark:bg-danger/20 dark:hover:bg-danger/30 transition"
+                                className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onDelete?.(booking.id);
+                                    setIsCollapsed(!isCollapsed);
                                 }}
-                                title="Delete"
                             >
-                                <IconTrashLines className="h-4 w-4" />
-                                Delete
+                                {isCollapsed ? (
+                                    <>
+                                        <IconCaretDown className="h-4 w-4" />
+                                        Expand
+                                    </>
+                                ) : (
+                                    <>
+                                        <IconCaretUp className="h-4 w-4" />
+                                        Collapse
+                                    </>
+                                )}
                             </button>
-                        )}
+
+                            {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
+                                <button
+                                    type="button"
+                                    className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                    }}
+                                    title="Edit"
+                                >
+                                    <Link href={`/bookings/edit/${booking.id}`} className="flex items-center gap-1">
+                                        <IconEdit className="h-4 w-4" />
+                                        Edit
+                                    </Link>
+                                </button>
+                            )}
+
+                            {userRole === 'admin' && (
+                                <button
+                                    type="button"
+                                    className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-danger/10 text-danger hover:bg-danger/20 dark:bg-danger/20 dark:hover:bg-danger/30 transition"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDelete?.(booking.id);
+                                    }}
+                                    title="Delete"
+                                >
+                                    <IconTrashLines className="h-4 w-4" />
+                                    Delete
+                                </button>
+                            )}
+
+                            {(userRole === 'contractor' || userRole === 'driver') && booking.status === 'awaiting_execution' && (
+                                <button
+                                    type="button"
+                                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition font-semibold text-xs"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onConfirm?.(booking);
+                                    }}
+                                    title="Confirm Booking"
+                                >
+                                    <IconCheck className="h-4 w-4" />
+                                    Confirm Booking
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Info Grid - Service, Date, Time, Provider, Price, Balance - Hidden when expanded */}
+                    {isCollapsed && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                            {/* Service Name Box */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded p-3">
+                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Service</p>
+                                {(() => {
+                                    const services =
+                                        booking?.booking_services && booking.booking_services.length > 0
+                                            ? booking.booking_services
+                                            : localServices && localServices.length > 0
+                                              ? localServices
+                                              : booking?.services && booking.services.length > 0
+                                                ? booking.services
+                                                : [{ name: booking.service_name || booking.service_type || '-' }];
+                                    const names = services.map((s: any) => s.name || s.service_name || s.service_type || '-');
+                                    const maxShown = 2;
+                                    const full = names.join(', ');
+                                    const shown = names.length <= maxShown ? names.join(', ') : `${names.slice(0, maxShown).join(', ')} +${names.length - maxShown} more`;
+                                    return (
+                                        <p title={full} className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                                            {shown}
+                                        </p>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Service Date Box */}
+                            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700/50 rounded p-3">
+                                <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">Date</p>
+                                <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
+                            </div>
+
+                            {/* Service Time Box */}
+                            <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-700/50 rounded p-3">
+                                <p className="text-xs font-semibold text-pink-600 dark:text-pink-400 mb-1">Time</p>
+                                <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
+                            </div>
+
+                            {/* Assigned Provider Box */}
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded p-3">
+                                <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Provider</p>
+                                <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{booking.contractor?.name || booking.driver?.name || '-'}</p>
+                            </div>
+
+                            {/* Price Box */}
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded p-3">
+                                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">Price</p>
+                                <p className="font-bold text-xs text-amber-700 dark:text-amber-300">₪{booking.price || 0}</p>
+                            </div>
+
+                            {/* Balance Box */}
+                            <div
+                                className={`rounded p-3 border ${(() => {
+                                    const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                    const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                    return isPaid
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700/50'
+                                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50';
+                                })()}`}
+                            >
+                                <p
+                                    className={`text-xs font-semibold mb-1 ${(() => {
+                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                        return isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+                                    })()}`}
+                                >
+                                    Balance
+                                </p>
+                                <p
+                                    className={`font-bold text-xs ${(() => {
+                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                        return isPaid ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300';
+                                    })()}`}
+                                >
+                                    ₪
+                                    {(() => {
+                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                        return isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`;
+                                    })()}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Detailed Content - Only show when expanded */}
@@ -184,10 +353,6 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             <h4 className="text-sm font-bold text-purple-900 dark:text-purple-300 mb-4">🔧 Service Details</h4>
                             <div className="space-y-3">
                                 <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
-                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
-                                </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
                                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Date</p>
                                     <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
                                 </div>
@@ -199,6 +364,36 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Address</p>
                                     <p className="text-sm text-gray-700 dark:text-gray-300">{booking.service_address || '-'}</p>
                                 </div>
+                                {(booking.booking_services && booking.booking_services.length > 0) || (localServices && localServices.length > 0) ? (
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Services</p>
+                                        <div className="space-y-2">
+                                            {(booking.booking_services && booking.booking_services.length > 0 ? booking.booking_services : localServices).map((service: any, idx: number) => {
+                                                const qty = service.quantity || 1;
+                                                const unit = service.unit_price ?? service.unitPrice ?? 0;
+                                                const total = service.total_price ?? service.totalPrice ?? unit * qty;
+                                                return (
+                                                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-slate-700/50 rounded p-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-medium">{service.name || service.service_name || '-'}</span>
+                                                            <span className="text-gray-500">·</span>
+                                                            <span className="text-gray-600 dark:text-gray-400">x{qty}</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="font-medium text-xs text-amber-700 dark:text-amber-300">₪{unit}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">₪{total}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
