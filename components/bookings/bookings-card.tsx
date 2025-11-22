@@ -100,7 +100,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             )}
                         </button>
 
-                        {userRole === 'admin' && !hasInvoice && (
+                        {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
                             <button
                                 type="button"
                                 className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
