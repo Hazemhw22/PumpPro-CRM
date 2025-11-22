@@ -245,7 +245,7 @@ const BookingPreview = () => {
                 try {
                     const { data: bookingServicesData, error: bookingServicesError } = await supabase
                         .from('booking_services')
-                        .select('id, service_id, service_name, quantity, unit_price, description, created_at, scheduled_date, scheduled_time')
+                        .select('id, service_id, quantity, unit_price, total_price, created_at')
                         .eq('booking_id', params?.id);
 
                     if (!bookingServicesError && bookingServicesData && bookingServicesData.length > 0) {
