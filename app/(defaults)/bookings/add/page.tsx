@@ -432,7 +432,7 @@ const AddBooking = () => {
                         {/* Booking Number */}
                         <div>
                             <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Booking Number (Optional)
+                                Booking Number <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -478,7 +478,9 @@ const AddBooking = () => {
 
                         {/* Select Existing Customer */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Select Existing Customer (Optional)</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                Select Existing Customer <span className="text-red-500">*</span>
+                            </label>
                             <CustomerSelect
                                 selectedCustomer={selectedCustomer}
                                 onCustomerSelect={(customer) => {
@@ -546,7 +548,7 @@ const AddBooking = () => {
                             {/* Email */}
                             <div>
                                 <label htmlFor="customer_email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Email (Optional)
+                                    Email <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="email"
@@ -576,25 +578,35 @@ const AddBooking = () => {
                                 />
                             </div>
 
-                            {/* Date */}
-                            <div>
-                                <label htmlFor="scheduled_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Date <span className="text-red-500">*</span>
+                            {/* Date and Time Combined in Single Input */}
+                            <div className="md:col-span-2">
+                                <label htmlFor="scheduled_datetime" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Schedule (Date & Time) <span className="text-red-500">*</span>
                                 </label>
-                                <input type="date" id="scheduled_date" name="scheduled_date" value={form.scheduled_date} onChange={handleInputChange} className="form-input" required />
-                            </div>
-
-                            {/* Time */}
-                            <div>
-                                <label htmlFor="scheduled_time" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Time <span className="text-red-500">*</span>
-                                </label>
-                                <input type="time" id="scheduled_time" name="scheduled_time" value={form.scheduled_time} onChange={handleInputChange} className="form-input" required />
+                                <input
+                                    type="datetime-local"
+                                    id="scheduled_datetime"
+                                    value={form.scheduled_date && form.scheduled_time ? `${form.scheduled_date}T${form.scheduled_time}` : ''}
+                                    onChange={(e) => {
+                                        if (e.target.value) {
+                                            const [date, time] = e.target.value.split('T');
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                scheduled_date: date,
+                                                scheduled_time: time,
+                                            }));
+                                        }
+                                    }}
+                                    className="form-input w-full"
+                                    required
+                                />
                             </div>
 
                             {/* Main Service - Primary Service */}
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Primary Service (Optional)</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                    Primary Service <span className="text-red-500">*</span>
+                                </label>
                                 <ServiceSelect
                                     selectedService={selectedService}
                                     onServiceSelect={(service) => {

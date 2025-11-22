@@ -42,7 +42,7 @@ const BookingsList = () => {
     const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
     const [currentContractorId, setCurrentContractorId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<TabType>('pending');
+    const [activeTab, setActiveTab] = useState<TabType>('request');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(20);
     const [searchTerm, setSearchTerm] = useState('');

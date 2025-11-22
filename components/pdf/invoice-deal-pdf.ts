@@ -84,6 +84,15 @@ export class InvoiceDealPDFGenerator {
         }
     }
 
+    static formatTime(dateString?: string | null) {
+        if (!dateString) return '-';
+        try {
+            return new Date(dateString).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        } catch {
+            return '-';
+        }
+    }
+
     static inferSellerType(booking: InvoiceDealPdfData['booking']): 'driver' | 'contractor' | null {
         if (booking?.driver_id) return 'driver';
         if (booking?.contractor_id) return 'contractor';
@@ -277,7 +286,7 @@ export class InvoiceDealPDFGenerator {
         } catch (e) {
             baseHref = '';
         }
-        // Prefer explicitly passed `data.services`, then try `booking_services` or booking-level `services`.
+        // Aggregate services from multiple possible sources so that ALL services appear in the PDF.
         let servicesList: Array<any> = [];
         console.log(
             '[servicesList init] data.services=',
@@ -287,34 +296,42 @@ export class InvoiceDealPDFGenerator {
             'data.booking.services=',
             Array.isArray((data.booking as any)?.services) ? (data.booking as any).services.length : typeof (data.booking as any)?.services,
         );
+
+        // Helper to normalize a service item and ensure timestamps carried through
+        const normalizeService = (s: any, fallbackUnitPrice?: number) => ({
+            name: s.name || s.service_name || (s.service && s.service.name) || '-',
+            description: s.description || null,
+            quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || s.count || 1),
+            unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.price || fallbackUnitPrice || 0),
+            total: typeof s.total === 'number' ? s.total : typeof s.unit_price === 'number' && typeof s.quantity === 'number' ? s.unit_price * s.quantity : undefined,
+            created_at: s.created_at || null,
+            scheduled_date: s.scheduled_date || null,
+            scheduled_time: s.scheduled_time || null,
+        });
+
+        // Add data.services first (if any)
         if (Array.isArray(data.services) && data.services.length > 0) {
-            servicesList = data.services.map((s: any) => ({
-                name: s.name || s.service_name || (s.service && s.service.name) || '-',
-                description: s.description || null,
-                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || s.count || 1),
-                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.price || s.unit_price || this.calculatePrice(data) || 0),
-                total: typeof s.total === 'number' ? s.total : typeof s.unit_price === 'number' && typeof s.quantity === 'number' ? s.unit_price * s.quantity : undefined,
-            }));
-        } else if (Array.isArray((data as any).booking_services) && (data as any).booking_services.length > 0) {
-            servicesList = (data as any).booking_services.map((s: any) => ({
-                name: s.name || s.service_name || '-',
-                description: s.description || null,
-                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || 1),
-                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.unit_price || s.unit_price || 0),
-                total: typeof s.total === 'number' ? s.total : s.unit_price && s.quantity ? s.unit_price * s.quantity : undefined,
-            }));
-        } else if (Array.isArray((data.booking as any)?.services) && (data.booking as any).services.length > 0) {
-            servicesList = (data.booking as any).services.map((s: any) => ({
-                name: s.name || s.service_name || '-',
-                description: s.description || null,
-                quantity: typeof s.quantity === 'number' ? s.quantity : Number(s.qty || 1),
-                unit_price: typeof s.unit_price === 'number' ? s.unit_price : Number(s.price || 0),
-                total: typeof s.total === 'number' ? s.total : s.unit_price && s.quantity ? s.unit_price * s.quantity : undefined,
-            }));
-        } else if (serviceTypeName !== '-') {
-            servicesList = [{ name: serviceTypeName, description: null, quantity: 1, unit_price: this.calculatePrice(data), total: this.calculatePrice(data) }];
-        } else {
-            servicesList = [];
+            const fallbackPrice = this.calculatePrice(data);
+            servicesList.push(...data.services.map((s: any) => normalizeService(s, fallbackPrice)));
+        }
+
+        // Then add booking_services (if any) — these often carry per-service created_at
+        if (Array.isArray((data as any).booking_services) && (data as any).booking_services.length > 0) {
+            servicesList.push(...(data as any).booking_services.map((s: any) => normalizeService(s, this.calculatePrice(data))));
+        }
+
+        // Then append booking-level services if present
+        if (Array.isArray((data.booking as any)?.services) && (data.booking as any).services.length > 0) {
+            servicesList.push(...(data.booking as any).services.map((s: any) => normalizeService(s, this.calculatePrice(data))));
+        }
+
+        // If still empty, fall back to a single service row based on booking/service_type
+        if (servicesList.length === 0) {
+            if (serviceTypeName !== '-') {
+                servicesList = [{ name: serviceTypeName, description: null, quantity: 1, unit_price: this.calculatePrice(data), total: this.calculatePrice(data), created_at: null }];
+            } else {
+                servicesList = [];
+            }
         }
 
         // Calculate total price as sum of all services
@@ -393,8 +410,8 @@ export class InvoiceDealPDFGenerator {
                 (svc: any) => `
         <tr>
           <td style="border:1px solid #d1d5db;padding:8px;text-align:right;font-weight:700;">${svc.name || '-'}</td>
-          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(bk.scheduled_date)}</td>
-          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${bk.scheduled_time || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(svc.created_at || svc.scheduled_date || bk.scheduled_date)}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatTime(svc.created_at || svc.scheduled_date || bk.scheduled_date) || svc.scheduled_time || bk.scheduled_time || '-'}</td>
           <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${svc.quantity || 1}</td>
           <td style="border:1px solid #d1d5db;padding:8px;text-align:left;">${svc.total ? this.formatCurrency(svc.total) : '-'}</td>
         </tr>
@@ -446,8 +463,8 @@ export class InvoiceDealPDFGenerator {
                 (svc: any) => `
         <tr>
           <td style="border:1px solid #d1d5db;padding:8px;text-align:right;font-weight:700;">${svc.name || '-'}</td>
-          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(bk.scheduled_date)}</td>
-          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${bk.scheduled_time || '-'}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatDate(svc.created_at || svc.scheduled_date || bk.scheduled_date)}</td>
+          <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${this.formatTime(svc.created_at || svc.scheduled_date || bk.scheduled_date) || svc.scheduled_time || bk.scheduled_time || '-'}</td>
           <td style="border:1px solid #d1d5db;padding:8px;text-align:center;">${svc.quantity || 1}</td>
         </tr>
         `,

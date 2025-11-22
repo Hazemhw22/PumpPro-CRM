@@ -20,28 +20,42 @@ export default function ProviderPdfButton({ booking, provider, role }: Props) {
             // Fetch booking services
             let bookingServices: any[] = [];
             try {
+                // Fetch booking services including created_at so we can show date/time
                 // @ts-ignore
-                const { data: bsData } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, description').eq('booking_id', booking.id);
+                const { data: bsData } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, description, created_at').eq('booking_id', booking.id);
                 if (bsData && bsData.length > 0) {
                     const serviceIds = Array.from(new Set(bsData.map((s: any) => s.service_id).filter(Boolean)));
                     // @ts-ignore
-                    const { data: svcData } = serviceIds.length > 0 ? await supabase.from('services').select('id, name, price_private, price_business').in('id', serviceIds) : { data: [] };
+                    const { data: svcData } = serviceIds.length > 0 ? await supabase.from('services').select('id, name').in('id', serviceIds) : { data: [] };
                     const svcMap = new Map((svcData || []).map((s: any) => [s.id, s]));
-                    bookingServices = bsData.map((bsvc: any) => ({
-                        id: bsvc.id,
-                        service_id: bsvc.service_id,
-                        name: svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-',
-                        description: bsvc.description || null,
-                        quantity: typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1),
-                        unit_price: typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0),
-                        total:
-                            (typeof bsvc.unit_price === 'number' ? bsvc.unit_price : Number(svcMap.get(bsvc.service_id)?.price_private || svcMap.get(bsvc.service_id)?.price_business || 0)) *
-                            (typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1)),
-                    }));
+
+                    // Map booking services to include only name, date/time, and quantity (no prices)
+                    bookingServices = bsData.map((bsvc: any) => {
+                        const name = svcMap.get(bsvc.service_id)?.name || bsvc.service_name || '-';
+                        const quantity = typeof bsvc.quantity === 'number' ? bsvc.quantity : Number(bsvc.qty || 1);
+                        return {
+                            id: bsvc.id,
+                            service_id: bsvc.service_id,
+                            name,
+                            description: bsvc.description || null,
+                            quantity,
+                            // include created_at for per-service date/time display
+                            created_at: bsvc.created_at || null,
+                            // also include the booking scheduled date/time for reference
+                            scheduled_date: booking.scheduled_date,
+                            scheduled_time: booking.scheduled_time,
+                            // omit price fields (explicitly set to undefined)
+                            unit_price: undefined,
+                            total: undefined,
+                        };
+                    });
                 }
             } catch (err) {
                 console.warn('Could not fetch booking services for provider PDF', err);
             }
+
+            // Build a combined service names string from bookingServices (if any)
+            const allServiceNames = bookingServices && bookingServices.length > 0 ? bookingServices.map((s) => s.name).join(', ') : booking.service_name || booking.service_type || '-';
 
             const providerContractor = booking.contractor || null;
             const providerDriver = booking.driver || null;
@@ -58,7 +72,8 @@ export default function ProviderPdfButton({ booking, provider, role }: Props) {
                 invoice: null,
                 booking: {
                     booking_number: booking.booking_number,
-                    service_type: booking.service_type,
+                    // show all service names from booking_services instead of the raw service_type
+                    service_type: allServiceNames,
                     service_address: booking.service_address,
                     scheduled_date: booking.scheduled_date,
                     scheduled_time: booking.scheduled_time,
@@ -84,7 +99,8 @@ export default function ProviderPdfButton({ booking, provider, role }: Props) {
                     address: booking.service_address,
                 },
                 service: {
-                    name: booking.service_name || booking.service_type,
+                    // present consolidated service names to the PDF generator
+                    name: allServiceNames,
                 },
                 // include booking services (ALL services, not just the main one)
                 booking_services: bookingServices.length > 0 ? bookingServices : undefined,
