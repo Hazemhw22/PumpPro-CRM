@@ -136,54 +136,86 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                 {/* Detailed Content - Only show when expanded */}
                 {!isCollapsed && (
                     <>
-                        {/* Customer Info */}
-                        <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-600">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Customer Information</h4>
+                        {/* Top Info Row - Booking Date & Balance */}
+                        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-4">
+                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Created Date</p>
+                                <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-GB') : '-'}</p>
+                            </div>
+                            {(() => {
+                                const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                const bgColor = isPaid
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700/50'
+                                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50';
+                                const labelColor = isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+                                const valueColor = isPaid ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300';
+
+                                return (
+                                    <div className={`border rounded-lg p-4 ${bgColor}`}>
+                                        <p className={`text-xs font-semibold mb-1 ${labelColor}`}>Balance</p>
+                                        <p className={`font-bold text-sm ${valueColor}`}>₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}</p>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Customer Info - Card Box */}
+                        <div className="mb-4 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/10 dark:to-blue-900/10 border border-cyan-200 dark:border-cyan-700/50 rounded-lg p-4">
+                            <h4 className="text-sm font-bold text-cyan-900 dark:text-cyan-300 mb-4">👤 Customer Information</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Name</p>
-                                    <p className="font-medium text-sm">{booking.customer_name}</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Name</p>
+                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.customer_name || '-'}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Phone</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Phone</p>
                                     <p className="text-sm text-gray-700 dark:text-gray-300">
-                                        <a href={`tel:${booking.customer_phone}`} className="hover:text-primary">
-                                            {booking.customer_phone}
+                                        <a href={`tel:${booking.customer_phone}`} className="hover:text-primary font-medium">
+                                            {booking.customer_phone || '-'}
                                         </a>
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Service & Location Info */}
-                        <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-600">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Service Details</h4>
+                        {/* Service & Location Info - Card Box */}
+                        <div className="mb-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 border border-purple-200 dark:border-purple-700/50 rounded-lg p-4">
+                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-300 mb-4">🔧 Service Details</h4>
                             <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Service Type</p>
-                                    <p className="font-medium text-sm">{booking.service_name || booking.service_type}</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
+                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Service Address</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Date</p>
+                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
+                                </div>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Time</p>
+                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
+                                </div>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Address</p>
                                     <p className="text-sm text-gray-700 dark:text-gray-300">{booking.service_address || '-'}</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Price & Profit & Payment Status */}
-                        <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-600">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Financial Information</h4>
+                        {/* Price & Profit & Payment Status - Card Box */}
+                        <div className="mb-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-200 dark:border-amber-700/50 rounded-lg p-4">
+                            <h4 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-4">💰 Financial Information</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Price</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Price</p>
                                     <p className="font-bold text-base text-success">₪{booking.price || 0}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Profit</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Profit</p>
                                     <p className="font-bold text-base text-primary">₪{booking.profit || 0}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Payment Status</p>
+                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Payment Status</p>
                                     <span className={`inline-block badge px-2 py-1 rounded text-xs font-semibold ${getPaymentStatusColor(booking.payment_status)}`}>
                                         {booking.payment_status?.toUpperCase() || 'PENDING'}
                                     </span>
@@ -193,40 +225,37 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
 
                         {/* Provider Info - Conditional based on provider type */}
                         {booking.contractor?.name ? (
-                            <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-600">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Assigned Provider</h4>
+                            <div className="mb-4 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/10 dark:to-rose-900/10 border border-red-200 dark:border-red-700/50 rounded-lg p-4">
+                                <h4 className="text-sm font-bold text-red-900 dark:text-red-300 mb-4">🏗️ Assigned Provider</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Contractor</p>
-                                        <p className="font-medium text-sm">{booking.contractor.name}</p>
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.contractor.name}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Contractor Price</p>
-                                        <p className="font-bold text-sm text-primary">₪{booking.contractor_price || 0}</p>
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Price</p>
+                                        <p className="font-bold text-sm text-red-600 dark:text-red-400">₪{booking.contractor_price || 0}</p>
                                     </div>
                                 </div>
                             </div>
                         ) : booking.driver?.name ? (
-                            <>
-                                {/* Driver & Truck Info */}
-                                <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-600">
-                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Assigned Providers</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Driver</p>
-                                            <p className="font-medium text-sm">{booking.driver.name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Truck Number</p>
-                                            <p className="font-medium text-sm">{booking.truck?.truck_number || '-'}</p>
-                                        </div>
+                            <div className="mb-4 bg-gradient-to-br from-green-50 to-teal-50 dark:from-green-900/10 dark:to-teal-900/10 border border-green-200 dark:border-green-700/50 rounded-lg p-4">
+                                <h4 className="text-sm font-bold text-green-900 dark:text-green-300 mb-4">🚚 Assigned Providers</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Driver</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.driver.name}</p>
+                                    </div>
+                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Truck Number</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.truck?.truck_number || '-'}</p>
                                     </div>
                                 </div>
-                            </>
+                            </div>
                         ) : null}
 
                         {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-600 flex flex-wrap items-center gap-2">
                             {userRole === 'admin' && booking.status === 'confirmed' && <ProviderPdfButton booking={booking} provider={booking.contractor || booking.driver} role={userRole} />}
 
                             {(userRole === 'contractor' || userRole === 'driver') && (
