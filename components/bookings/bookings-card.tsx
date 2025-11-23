@@ -36,7 +36,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
 
                 if (!booking?.id) return;
 
-                const { data, error } = await supabase.from('booking_services').select('id, service_id, quantity, unit_price, total_price, created_at').eq('booking_id', booking.id);
+                const { data, error } = await supabase.from('booking_services').select('id, booking_id, service_id, quantity, unit_price, total_price, created_at').eq('booking_id', booking.id);
 
                 if (!mounted) return;
 
@@ -72,7 +72,6 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                         quantity: r.quantity || 1,
                         unit_price: r.unit_price || 0,
                         total_price: r.total_price ?? r.totalPrice ?? (r.unit_price || 0) * (r.quantity || 1),
-                        description: r.description || null,
                         created_at: r.created_at || null,
                         scheduled_date: r.scheduled_date || null,
                         scheduled_time: r.scheduled_time || null,
@@ -217,8 +216,8 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                     {isCollapsed && (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
                             {/* Service Name Box */}
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded p-3">
-                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Service</p>
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service</p>
                                 {(() => {
                                     const services =
                                         booking?.booking_services && booking.booking_services.length > 0
@@ -241,39 +240,31 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             </div>
 
                             {/* Service Date Box */}
-                            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700/50 rounded p-3">
-                                <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">Date</p>
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</p>
                                 <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
                             </div>
 
                             {/* Service Time Box */}
-                            <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-700/50 rounded p-3">
-                                <p className="text-xs font-semibold text-pink-600 dark:text-pink-400 mb-1">Time</p>
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Time</p>
                                 <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
                             </div>
 
                             {/* Assigned Provider Box */}
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded p-3">
-                                <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Provider</p>
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Provider</p>
                                 <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{booking.contractor?.name || booking.driver?.name || '-'}</p>
                             </div>
 
                             {/* Price Box */}
-                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded p-3">
-                                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">Price</p>
-                                <p className="font-bold text-xs text-amber-700 dark:text-amber-300">₪{booking.price || 0}</p>
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Price</p>
+                                <p className="font-bold text-xs text-gray-900 dark:text-white">₪{booking.price || 0}</p>
                             </div>
 
                             {/* Balance Box */}
-                            <div
-                                className={`rounded p-3 border ${(() => {
-                                    const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                    const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                    return isPaid
-                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700/50'
-                                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50';
-                                })()}`}
-                            >
+                            <div className="p-3">
                                 <p
                                     className={`text-xs font-semibold mb-1 ${(() => {
                                         const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
@@ -283,13 +274,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                 >
                                     Balance
                                 </p>
-                                <p
-                                    className={`font-bold text-xs ${(() => {
-                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                        return isPaid ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300';
-                                    })()}`}
-                                >
+                                <p className={`font-bold text-xs text-gray-900 dark:text-white`}>
                                     ₪
                                     {(() => {
                                         const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
@@ -306,111 +291,115 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                 {!isCollapsed && (
                     <>
                         {/* Top Info Row - Booking Date & Balance */}
-                        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-4">
-                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Created Date</p>
-                                <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-GB') : '-'}</p>
-                            </div>
-                            {(() => {
-                                const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                const bgColor = isPaid
-                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700/50'
-                                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50';
-                                const labelColor = isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
-                                const valueColor = isPaid ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300';
-
-                                return (
-                                    <div className={`border rounded-lg p-4 ${bgColor}`}>
-                                        <p className={`text-xs font-semibold mb-1 ${labelColor}`}>Balance</p>
-                                        <p className={`font-bold text-sm ${valueColor}`}>₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}</p>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        {/* Customer Info - Card Box */}
-                        <div className="mb-4 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/10 dark:to-blue-900/10 border border-cyan-200 dark:border-cyan-700/50 rounded-lg p-4">
-                            <h4 className="text-sm font-bold text-cyan-900 dark:text-cyan-300 mb-4">👤 Customer Information</h4>
+                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Name</p>
-                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.customer_name || '-'}</p>
+                                <div>
+                                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">📅 Created Date</p>
+                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-GB') : '-'}</p>
                                 </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Phone</p>
-                                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                                        <a href={`tel:${booking.customer_phone}`} className="hover:text-primary font-medium">
-                                            {booking.customer_phone || '-'}
-                                        </a>
-                                    </p>
+                                {(() => {
+                                    const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                    const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                    return (
+                                        <div>
+                                            <p className={`text-xs font-semibold mb-1 ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                {isPaid ? '✓ Balance (Paid)' : '⚠ Balance (Pending)'}
+                                            </p>
+                                            <p className={`font-bold text-sm ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                ₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Service Details - Timing & Location */}
+                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🔧 Service Details</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Date</p>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Time</p>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Address</p>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.service_address || '-'}</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Service & Location Info - Card Box */}
-                        <div className="mb-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 border border-purple-200 dark:border-purple-700/50 rounded-lg p-4">
-                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-300 mb-4">🔧 Service Details</h4>
-                            <div className="space-y-3">
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Date</p>
-                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
+                        {/* Customer Info & Provider Info - Side by Side */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            {/* Customer Info */}
+                            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">👤 Customer Information</h4>
+                                <div className="space-y-2">
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Name</p>
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.customer_name || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Phone</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                                            <a href={`tel:${booking.customer_phone}`} className="hover:text-primary font-medium">
+                                                {booking.customer_phone || '-'}
+                                            </a>
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Time</p>
-                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
-                                </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Address</p>
-                                    <p className="text-sm text-gray-700 dark:text-gray-300">{booking.service_address || '-'}</p>
-                                </div>
-                                {(booking.booking_services && booking.booking_services.length > 0) || (localServices && localServices.length > 0) ? (
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Services</p>
-                                        <div className="space-y-2">
-                                            {(booking.booking_services && booking.booking_services.length > 0 ? booking.booking_services : localServices).map((service: any, idx: number) => {
-                                                const qty = service.quantity || 1;
-                                                const unit = service.unit_price ?? service.unitPrice ?? 0;
-                                                const total = service.total_price ?? service.totalPrice ?? unit * qty;
-                                                return (
-                                                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-slate-700/50 rounded p-2">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="font-medium">{service.name || service.service_name || '-'}</span>
-                                                            <span className="text-gray-500">·</span>
-                                                            <span className="text-gray-600 dark:text-gray-400">x{qty}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="font-medium text-xs text-amber-700 dark:text-amber-300">₪{unit}</div>
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">₪{total}</div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                            </div>
+
+                            {/* Provider Info */}
+                            {booking.contractor?.name ? (
+                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🏗️ Assigned Contractor</h4>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Name</p>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.contractor.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Price</p>
+                                            <p className="text-sm font-medium text-red-600 dark:text-red-400">₪{booking.contractor_price || 0}</p>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
+                                </div>
+                            ) : booking.driver?.name ? (
+                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🚚 Assigned Driver</h4>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Driver Name</p>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.driver.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Truck Number</p>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.truck?.truck_number || '-'}</p>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            ) : null}
                         </div>
 
-                        {/* Price & Profit & Payment Status - Card Box */}
-                        <div className="mb-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-200 dark:border-amber-700/50 rounded-lg p-4">
-                            <h4 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-4">💰 Financial Information</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Price</p>
-                                    <p className="font-bold text-base text-success">₪{booking.price || 0}</p>
+                        {/* Financial Information */}
+                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">💰 Financial Information</h4>
+                            <div className="space-y-2 mb-4">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">Price:</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">₪{booking.price || 0}</span>
                                 </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Profit</p>
-                                    <p className="font-bold text-base text-primary">₪{booking.profit || 0}</p>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">Profit:</span>
+                                    <span className="font-medium text-primary">₪{booking.profit || 0}</span>
                                 </div>
-                                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Payment Status</p>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">Payment Status:</span>
                                     <span className={`inline-block badge px-2 py-1 rounded text-xs font-semibold ${getPaymentStatusColor(booking.payment_status)}`}>
                                         {booking.payment_status?.toUpperCase() || 'PENDING'}
                                     </span>
@@ -418,36 +407,71 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             </div>
                         </div>
 
-                        {/* Provider Info - Conditional based on provider type */}
-                        {booking.contractor?.name ? (
-                            <div className="mb-4 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/10 dark:to-rose-900/10 border border-red-200 dark:border-red-700/50 rounded-lg p-4">
-                                <h4 className="text-sm font-bold text-red-900 dark:text-red-300 mb-4">🏗️ Assigned Provider</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor</p>
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.contractor.name}</p>
+                        {/* Services List - At the bottom with total price */}
+                        <div className="mb-4 p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">📦 Services</h4>
+                            {(() => {
+                                // Get all services from different possible sources
+                                const allServices =
+                                    booking.booking_services && booking.booking_services.length > 0
+                                        ? booking.booking_services
+                                        : localServices && localServices.length > 0
+                                          ? localServices
+                                          : booking.services && booking.services.length > 0
+                                            ? booking.services
+                                            : [];
+
+                                return allServices.length > 0 ? (
+                                    <>
+                                        <div className="space-y-2 mb-4">
+                                            {allServices.map((service: any, idx: number) => {
+                                                const qty = service.quantity || 1;
+                                                const unit = service.unit_price ?? service.unitPrice ?? 0;
+                                                const total = service.total_price ?? service.totalPrice ?? unit * qty;
+                                                const serviceName = service.name || service.service_name || service.service_type || '-';
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex justify-between items-center text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-700 pb-2"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-medium">{serviceName}</span>
+                                                            <span className="text-gray-400">×{qty}</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="font-medium text-gray-900 dark:text-white">₪{total}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">₪{unit} each</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="border-t-2 border-gray-300 dark:border-gray-600 pt-3 mt-3">
+                                            <div className="flex justify-between items-center text-base font-bold">
+                                                <span className="text-gray-900 dark:text-white">Total Services Price:</span>
+                                                <span className="text-primary text-lg">
+                                                    ₪
+                                                    {(() => {
+                                                        const total = allServices.reduce((sum: number, service: any) => {
+                                                            const qty = service.quantity || 1;
+                                                            const unit = service.unit_price ?? service.unitPrice ?? 0;
+                                                            const serviceTotal = service.total_price ?? service.totalPrice ?? unit * qty;
+                                                            return sum + serviceTotal;
+                                                        }, 0);
+                                                        return total;
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
                                     </div>
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Price</p>
-                                        <p className="font-bold text-sm text-red-600 dark:text-red-400">₪{booking.contractor_price || 0}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : booking.driver?.name ? (
-                            <div className="mb-4 bg-gradient-to-br from-green-50 to-teal-50 dark:from-green-900/10 dark:to-teal-900/10 border border-green-200 dark:border-green-700/50 rounded-lg p-4">
-                                <h4 className="text-sm font-bold text-green-900 dark:text-green-300 mb-4">🚚 Assigned Providers</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Driver</p>
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.driver.name}</p>
-                                    </div>
-                                    <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Truck Number</p>
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.truck?.truck_number || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : null}
+                                );
+                            })()}
+                        </div>
 
                         {/* Action Buttons */}
                         <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-600 flex flex-wrap items-center gap-2">
