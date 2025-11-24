@@ -43,21 +43,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Contractor not found' }, { status: 404 });
         }
 
-        const isSameContractor = (bookingRow as any).contractor_id === contractorId;
-        const previousPrice = Number((bookingRow as any).contractor_price || 0);
-        const deltaForNewContractor = isSameContractor ? contractorPrice - previousPrice : contractorPrice;
-        const newContractorBalance = Number((contractorRow as any).balance || 0) - deltaForNewContractor;
-
-        let previousContractor: Tables<'contractors'> | null = null;
-        if (!isSameContractor && (bookingRow as any).contractor_id) {
-            const { data: prevContr } = await supabaseAdmin
-                .from('contractors')
-                .select('id,name,balance')
-                .eq('id', (bookingRow as any).contractor_id)
-                .maybeSingle();
-            previousContractor = prevContr || null;
-        }
-
+        // Do NOT modify contractor balances from this API.
+        // We only update the booking row to set contractor assignment and price.
         const originalBookingState = {
             contractor_id: (bookingRow as any).contractor_id,
             contractor_name: (bookingRow as any).contractor_name,
@@ -81,45 +68,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Failed to update booking' }, { status: 500 });
         }
 
-        const { data: updatedContractor, error: contractorUpdateError } = await (supabaseAdmin.from('contractors') as any)
-            .update({ balance: newContractorBalance, updated_at: new Date().toISOString() })
-            .eq('id', contractorId)
-            .select('id,name,phone,email,balance')
-            .single();
-
-        if (contractorUpdateError || !updatedContractor) {
-            await (supabaseAdmin.from('bookings') as any)
-                .update({
-                    contractor_id: originalBookingState.contractor_id,
-                    contractor_name: originalBookingState.contractor_name,
-                    contractor_price: originalBookingState.contractor_price,
-                    status: originalBookingState.status,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', bookingId);
-            return NextResponse.json({ message: 'Failed to update contractor balance' }, { status: 500 });
-        }
-
-        if (previousContractor && previousPrice > 0) {
-            const revertBalance = Number((previousContractor as any).balance || 0) + previousPrice;
-            const { error: previousUpdateError } = await (supabaseAdmin.from('contractors') as any)
-                .update({ balance: revertBalance, updated_at: new Date().toISOString() })
-                .eq('id', (previousContractor as any).id);
-
-            if (previousUpdateError) {
-                await (supabaseAdmin.from('contractors') as any).update({ balance: (contractorRow as any).balance, updated_at: new Date().toISOString() }).eq('id', contractorId);
-                await (supabaseAdmin.from('bookings') as any)
-                    .update({
-                        contractor_id: originalBookingState.contractor_id,
-                        contractor_name: originalBookingState.contractor_name,
-                        contractor_price: originalBookingState.contractor_price,
-                        status: originalBookingState.status,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq('id', bookingId);
-                return NextResponse.json({ message: 'Failed to restore previous contractor balance' }, { status: 500 });
-            }
-        }
+        // Do not touch contractors.balance. Return the fetched contractor info (unchanged).
+        const updatedContractor = contractorRow;
 
         await (supabaseAdmin.from('booking_tracks') as any).insert([
             {

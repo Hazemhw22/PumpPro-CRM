@@ -126,8 +126,10 @@ const AddBooking = () => {
                 if (servicesData) setServices(servicesData as any);
                 // fetch contractors
                 try {
+                    // We only need basic contractor info here. Do NOT fetch or rely on `balance` from this flow.
+                    // Balances are managed elsewhere and this page must not modify them.
                     // @ts-ignore
-                    const { data: contractorsData } = await supabase.from('contractors').select('id, name, phone, email, balance');
+                    const { data: contractorsData } = await supabase.from('contractors').select('id, name, phone, email');
                     if (contractorsData) setContractors(contractorsData as any);
                 } catch (err) {
                     console.warn('Failed to fetch contractors', err);
@@ -301,7 +303,9 @@ const AddBooking = () => {
                 truck_id: null,
                 driver_id: null,
                 contractor_id: null,
-                // Do NOT store contractor_price inside notes. We'll record it on the contractor's balance instead.
+                // Do NOT store contractor_price inside notes.
+                // contractor_price (when assigned) must be stored on the `bookings` row
+                // and this flow MUST NOT write to `contractors.balance`.
                 notes: (form.notes || '').trim() || null,
                 // Save a DB-compatible status (avoid writing unknown enum values)
                 status: statusToSave,

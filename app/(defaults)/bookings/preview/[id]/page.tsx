@@ -347,9 +347,7 @@ const BookingPreview = () => {
                 setSelectedContractor(enrichedBooking.contractor || null);
                 setSelectedContractorAssign(enrichedBooking.contractor || null);
                 setContractorPriceAssign(typeof enrichedBooking.contractor_price === 'number' && !Number.isNaN(enrichedBooking.contractor_price) ? String(enrichedBooking.contractor_price) : '');
-                // contractor_price is no longer stored inside booking notes.
-                // The contractor's owed amount is reflected on the contractor's `balance`.
-                // For now clear any transient contractorPaid value here.
+
                 setContractorPaid(0);
                 if (!invoicesError && invoicesData) {
                     setInvoices(invoicesData as any);
@@ -835,40 +833,44 @@ const BookingPreview = () => {
         }
 
         try {
+            // Update booking directly: set contractor_id/name/price and move to awaiting_execution
             setAssigningContractor(true);
-            const res = await fetch('/api/bookings/assign-contractor', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookingId: booking.id, contractorId: contractor.id, contractorPrice: parsedPrice }),
-            });
-            const payload = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(payload?.message || 'Failed to assign contractor');
+
+            const updatePayload: any = {
+                contractor_id: contractor.id,
+                contractor_name: contractor.name || null,
+                contractor_price: parsedPrice,
+                status: 'awaiting_execution',
+            };
+
+            // @ts-ignore
+            const { error: updateError } = await supabase.from('bookings').update(updatePayload).eq('id', booking.id);
+            if (updateError) throw updateError;
+
+            // Insert booking track for assignment
+            try {
+                await supabase.from('booking_tracks').insert([
+                    {
+                        booking_id: booking.id,
+                        old_status: booking.status,
+                        new_status: 'awaiting_execution',
+                        notes: `Assigned contractor ${(contractor && contractor.name) || contractor.id}`,
+                        created_at: new Date().toISOString(),
+                    },
+                ] as any);
+            } catch (e) {
+                console.warn('Could not insert booking track for contractor assignment', e);
             }
 
-            const updatedBooking = payload?.booking;
-            const updatedContractor = payload?.contractor;
-            const contractorName = updatedBooking?.contractor_name || contractor.name || updatedContractor?.name || '';
-
+            // Update local UI state (do NOT touch the contractors table/balance here)
+            const contractorName = contractor.name || '';
             setBooking((prev) =>
-                prev
-                    ? ({
-                          ...prev,
-                          contractor_id: updatedBooking?.contractor_id,
-                          contractor: { id: contractor.id, name: contractorName },
-                          status: updatedBooking?.status || prev.status,
-                          contractor_price: updatedBooking?.contractor_price ?? parsedPrice,
-                      } as any)
-                    : prev,
+                prev ? ({ ...prev, contractor_id: contractor.id, contractor: { id: contractor.id, name: contractorName }, status: 'awaiting_execution', contractor_price: parsedPrice } as any) : prev,
             );
             setSelectedContractor({ id: contractor.id, name: contractorName });
             setSelectedContractorAssign({ id: contractor.id, name: contractorName });
-            setContractorPriceAssign(typeof updatedBooking?.contractor_price === 'number' ? String(updatedBooking.contractor_price) : String(parsedPrice));
-            setAlert({
-                visible: true,
-                message: 'Contractor assigned and booking moved to Awaiting Execution',
-                type: 'success',
-            });
+            setContractorPriceAssign(String(parsedPrice));
+            setAlert({ visible: true, message: 'Contractor assigned and booking moved to Awaiting Execution', type: 'success' });
         } catch (err) {
             console.error('Error assigning contractor:', err);
             setAlert({ visible: true, message: (err as Error).message || 'Could not assign contractor', type: 'danger' });
@@ -1580,7 +1582,8 @@ const BookingPreview = () => {
                                                                                     placeholder="Enter contractor price"
                                                                                 />
                                                                                 <p className="text-xs text-gray-500 mt-1">
-                                                                                    This amount will be saved to the booking and deducted from the contractor balance.
+                                                                                    This amount will be saved to the booking (bookings.contractor_price) only and will NOT modify the contractor balance
+                                                                                    (contractors.balance).
                                                                                 </p>
                                                                             </div>
                                                                         )}

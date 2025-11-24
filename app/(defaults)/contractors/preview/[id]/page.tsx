@@ -159,20 +159,12 @@ const ContractorPreview = () => {
 
             if (error) throw error;
 
-            // Adjust contractor balance by adding the booking price (credited on confirmation)
-            const confirmed = bookings.find((b) => b.id === bookingId);
-            if (confirmed && contractor?.id) {
-                // ensure we always credit a positive amount to balance
-                const owedAmount = Math.abs(getContractorAmount(confirmed) || 0);
-                const newBalance = (contractor.balance || 0) + owedAmount;
-                // @ts-ignore
-                const { error: contractorUpdateError } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', contractor.id);
-
-                if (contractorUpdateError) throw contractorUpdateError;
-
-                // Update UI balance
-                setContractor({ ...contractor, balance: newBalance });
-            }
+            // NOTE: Do NOT modify the `contractors` table or its `balance` from this flow.
+            // The contractor's owed amount is recorded on the booking via `contractor_price`.
+            // If you need to display an owed amount here, compute it from the booking record
+            // but do not write to `contractors.balance`.
+            // const confirmed = bookings.find((b) => b.id === bookingId);
+            // const owedAmount = confirmed ? Math.abs(getContractorAmount(confirmed) || 0) : 0;
 
             // Create Invoice Deal and Confirmation records for this booking
             try {

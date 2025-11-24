@@ -439,46 +439,31 @@ const EditBooking = () => {
                 console.error('Error updating booking_services rows:', e);
             }
 
-            // Handle contractor balance adjustments when contractorPrice changed or contractor reassigned.
+            // Do NOT update contractor balances here. Record assignment/price changes in booking_tracks for audit.
             try {
-                const newCp = parseFloat(contractorPrice || '') || 0;
-                const oldCp = Number(booking?.contractor_price || 0);
-
                 const prevContractorId = (booking as any)?.contractor_id || null;
                 const newContractorId = selectedContractor ? selectedContractor.id : null;
+                const prevPrice = Number(booking?.contractor_price || 0);
+                const newPrice = selectedContractor ? Number(contractorPrice || 0) : 0;
 
-                // If contractor changed and there was an old contractor price applied, revert it from previous contractor
-                if (prevContractorId && prevContractorId !== newContractorId && oldCp > 0) {
-                    try {
-                        const { data: prevContr, error: prevErr } = await supabase.from('contractors').select('balance').eq('id', prevContractorId).maybeSingle();
-                        const prevBalance = (prevContr && (prevContr as any).balance) || 0;
-                        const { error: revertErr } = await (supabase.from('contractors') as any)
-                            .update({ balance: prevBalance + oldCp, updated_at: new Date().toISOString() })
-                            .eq('id', prevContractorId);
-                        if (revertErr) console.warn('Failed to revert previous contractor balance', revertErr);
-                    } catch (e) {
-                        console.warn('Error reverting previous contractor balance', e);
-                    }
-                }
+                if (prevContractorId !== newContractorId || prevPrice !== newPrice) {
+                    const noteParts: string[] = [];
+                    if (prevContractorId !== newContractorId) noteParts.push(`Assigned contractor ${selectedContractor ? selectedContractor.name : 'None'}`);
+                    if (prevPrice !== newPrice) noteParts.push(`Contractor price ${newPrice}`);
 
-                // Apply new contractor price to currently selected contractor
-                if (newContractorId && newCp > 0) {
-                    try {
-                        const { data: contrData, error: contrErr } = await supabase.from('contractors').select('balance').eq('id', newContractorId).maybeSingle();
-                        const currentBalance = (contrData && (contrData as any).balance) || 0;
-
-                        // If same contractor, apply delta (new - old), otherwise subtract full newCp
-                        const delta = prevContractorId === newContractorId ? newCp - oldCp : newCp;
-                        const newBalance = (currentBalance || 0) - delta;
-                        const { error: updateErr } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', newContractorId);
-                        if (updateErr) console.warn('Failed to update contractor balance', updateErr);
-                        else addAlert('success', `Recorded contractor adjustment ₪${delta.toFixed(2)} for contractor`, 'Success');
-                    } catch (e) {
-                        console.warn('Error updating contractor balance', e);
-                    }
+                    // @ts-ignore
+                    await supabase.from('booking_tracks').insert([
+                        {
+                            booking_id: bookingId,
+                            old_status: booking?.status || null,
+                            new_status: form.status || booking?.status || null,
+                            notes: noteParts.join(' | '),
+                            created_at: new Date().toISOString(),
+                        },
+                    ]);
                 }
             } catch (e) {
-                console.error('Error handling contractor balance adjustments:', e);
+                console.warn('Error recording booking track for contractor assignment change', e);
             }
 
             addAlert('success', t('booking_updated_successfully') || 'Booking updated successfully', 'Success');
