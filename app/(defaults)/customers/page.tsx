@@ -319,7 +319,9 @@ const CustomersList = () => {
                                             <td>{row.address || '-'}</td>
                                             <td>{row.phone}</td>
                                             <td>
-                                                <span className={`font-bold ${(row.balance || 0) > 0 ? 'text-success' : 'text-danger'}`}>₪{(row.balance || 0).toFixed(2)}</span>
+                                                <span className={`font-bold ${(row.balance || 0) < 0 ? 'text-danger' : (row.balance || 0) === 0 ? 'text-gray-500' : 'text-success'}`}>
+                                                    {(row.balance || 0) < 0 ? '-' : ''}₪{Math.abs(row.balance || 0).toFixed(2)}
+                                                </span>
                                             </td>
                                             <td>
                                                 {new Date(row.created_at).toLocaleDateString('en-GB', {

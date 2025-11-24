@@ -159,11 +159,12 @@ const ContractorPreview = () => {
 
             if (error) throw error;
 
-            // Adjust contractor balance by subtracting the booking price
+            // Adjust contractor balance by adding the booking price (credited on confirmation)
             const confirmed = bookings.find((b) => b.id === bookingId);
             if (confirmed && contractor?.id) {
-                const owedAmount = getContractorAmount(confirmed);
-                const newBalance = (contractor.balance || 0) - owedAmount;
+                // ensure we always credit a positive amount to balance
+                const owedAmount = Math.abs(getContractorAmount(confirmed) || 0);
+                const newBalance = (contractor.balance || 0) + owedAmount;
                 // @ts-ignore
                 const { error: contractorUpdateError } = await (supabase.from('contractors') as any).update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', contractor.id);
 

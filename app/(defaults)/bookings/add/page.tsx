@@ -356,25 +356,24 @@ const AddBooking = () => {
                 console.error('Error inserting booking_services rows:', e);
             }
 
-            // If a contractor and a contractorPrice were provided, deduct that amount
-            // from the contractor's balance (recorded as a negative credit for them).
+            // Deduct the booking price from customer's balance (record as debt/negative)
             try {
-                const cp = parseFloat(contractorPrice || '') || 0;
-                if (selectedContractor && cp > 0) {
-                    // Try to get current balance from contractors table
-                    const { data: contrData, error: contrError } = await supabase.from('contractors').select('balance').eq('id', selectedContractor.id).maybeSingle();
-                    if (contrError) {
-                        console.warn('Failed to fetch contractor balance', contrError);
+                const bookingPrice = parseFloat(form.price || '0') || 0;
+                if (form.customer_id && bookingPrice > 0) {
+                    // Get current balance from customers table
+                    const { data: custData, error: custError } = await supabase.from('customers').select('balance').eq('id', form.customer_id).maybeSingle();
+                    if (custError) {
+                        console.warn('Failed to fetch customer balance', custError);
                     }
-                    const currentBalance = (contrData && (contrData as any).balance) || 0;
-                    const newBalance = (currentBalance || 0) - cp;
+                    const currentBalance = (custData && (custData as any).balance) || 0;
+                    const newBalance = (currentBalance || 0) - bookingPrice; // Deduct (make negative/debt)
                     // @ts-ignore
-                    const { error: updateError } = await supabase.from('contractors').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', selectedContractor.id);
-                    if (updateError) console.warn('Failed to update contractor balance', updateError);
-                    else addAlert('success', `Recorded ₪${cp.toFixed(2)} as credit for contractor ${selectedContractor.name}`);
+                    const { error: updateError } = await supabase.from('customers').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', form.customer_id);
+                    if (updateError) console.warn('Failed to update customer balance', updateError);
+                    else addAlert('success', `Booking amount ₪${bookingPrice.toFixed(2)} added to customer debt`);
                 }
             } catch (err) {
-                console.error('Error updating contractor balance:', err);
+                console.error('Error updating customer balance:', err);
             }
 
             addAlert('success', t('booking_added_successfully') || 'Booking created successfully', 'Success');
@@ -429,22 +428,6 @@ const AddBooking = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Booking Number */}
-                        <div>
-                            <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Booking Number <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="booking_number"
-                                name="booking_number"
-                                value={form.booking_number}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder="Enter booking number (e.g., BK-2025-001)"
-                            />
-                        </div>
-
                         {/* Customer Type */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -492,6 +475,7 @@ const AddBooking = () => {
                                             customer_name: customer.name,
                                             customer_phone: customer.phone,
                                             customer_email: (customer as any).email || '',
+                                            service_address: (customer as any).address || prev.service_address || '',
                                         }));
                                     } else {
                                         setForm((prev) => ({
@@ -500,6 +484,7 @@ const AddBooking = () => {
                                             customer_name: '',
                                             customer_phone: '',
                                             customer_email: '',
+                                            service_address: '',
                                         }));
                                     }
                                 }}
@@ -564,7 +549,7 @@ const AddBooking = () => {
                             {/* Service Address */}
                             <div>
                                 <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Service Address <span className="text-red-500">*</span>
+                                    Customer Address <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -705,6 +690,22 @@ const AddBooking = () => {
                             </div>
 
                             {/* Assignment moved to Booking Preview (admin will assign driver/contractor there) */}
+                        </div>
+
+                        {/* Customer Confirmation Number */}
+                        <div>
+                            <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                Customer Confirmation Number <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="booking_number"
+                                name="booking_number"
+                                value={form.booking_number}
+                                onChange={handleInputChange}
+                                className="form-input"
+                                placeholder="Enter confirmation number (e.g., CONF-2025-001)"
+                            />
                         </div>
 
                         {/* Notes */}

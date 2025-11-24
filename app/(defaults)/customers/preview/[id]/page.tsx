@@ -263,7 +263,7 @@ const CustomerPreview = () => {
 
             <div className="container mx-auto p-6">
                 {/* Financial Summary Cards */}
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-4 mb-6">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
                     <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
                         <div className="flex items-center gap-3">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
@@ -274,20 +274,7 @@ const CustomerPreview = () => {
                                 <div className="text-xs text-gray-500">Total Bookings</div>
                             </div>
                         </div>
-                    </div>
-                    <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20">
-                                <IconClipboardText className="h-6 w-6 text-orange-500" />
-                            </div>
-                            <div>
-                                <div className={`text-2xl font-bold ${balanceAmount >= 0 ? 'text-success' : 'text-danger'}`}>
-                                    {balanceAmount < 0 ? '-' : ''}₪{Math.abs(balanceAmount).toFixed(2)}
-                                </div>
-                                <div className="text-xs text-gray-500">Balance</div>
-                            </div>
-                        </div>
-                    </div>
+                    </div>                 
                     <div className="panel bg-gradient-to-br from-purple-500/10 to-purple-600/10">
                         <div className="flex items-center gap-3">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20">
@@ -348,7 +335,7 @@ const CustomerPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
-                                    Accounting
+                                    Invoices & Confirmation
                                 </button>
                             )}
                         </Tab>
@@ -360,7 +347,7 @@ const CustomerPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
-                                    Balance
+                                    Accounting
                                 </button>
                             )}
                         </Tab>
