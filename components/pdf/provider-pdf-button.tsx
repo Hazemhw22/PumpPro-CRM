@@ -119,8 +119,14 @@ export default function ProviderPdfButton({ booking, provider, role }: Props) {
     };
 
     return (
-        <button type="button" className={`flex hover:text-info ${loading ? 'opacity-60 pointer-events-none' : ''}`} onClick={handleClick} title="Print">
-            <IconPdf className="h-4.5 w-4.5" />
+        <button 
+            type="button" 
+            className={`inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300 ${loading ? 'opacity-60 pointer-events-none' : ''}`} 
+            onClick={handleClick} 
+            title="Download PDF"
+        >
+            <IconPdf className="h-4 w-4" />
+            Download PDF
         </button>
     );
 }

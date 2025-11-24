@@ -1,12 +1,14 @@
 'use client';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import IconEye from '@/components/icon/icon-eye';
 import IconEdit from '@/components/icon/icon-edit';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconCheck from '@/components/icon/icon-check';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconCaretUp from '@/components/icon/icon-carets-down';
+import IconBox from '@/components/icon/icon-box';
+import IconHorizontalDots from '@/components/icon/icon-horizontal-dots';
 import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
 import { supabase } from '@/lib/supabase/client';
 
@@ -23,6 +25,20 @@ interface BookingsCardProps {
 export default function BookingsCard({ booking, userRole, currentContractorId, currentDriverId, onDelete, onConfirm, hasInvoice }: BookingsCardProps) {
     const [isCollapsed, setIsCollapsed] = useState(true);
     const [localServices, setLocalServices] = useState<any[]>([]);
+    const [customerPhoto, setCustomerPhoto] = useState<string | null>(null);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
+    const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+    // Close mobile menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+                setShowMobileMenu(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         let mounted = true;
@@ -92,23 +108,65 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
         };
     }, [booking?.id, booking?.booking_services, booking?.services]);
 
+    // Fetch customer photo if customer_id exists
+    useEffect(() => {
+        let mounted = true;
+        const loadCustomerPhoto = async () => {
+            if (!booking?.customer_id) {
+                setCustomerPhoto(null);
+                return;
+            }
+            try {
+                const { data: customerData } = await supabase.from('customers').select('photo_url').eq('id', booking.customer_id).maybeSingle();
+                if (mounted && customerData && (customerData as any).photo_url) {
+                    setCustomerPhoto((customerData as any).photo_url);
+                } else if (mounted) {
+                    setCustomerPhoto(null);
+                }
+            } catch (e) {
+                console.warn('Could not load customer photo:', e);
+                if (mounted) setCustomerPhoto(null);
+            }
+        };
+        loadCustomerPhoto();
+        return () => {
+            mounted = false;
+        };
+    }, [booking?.customer_id]);
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'confirmed':
-                return 'bg-success/10 border-success/20 text-success';
+                return 'success';
             case 'in_progress':
-                return 'bg-info/10 border-info/20 text-info';
+                return 'info';
             case 'completed':
-                return 'bg-primary/10 border-primary/20 text-primary';
+                return 'primary';
             case 'cancelled':
-                return 'bg-danger/10 border-danger/20 text-danger';
+                return 'error';
+            case 'request':
+                return 'warning';
+            case 'awaiting_execution':
+                return 'warning';
             default:
-                return 'bg-warning/10 border-warning/20 text-warning';
+                return 'warning';
         }
     };
 
+    const getStatusBadgeColor = (status: string) => {
+        const color = getStatusColor(status);
+        const colorMap: { [key: string]: string } = {
+            success: 'bg-success/10 text-success dark:bg-success/20 dark:text-success',
+            info: 'bg-info/10 text-info dark:bg-info/20 dark:text-info',
+            primary: 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary',
+            error: 'bg-danger/10 text-danger dark:bg-danger/20 dark:text-danger',
+            warning: 'bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning',
+        };
+        return colorMap[color] || colorMap.warning;
+    };
+
     const getPaymentStatusColor = (status: string) => {
-        return status === 'paid' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning';
+        return status === 'paid' ? 'bg-success/10 text-success dark:bg-success/20 dark:text-success' : 'bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning';
     };
 
     const getStatusLabel = (status: string) => {
@@ -117,385 +175,446 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
 
     return (
         <div
-            className="panel bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+            className="rounded-lg border border-gray-200 bg-white text-gray-950 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 hover:shadow-md transition-shadow cursor-pointer"
             onClick={() => setIsCollapsed(!isCollapsed)}
         >
-            <div className="p-5">
+            <div className="p-6">
                 {/* Header Row - Booking # and Status */}
-                <div className="mb-4">
-                    {/* Top Row: Booking Number and Status Badge */}
-                    <div className="flex items-start justify-between mb-4">
-                        <h3 className="font-bold text-lg text-primary">#{booking.booking_number || booking.id.slice(0, 8)}</h3>
-                        {/* Action Buttons Row - Always visible */}
-                        <div className="flex items-center gap-2 flex-wrap mb-4">
-                            <span className={`badge px-3 py-1 rounded-full font-semibold text-xs ${getStatusColor(booking.status)}`}>{getStatusLabel(booking.status)}</span>
+                <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                #{booking.booking_number || booking.id.slice(0, 8)}
+                            </h3>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium text-sm ${getStatusBadgeColor(booking.status)}`}>
+                                {getStatusLabel(booking.status)}
+                            </span>
+                        </div>
+                        {isCollapsed && (
+                            <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
+                                ₪{booking.price || 0}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Action Buttons Row - Always visible */}
+                    <div className="flex items-center gap-2">
+                        {/* Preview Button - Hidden on mobile (shown in menu) */}
+                        <button
+                            type="button"
+                            className="hidden md:inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                            }}
+                            title="View"
+                        >
+                            <Link href={`/bookings/preview/${booking.id}`} className="flex items-center gap-1">
+                                <IconEye className="h-4 w-4" />
+                                <span className="hidden sm:inline">Preview</span>
+                            </Link>
+                        </button>
+
+                        {/* Collapse/Expand Button - Always visible */}
+                        <button
+                            type="button"
+                            className="inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsCollapsed(!isCollapsed);
+                            }}
+                        >
+                            {isCollapsed ? (
+                                <>
+                                    <IconCaretDown className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Expand</span>
+                                </>
+                            ) : (
+                                <>
+                                    <IconCaretUp className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Collapse</span>
+                                </>
+                            )}
+                        </button>
+
+                        {/* Desktop: Edit and Delete buttons */}
+                        {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
                             <button
                                 type="button"
-                                className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
+                                className="hidden md:inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                 }}
-                                title="View"
+                                title="Edit"
                             >
-                                <Link href={`/bookings/preview/${booking.id}`} className="flex items-center gap-1">
-                                    <IconEye className="h-4 w-4" />
-                                    Preview
+                                <Link href={`/bookings/edit/${booking.id}`} className="flex items-center gap-1">
+                                    <IconEdit className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Edit</span>
                                 </Link>
                             </button>
+                        )}
 
+                        {userRole === 'admin' && (
                             <button
                                 type="button"
-                                className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
+                                className="hidden md:inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-white text-red-600 ring-1 ring-inset ring-red-300 hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:ring-red-700 dark:hover:bg-red-900/20"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setIsCollapsed(!isCollapsed);
+                                    onDelete?.(booking.id);
                                 }}
+                                title="Delete"
                             >
-                                {isCollapsed ? (
-                                    <>
-                                        <IconCaretDown className="h-4 w-4" />
-                                        Expand
-                                    </>
-                                ) : (
-                                    <>
-                                        <IconCaretUp className="h-4 w-4" />
-                                        Collapse
-                                    </>
-                                )}
+                                <IconTrashLines className="h-4 w-4" />
+                                <span className="hidden sm:inline">Delete</span>
+                            </button>
+                        )}
+
+                        {/* Mobile: 3-dot menu - Show if admin has actions OR always show for mobile optimization */}
+                        <div ref={mobileMenuRef} className="relative md:hidden">
+                            <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-lg transition p-2 text-sm bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowMobileMenu(!showMobileMenu);
+                                }}
+                                title="More options"
+                            >
+                                <IconHorizontalDots className="h-5 w-5" />
                             </button>
 
-                            {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
-                                <button
-                                    type="button"
-                                    className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-gray-200/50 hover:bg-gray-300/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 transition"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                    }}
-                                    title="Edit"
-                                >
-                                    <Link href={`/bookings/edit/${booking.id}`} className="flex items-center gap-1">
-                                        <IconEdit className="h-4 w-4" />
-                                        Edit
-                                    </Link>
-                                </button>
+                            {/* Mobile Menu Dropdown */}
+                            {showMobileMenu && (
+                                <div className="absolute right-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg dark:bg-gray-800 dark:border-gray-700 z-50">
+                                    <div className="py-1">
+                                        <Link
+                                            href={`/bookings/preview/${booking.id}`}
+                                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowMobileMenu(false);
+                                            }}
+                                        >
+                                            <IconEye className="h-4 w-4" />
+                                            Preview
+                                        </Link>
+                                        {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
+                                            <Link
+                                                href={`/bookings/edit/${booking.id}`}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowMobileMenu(false);
+                                                }}
+                                            >
+                                                <IconEdit className="h-4 w-4" />
+                                                Edit
+                                            </Link>
+                                        )}
+                                        {userRole === 'admin' && (
+                                            <button
+                                                type="button"
+                                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowMobileMenu(false);
+                                                    onDelete?.(booking.id);
+                                                }}
+                                            >
+                                                <IconTrashLines className="h-4 w-4" />
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             )}
+                        </div>
+                    </div>
+                </div>
 
-                            {userRole === 'admin' && (
-                                <button
-                                    type="button"
-                                    className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium bg-danger/10 text-danger hover:bg-danger/20 dark:bg-danger/20 dark:hover:bg-danger/30 transition"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDelete?.(booking.id);
-                                    }}
-                                    title="Delete"
-                                >
-                                    <IconTrashLines className="h-4 w-4" />
-                                    Delete
-                                </button>
+                {/* Collapsed View - Show key info */}
+                {isCollapsed && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {booking.scheduled_date && (
+                            <p>
+                                {new Date(booking.scheduled_date).toLocaleDateString('en-GB')} {booking.scheduled_time ? `at ${booking.scheduled_time}` : ''}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {/* Detailed Content - Only show when expanded */}
+                {!isCollapsed && (
+                    <>
+                        {/* Customer Information */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            {/* Customer Info */}
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                    Customer Info
+                                </h4>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                                            {customerPhoto ? (
+                                                <img
+                                                    src={customerPhoto}
+                                                    alt={booking.customer_name || 'Customer'}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="text-xs font-medium text-gray-400">
+                                                    {(booking.customer_name || 'C').charAt(0).toUpperCase()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {booking.customer_name || '-'}
+                                        </span>
+                                    </div>
+                                    {booking.customer_phone && (
+                                        <div>
+                                            <a href={`tel:${booking.customer_phone}`} className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary">
+                                                {booking.customer_phone}
+                                            </a>
+                                        </div>
+                                    )}
+                                    {booking.service_address && (
+                                        <div>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                {booking.service_address}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Booking Info */}
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                    Booking Info
+                                </h4>
+                                <div className="space-y-1">
+                                    {booking.scheduled_date && (
+                                        <div>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                Date: {new Date(booking.scheduled_date).toLocaleDateString('en-GB')}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {booking.scheduled_time && (
+                                        <div>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                Time: {booking.scheduled_time}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {booking.created_at && (
+                                        <div>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                Created: {new Date(booking.created_at).toLocaleDateString('en-GB')}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Provider Info */}
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                    {booking.contractor?.name ? 'Contractor' : booking.driver?.name ? 'Driver' : 'Provider'}
+                                </h4>
+                                <div className="space-y-1">
+                                    {booking.contractor?.name ? (
+                                        <>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                    <span className="text-xs font-medium text-gray-400">
+                                                        {booking.contractor.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {booking.contractor.name}
+                                                </span>
+                                            </div>
+                                            {booking.contractor_price && (
+                                                <div>
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                        Price: ₪{booking.contractor_price}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : booking.driver?.name ? (
+                                        <>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                    <span className="text-xs font-medium text-gray-400">
+                                                        {booking.driver.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {booking.driver.name}
+                                                </span>
+                                            </div>
+                                            {booking.truck?.truck_number && (
+                                                <div>
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                        Truck: {booking.truck.truck_number}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                Not assigned
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Services List */}
+                        {(() => {
+                            // Get all services from different possible sources
+                            const allServices =
+                                booking.booking_services && booking.booking_services.length > 0
+                                    ? booking.booking_services
+                                    : localServices && localServices.length > 0
+                                      ? localServices
+                                      : booking.services && booking.services.length > 0
+                                        ? booking.services
+                                        : [];
+
+                            return allServices.length > 0 ? (
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                        Services ({allServices.length})
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {allServices.slice(0, 3).map((service: any, idx: number) => {
+                                            const qty = service.quantity || 1;
+                                            const unit = service.unit_price ?? service.unitPrice ?? 0;
+                                            const total = service.total_price ?? service.totalPrice ?? unit * qty;
+                                            const serviceName = service.name || service.service_name || service.service_type || '-';
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    className="flex items-center gap-3 text-sm"
+                                                >
+                                                    <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                        <IconBox className="h-4 w-4 text-gray-400" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-gray-900 dark:text-white font-medium">
+                                                            {serviceName}
+                                                        </div>
+                                                        <div className="text-gray-500 text-xs">
+                                                            ×{qty}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="font-medium text-gray-900 dark:text-white block">
+                                                            ₪{total}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {allServices.length > 3 && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                +{allServices.length - 3} more services
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                        Service
+                                    </h4>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        {booking.service_name || booking.service_type || '-'}
+                                    </p>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Pricing Summary */}
+                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">
+                                    Price:
+                                </span>
+                                <span className="font-medium">
+                                    ₪{booking.price || 0}
+                                </span>
+                            </div>
+                            {booking.profit !== undefined && booking.profit > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Profit:
+                                    </span>
+                                    <span className="font-medium text-primary">
+                                        ₪{booking.profit}
+                                    </span>
+                                </div>
                             )}
+                            {(() => {
+                                const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
+                                const isPaid = booking.payment_status === 'paid' || balance <= 0;
+                                return (
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">
+                                            Balance:
+                                        </span>
+                                        <span className={`font-medium ${isPaid ? 'text-success dark:text-success' : 'text-danger dark:text-danger'}`}>
+                                            ₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}
+                                        </span>
+                                    </div>
+                                );
+                            })()}
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">
+                                    Payment Status:
+                                </span>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium text-sm ${getPaymentStatusColor(booking.payment_status)}`}>
+                                    {booking.payment_status?.toUpperCase() || 'PENDING'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                                <span>Total:</span>
+                                <span>₪{booking.price || 0}</span>
+                            </div>
+                        </div>
 
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2">
                             {(userRole === 'contractor' || userRole === 'driver') && booking.status === 'awaiting_execution' && (
                                 <button
                                     type="button"
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition font-semibold text-xs"
+                                    className="inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-3 text-sm bg-success text-white hover:bg-success/90"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onConfirm?.(booking);
                                     }}
-                                    title="Confirm Booking"
                                 >
                                     <IconCheck className="h-4 w-4" />
                                     Confirm Booking
                                 </button>
                             )}
-                        </div>
-                    </div>
 
-                    {/* Info Grid - Service, Date, Time, Provider, Price, Balance - Hidden when expanded */}
-                    {isCollapsed && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                            {/* Service Name Box */}
-                            <div className="p-3">
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service</p>
-                                {(() => {
-                                    const services =
-                                        booking?.booking_services && booking.booking_services.length > 0
-                                            ? booking.booking_services
-                                            : localServices && localServices.length > 0
-                                              ? localServices
-                                              : booking?.services && booking.services.length > 0
-                                                ? booking.services
-                                                : [{ name: booking.service_name || booking.service_type || '-' }];
-                                    const names = services.map((s: any) => s.name || s.service_name || s.service_type || '-');
-                                    const maxShown = 2;
-                                    const full = names.join(', ');
-                                    const shown = names.length <= maxShown ? names.join(', ') : `${names.slice(0, maxShown).join(', ')} +${names.length - maxShown} more`;
-                                    return (
-                                        <p title={full} className="font-bold text-xs text-gray-900 dark:text-white truncate">
-                                            {shown}
-                                        </p>
-                                    );
-                                })()}
-                            </div>
-
-                            {/* Service Date Box */}
-                            <div className="p-3">
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Date</p>
-                                <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
-                            </div>
-
-                            {/* Service Time Box */}
-                            <div className="p-3">
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Time</p>
-                                <p className="font-bold text-xs text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
-                            </div>
-
-                            {/* Assigned Provider Box */}
-                            <div className="p-3">
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Provider</p>
-                                <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{booking.contractor?.name || booking.driver?.name || '-'}</p>
-                            </div>
-
-                            {/* Price Box */}
-                            <div className="p-3">
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Price</p>
-                                <p className="font-bold text-xs text-gray-900 dark:text-white">₪{booking.price || 0}</p>
-                            </div>
-
-                            {/* Balance Box */}
-                            <div className="p-3">
-                                <p
-                                    className={`text-xs font-semibold mb-1 ${(() => {
-                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                        return isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
-                                    })()}`}
-                                >
-                                    Balance
-                                </p>
-                                <p className={`font-bold text-xs text-gray-900 dark:text-white`}>
-                                    ₪
-                                    {(() => {
-                                        const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                        const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                        return isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`;
-                                    })()}
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Detailed Content - Only show when expanded */}
-                {!isCollapsed && (
-                    <>
-                        {/* Top Info Row - Booking Date & Balance */}
-                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">📅 Created Date</p>
-                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-GB') : '-'}</p>
+                            {userRole === 'admin' && booking.status === 'confirmed' && (
+                                <div onClick={(e) => e.stopPropagation()}>
+                                    <ProviderPdfButton booking={booking} provider={booking.contractor || booking.driver} role={userRole} />
                                 </div>
-                                {(() => {
-                                    const balance = booking.remaining_amount !== undefined ? booking.remaining_amount : booking.price || 0;
-                                    const isPaid = booking.payment_status === 'paid' || balance <= 0;
-                                    return (
-                                        <div>
-                                            <p className={`text-xs font-semibold mb-1 ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                {isPaid ? '✓ Balance (Paid)' : '⚠ Balance (Pending)'}
-                                            </p>
-                                            <p className={`font-bold text-sm ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                ₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}
-                                            </p>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </div>
+                            )}
 
-                        {/* Service Details - Timing & Location */}
-                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🔧 Service Details</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Date</p>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.scheduled_date ? new Date(booking.scheduled_date).toLocaleDateString('en-GB') : '-'}</p>
+                            {(userRole === 'contractor' || userRole === 'driver') && booking.status === 'confirmed' && (
+                                <div onClick={(e) => e.stopPropagation()}>
+                                    <ProviderPdfButton booking={booking} provider={booking.contractor || booking.driver} role={userRole} />
                                 </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Time</p>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.scheduled_time || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Address</p>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.service_address || '-'}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Customer Info & Provider Info - Side by Side */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            {/* Customer Info */}
-                            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">👤 Customer Information</h4>
-                                <div className="space-y-2">
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Name</p>
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.customer_name || '-'}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Phone</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                                            <a href={`tel:${booking.customer_phone}`} className="hover:text-primary font-medium">
-                                                {booking.customer_phone || '-'}
-                                            </a>
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Provider Info */}
-                            {booking.contractor?.name ? (
-                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🏗️ Assigned Contractor</h4>
-                                    <div className="space-y-2">
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Name</p>
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.contractor.name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Contractor Price</p>
-                                            <p className="text-sm font-medium text-red-600 dark:text-red-400">₪{booking.contractor_price || 0}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : booking.driver?.name ? (
-                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">🚚 Assigned Driver</h4>
-                                    <div className="space-y-2">
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Driver Name</p>
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.driver.name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Truck Number</p>
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.truck?.truck_number || '-'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-
-                        {/* Financial Information */}
-                        <div className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">💰 Financial Information</h4>
-                            <div className="space-y-2 mb-4">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 dark:text-gray-400">Price:</span>
-                                    <span className="font-medium text-gray-900 dark:text-white">₪{booking.price || 0}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 dark:text-gray-400">Profit:</span>
-                                    <span className="font-medium text-primary">₪{booking.profit || 0}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 dark:text-gray-400">Payment Status:</span>
-                                    <span className={`inline-block badge px-2 py-1 rounded text-xs font-semibold ${getPaymentStatusColor(booking.payment_status)}`}>
-                                        {booking.payment_status?.toUpperCase() || 'PENDING'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Services List - At the bottom with total price */}
-                        <div className="mb-4 p-4">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">📦 Services</h4>
-                            {(() => {
-                                // Get all services from different possible sources
-                                const allServices =
-                                    booking.booking_services && booking.booking_services.length > 0
-                                        ? booking.booking_services
-                                        : localServices && localServices.length > 0
-                                          ? localServices
-                                          : booking.services && booking.services.length > 0
-                                            ? booking.services
-                                            : [];
-
-                                return allServices.length > 0 ? (
-                                    <>
-                                        <div className="space-y-2 mb-4">
-                                            {allServices.map((service: any, idx: number) => {
-                                                const qty = service.quantity || 1;
-                                                const unit = service.unit_price ?? service.unitPrice ?? 0;
-                                                const total = service.total_price ?? service.totalPrice ?? unit * qty;
-                                                const serviceName = service.name || service.service_name || service.service_type || '-';
-                                                return (
-                                                    <div
-                                                        key={idx}
-                                                        className="flex justify-between items-center text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-700 pb-2"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="font-medium">{serviceName}</span>
-                                                            <span className="text-gray-400">×{qty}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="font-medium text-gray-900 dark:text-white">₪{total}</div>
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">₪{unit} each</div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="border-t-2 border-gray-300 dark:border-gray-600 pt-3 mt-3">
-                                            <div className="flex justify-between items-center text-base font-bold">
-                                                <span className="text-gray-900 dark:text-white">Total Services Price:</span>
-                                                <span className="text-primary text-lg">
-                                                    ₪
-                                                    {(() => {
-                                                        const total = allServices.reduce((sum: number, service: any) => {
-                                                            const qty = service.quantity || 1;
-                                                            const unit = service.unit_price ?? service.unitPrice ?? 0;
-                                                            const serviceTotal = service.total_price ?? service.totalPrice ?? unit * qty;
-                                                            return sum + serviceTotal;
-                                                        }, 0);
-                                                        return total;
-                                                    })()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Service Type</p>
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.service_name || booking.service_type || '-'}</p>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-600 flex flex-wrap items-center gap-2">
-                            {userRole === 'admin' && booking.status === 'confirmed' && <ProviderPdfButton booking={booking} provider={booking.contractor || booking.driver} role={userRole} />}
-
-                            {(userRole === 'contractor' || userRole === 'driver') && (
-                                <>
-                                    {booking.status === 'awaiting_execution' && (
-                                        <button
-                                            type="button"
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition font-semibold text-xs"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onConfirm?.(booking);
-                                            }}
-                                            title="Confirm Booking"
-                                        >
-                                            <IconCheck className="h-4 w-4" />
-                                            Confirm Booking
-                                        </button>
-                                    )}
-
-                                    {booking.status === 'confirmed' && <ProviderPdfButton booking={booking} provider={booking.contractor || booking.driver} role={userRole} />}
-                                </>
                             )}
                         </div>
                     </>

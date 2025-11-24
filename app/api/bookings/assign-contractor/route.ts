@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { Tables } from '@/types/database.types';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 type AssignContractorPayload = {
     bookingId?: string;
     contractorId?: string;
