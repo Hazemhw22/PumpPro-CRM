@@ -71,7 +71,8 @@ const PaymentsPage = () => {
         };
         const loadBalances = async () => {
             try {
-                const { data } = await supabase.from('contractors').select('id,name,balance').lt('balance', 0).order('balance');
+                // Under new convention a POSITIVE balance means the contractor is owed money.
+                const { data } = await supabase.from('contractors').select('id,name,balance').gt('balance', 0).order('balance');
                 setNegativeBalances((data as any) || []);
             } catch (err) {
                 console.error('Error loading contractor balances', err);
@@ -107,7 +108,8 @@ const PaymentsPage = () => {
 
     const totals = useMemo(() => {
         const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-        const outstanding = negativeBalances.reduce((sum, contractor) => sum + Math.abs(contractor.balance || 0), 0);
+        // Sum positive balances (contractors owed money).
+        const outstanding = negativeBalances.reduce((sum, contractor) => sum + (contractor.balance || 0), 0);
         return { totalPaid, outstanding, count: payments.length };
     }, [payments, negativeBalances]);
 

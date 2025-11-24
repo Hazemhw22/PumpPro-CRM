@@ -6,6 +6,9 @@ import IconPdf from '@/components/icon/icon-pdf';
 import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 import MethodsSelect from '@/components/selectors/MethodsSelect';
 
+// Convention in the app: `contractors.balance > 0` means the contractor is owed money by admin.
+// Payments recorded should reduce this balance (balance = balance - paymentAmount).
+
 interface Payment {
     id: string;
     invoice_id: string;

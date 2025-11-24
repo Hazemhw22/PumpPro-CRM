@@ -84,10 +84,11 @@ const AddContractorPaymentPage = () => {
     }, [contractor]);
 
     const defaultAmount = useMemo(() => {
-        if (!contractor?.balance) return '';
-        if ((contractor.balance || 0) < 0) {
-            return Math.abs(contractor.balance || 0).toFixed(2);
-        }
+        if (!contractor) return '';
+        const bal = contractor.balance || 0;
+        // Under the current convention a POSITIVE balance means the contractor is owed money.
+        // Pre-fill the amount only when contractor is owed (balance > 0).
+        if (bal > 0) return bal.toFixed(2);
         return '';
     }, [contractor]);
 
@@ -123,9 +124,9 @@ const AddContractorPaymentPage = () => {
             });
             if (insertError) throw insertError;
 
-            const { error: balanceError } = await (supabase
-                .from('contractors') as any)
-                .update({ balance: (contractor.balance || 0) + amount, updated_at: new Date().toISOString() })
+            // Payment should REDUCE the contractor's owed balance (positive balance = owed amount).
+            const { error: balanceError } = await (supabase.from('contractors') as any)
+                .update({ balance: (contractor.balance || 0) - amount, updated_at: new Date().toISOString() })
                 .eq('id', contractor.id);
             if (balanceError) throw balanceError;
 
@@ -155,9 +156,7 @@ const AddContractorPaymentPage = () => {
             <div className="flex items-center justify-center gap-4">
                 {[1, 2].map((value) => (
                     <div key={value} className="flex items-center gap-2">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold ${step >= value ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>
-                            {value}
-                        </div>
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold ${step >= value ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>{value}</div>
                         {value < 2 && <div className={`h-1 w-16 rounded ${step > value ? 'bg-primary' : 'bg-gray-200'}`} />}
                     </div>
                 ))}
@@ -166,9 +165,7 @@ const AddContractorPaymentPage = () => {
             {step === 1 && (
                 <div className="panel space-y-4">
                     <h2 className="text-xl font-semibold">{t('select_contractor') || 'Select Contractor'}</h2>
-                    <p className="text-sm text-gray-500">
-                        {t('select_contractor_help') || 'Choose a contractor with a negative balance to begin recording a payment.'}
-                    </p>
+                    <p className="text-sm text-gray-500">{t('select_contractor_help') || 'Choose a contractor with a positive balance (owed to them) to begin recording a payout.'}</p>
                     <div className="grid gap-4 md:grid-cols-2">
                         {contractors.map((item) => (
                             <button
@@ -177,9 +174,7 @@ const AddContractorPaymentPage = () => {
                                     setContractor(item);
                                     setStep(2);
                                 }}
-                                className={`rounded-xl border p-4 text-left transition hover:border-primary ${
-                                    contractor?.id === item.id ? 'border-primary shadow-lg' : 'border-gray-200'
-                                }`}
+                                className={`rounded-xl border p-4 text-left transition hover:border-primary ${contractor?.id === item.id ? 'border-primary shadow-lg' : 'border-gray-200'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <IconUser className="h-6 w-6 text-primary" />
@@ -189,7 +184,7 @@ const AddContractorPaymentPage = () => {
                                     </div>
                                 </div>
                                 <div className="mt-3 text-sm font-semibold">
-                                    {t('balance') || 'Balance'}: <span className={((item.balance || 0) < 0 ? 'text-danger' : 'text-success')}>{formatCurrency(item.balance || 0)}</span>
+                                    {t('balance') || 'Balance'}: <span className={(item.balance || 0) > 0 ? 'text-danger' : 'text-success'}>{formatCurrency(item.balance || 0)}</span>
                                 </div>
                             </button>
                         ))}
@@ -215,11 +210,7 @@ const AddContractorPaymentPage = () => {
                     <form className="space-y-4" onSubmit={handleSubmit}>
                         <div>
                             <label className=" mb-1 block font-semibold">{t('booking_optional') || 'Booking (optional)'}</label>
-                            <select
-                                className="form-select"
-                                value={form.booking_id}
-                                onChange={(e) => setForm((prev) => ({ ...prev, booking_id: e.target.value }))}
-                            >
+                            <select className="form-select" value={form.booking_id} onChange={(e) => setForm((prev) => ({ ...prev, booking_id: e.target.value }))}>
                                 <option value="">{t('no_booking_selected') || 'No booking selected'}</option>
                                 {bookings.map((booking) => (
                                     <option key={booking.id} value={booking.id}>
@@ -233,54 +224,28 @@ const AddContractorPaymentPage = () => {
                             <label className="mb-1 block font-semibold">
                                 {t('amount')} <span className="text-danger">*</span>
                             </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                className="form-input"
-                                value={form.amount}
-                                onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                                required
-                            />
+                            <input type="number" step="0.01" className="form-input" value={form.amount} onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))} required />
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div>
                                 <label className="mb-1 block font-semibold">{t('payment_method') || 'Payment Method'}</label>
-                                <MethodsSelect
-                                    value={form.payment_method}
-                                    onChange={(val) => setForm((prev) => ({ ...prev, payment_method: (val as any) || 'cash' }))}
-                                />
+                                <MethodsSelect value={form.payment_method} onChange={(val) => setForm((prev) => ({ ...prev, payment_method: (val as any) || 'cash' }))} />
                             </div>
                             <div>
                                 <label className="mb-1 block font-semibold">{t('payment_date') || 'Payment Date'}</label>
-                                <input
-                                    type="date"
-                                    className="form-input"
-                                    value={form.payment_date}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, payment_date: e.target.value }))}
-                                    required
-                                />
+                                <input type="date" className="form-input" value={form.payment_date} onChange={(e) => setForm((prev) => ({ ...prev, payment_date: e.target.value }))} required />
                             </div>
                         </div>
 
                         <div>
                             <label className="mb-1 block font-semibold">{t('reference_number') || 'Reference'}</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={form.reference_number}
-                                onChange={(e) => setForm((prev) => ({ ...prev, reference_number: e.target.value }))}
-                            />
+                            <input type="text" className="form-input" value={form.reference_number} onChange={(e) => setForm((prev) => ({ ...prev, reference_number: e.target.value }))} />
                         </div>
 
                         <div>
                             <label className="mb-1 block font-semibold">{t('notes') || 'Notes'}</label>
-                            <textarea
-                                className="form-textarea"
-                                rows={3}
-                                value={form.notes}
-                                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                            />
+                            <textarea className="form-textarea" rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
                         </div>
 
                         <div className="flex items-center justify-end gap-3">
@@ -299,4 +264,3 @@ const AddContractorPaymentPage = () => {
 };
 
 export default AddContractorPaymentPage;
-
