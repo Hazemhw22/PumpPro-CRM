@@ -360,25 +360,14 @@ const AddBooking = () => {
                 console.error('Error inserting booking_services rows:', e);
             }
 
-            // Deduct the booking price from customer's balance (record as debt/negative)
-            try {
-                const bookingPrice = parseFloat(form.price || '0') || 0;
-                if (form.customer_id && bookingPrice > 0) {
-                    // Get current balance from customers table
-                    const { data: custData, error: custError } = await supabase.from('customers').select('balance').eq('id', form.customer_id).maybeSingle();
-                    if (custError) {
-                        console.warn('Failed to fetch customer balance', custError);
-                    }
-                    const currentBalance = (custData && (custData as any).balance) || 0;
-                    const newBalance = (currentBalance || 0) - bookingPrice; // Deduct (make negative/debt)
-                    // @ts-ignore
-                    const { error: updateError } = await supabase.from('customers').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('id', form.customer_id);
-                    if (updateError) console.warn('Failed to update customer balance', updateError);
-                    else addAlert('success', `Booking amount ₪${bookingPrice.toFixed(2)} added to customer debt`);
-                }
-            } catch (err) {
-                console.error('Error updating customer balance:', err);
-            }
+            // NOTE: Do NOT deduct booking price from customer balance on creation.
+            // Customer balance is updated only when:
+            // 1. Invoice is created/confirmed (then total_amount is recorded in invoices table)
+            // 2. Payments are recorded (then payment is subtracted from invoice.remaining_amount)
+            //
+            // The booking.price is the service cost to the customer.
+            // The contractor_price (when assigned) is what the contractor gets paid - it does NOT affect customer debt.
+            // Both are independent calculations.
 
             addAlert('success', t('booking_added_successfully') || 'Booking created successfully', 'Success');
 

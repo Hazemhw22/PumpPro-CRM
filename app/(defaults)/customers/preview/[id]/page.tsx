@@ -43,9 +43,12 @@ interface Booking {
     service_type: string;
     service_address: string;
     scheduled_date: string;
+    scheduled_time?: string;
     price: number;
     status: string;
     payment_status: string;
+    contractor_id?: string | null;
+    driver_id?: string | null;
 }
 
 interface Invoice {
@@ -220,6 +223,132 @@ const CustomerPreview = () => {
 
     const balanceAmount = calculateBalance();
 
+    // Helper function to fetch and generate PDF for invoice deals or confirmations
+    // Builds the same payload as bookings/preview so PDFs match exactly
+    const fetchInvoiceDealPdfBlob = async (deal: any) => {
+        if (!deal) throw new Error('Missing deal');
+
+        const booking = bookings.find((b) => b.id === deal.booking_id);
+        if (!booking) throw new Error('Booking not found');
+
+        // fetch booking_services for richer PDF when available
+        let bookingServices: any[] = [];
+        try {
+            // @ts-ignore
+            const { data: bsData, error: bsError } = await supabase
+                .from('booking_services')
+                .select('id, service_id, service_name, quantity, unit_price, total_price, scheduled_date, scheduled_time')
+                .eq('booking_id', booking.id);
+            if (!bsError && bsData) {
+                const rows = bsData as any[];
+                const uniqueServiceIds = Array.from(new Set(rows.map((r) => r.service_id).filter(Boolean)));
+
+                let servicesMap = new Map<string, any>();
+                if (uniqueServiceIds.length > 0) {
+                    try {
+                        // @ts-ignore
+                        const { data: svcList, error: svcError } = await supabase
+                            .from('services')
+                            .select('id, name')
+                            .in('id', uniqueServiceIds as any);
+                        if (!svcError && svcList) {
+                            servicesMap = new Map((svcList as any[]).map((s: any) => [s.id, s]));
+                        }
+                    } catch (e) {
+                        console.warn('Could not load service records for booking_services:', e);
+                    }
+                }
+
+                bookingServices = rows.map((r: any) => ({
+                    id: r.id,
+                    name: (r.service_name && r.service_name) || (r.service_id && servicesMap.get(r.service_id)?.name) || getServiceName(r.service_id || booking.service_type),
+                    service_id: r.service_id,
+                    quantity: r.quantity || 1,
+                    unit_price: Number(r.unit_price || 0),
+                    total: Number(r.total_price || 0),
+                    scheduled_date: r.scheduled_date || null,
+                    scheduled_time: r.scheduled_time || null,
+                }));
+            }
+        } catch (e) {
+            console.warn('Could not load booking_services for PDF:', e);
+        }
+
+        // fetch contractor/driver details if available (for provider info)
+        let contractor: any = null;
+        let driver: any = null;
+        try {
+            if (booking.contractor_id) {
+                // @ts-ignore
+                const { data: c } = await supabase.from('contractors').select('id, name, phone, email').eq('id', booking.contractor_id).maybeSingle();
+                contractor = c || null;
+            }
+            if (booking.driver_id) {
+                // @ts-ignore
+                const { data: d } = await supabase.from('drivers').select('id, name, phone').eq('id', booking.driver_id).maybeSingle();
+                driver = d || null;
+            }
+        } catch (e) {
+            console.warn('Could not fetch provider details for PDF:', e);
+        }
+
+        const isConfirmation = String(deal.invoice_number || '').startsWith('CONF-');
+
+        const data: any = {
+            invoice: deal,
+            booking: booking,
+            booking_services: bookingServices,
+            services: bookingServices,
+            contractor: contractor,
+            driver: driver,
+            customer: {
+                name: customer?.name || customer?.business_name,
+                phone: customer?.phone,
+                address: customer?.address || booking.service_address,
+                business_name: customer?.business_name || customer?.name,
+            },
+            service: { name: getServiceName(booking.service_type) },
+            lang: 'en',
+            no_price: isConfirmation, // confirmations should have no prices
+            companyInfo: { logo_url: '/favicon.png' },
+        };
+
+        const pdfData: any = {
+            invoice: data.invoice || {
+                id: data?.invoice_id || '',
+                invoice_number: data?.invoice_number || '',
+                total_amount: Number(data?.total_amount || data?.amount || 0),
+                paid_amount: Number(data?.paid_amount || data?.amount || 0),
+                remaining_amount: Number(data?.remaining_amount || 0),
+                status: String(data?.status || 'pending'),
+                created_at: String(data?.created_at || data?.date || new Date().toISOString()),
+            },
+            booking: data.booking || {},
+            booking_services: data.booking_services || [],
+            contractor: data.contractor || null,
+            driver: data.driver || null,
+            customer: data.customer || null,
+            service: data.service || null,
+            doc_type: isConfirmation ? 'confirmation' : 'invoice',
+            companyInfo: data.companyInfo || {},
+            lang: data.lang || 'en',
+            no_price: !!data.no_price,
+        };
+
+        const res = await fetch('/api/generate-contract-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pdfData, docType: isConfirmation ? 'invoice' : 'invoice', filename: `${isConfirmation ? 'confirmation' : 'invoice-deal'}-${deal.invoice_number || deal.id}.pdf` }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error || 'Failed to generate PDF');
+        }
+
+        return await res.blob();
+    };
+
     return (
         <div>
             {/* Header */}
@@ -274,7 +403,7 @@ const CustomerPreview = () => {
                                 <div className="text-xs text-gray-500">Total Bookings</div>
                             </div>
                         </div>
-                    </div>                 
+                    </div>
                     <div className="panel bg-gradient-to-br from-purple-500/10 to-purple-600/10">
                         <div className="flex items-center gap-3">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20">
@@ -637,77 +766,112 @@ const CustomerPreview = () => {
                             </div>
                         </Tab.Panel>
 
-                        {/* Accounting Tab */}
+                        {/* Invoices & Confirmation Tab */}
                         <Tab.Panel>
-                            <div className="panel">
-                                <div className="mb-5">
-                                    <h3 className="text-lg font-semibold mb-3">Invoice Deals</h3>
-                                    {invoiceDeals.length === 0 ? (
-                                        <p className="text-gray-500 text-sm">No invoice deals found for this customer&apos;s bookings.</p>
-                                    ) : (
-                                        <div className="table-responsive">
-                                            <table className="table-bordered">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Deal #</th>
-                                                        <th>Booking #</th>
-                                                        <th>Amount</th>
-                                                        <th>Remaining</th>
-                                                        <th>Status</th>
-                                                        <th>PDF</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {invoiceDeals.map((deal) => {
-                                                        const booking = bookings.find((b) => b.id === deal.booking_id);
-                                                        return (
-                                                            <tr key={deal.id}>
-                                                                <td>
-                                                                    <strong className="text-primary">#{deal.invoice_number}</strong>
-                                                                </td>
-                                                                <td>
-                                                                    {booking ? (
-                                                                        <Link href={`/bookings/preview/${booking.id}`} className="text-info hover:underline">
-                                                                            #{booking.booking_number}
-                                                                        </Link>
-                                                                    ) : (
-                                                                        'N/A'
-                                                                    )}
-                                                                </td>
-                                                                <td>₪{deal.total_amount?.toFixed(2) || 0}</td>
-                                                                <td className="text-danger">₪{deal.remaining_amount?.toFixed(2) || 0}</td>
-                                                                <td>
-                                                                    <span className="badge badge-outline-info">{deal.status?.toUpperCase()}</span>
-                                                                </td>
-                                                                <td className="text-center">
-                                                                    {deal.pdf_url ? (
-                                                                        <button
-                                                                            onClick={() => window.open(deal.pdf_url as string, '_blank')}
-                                                                            className="inline-flex hover:text-primary"
-                                                                            title="Open Deal PDF"
-                                                                        >
-                                                                            <IconPdf className="h-5 w-5" />
-                                                                        </button>
-                                                                    ) : (
-                                                                        <span className="text-xs text-gray-500">No PDF</span>
-                                                                    )}
-                                                                </td>
+                            <div className="space-y-6">
+                                {/* Combined Invoice Deals & Confirmations */}
+                                <div className="panel">
+                                    <div className="mb-5">
+                                        <h3 className="text-lg font-semibold mb-3">Invoice Deals & Confirmations</h3>
+                                        {(() => {
+                                            const combined: any[] = [...invoiceDeals].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                                            if (combined.length === 0) {
+                                                return <p className="text-gray-500 text-sm">No invoice deals or confirmations found for this customer&apos;s bookings.</p>;
+                                            }
+                                            return (
+                                                <div className="table-responsive">
+                                                    <table className="table-bordered">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>ID</th>
+                                                                <th>Type</th>
+                                                                <th>Customer</th>
+                                                                <th>Service</th>
+                                                                <th>Amount</th>
+                                                                <th>Status</th>
+                                                                <th>Date</th>
+                                                                <th>Action</th>
                                                             </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
+                                                        </thead>
+                                                        <tbody>
+                                                            {combined.map((deal) => {
+                                                                const booking = bookings.find((b) => b.id === deal.booking_id);
+                                                                const isConfirmation = String(deal.invoice_number || '').startsWith('CONF-');
+                                                                const customerName = displayName || customer?.name || customer?.business_name || '-';
+                                                                const serviceName = booking
+                                                                    ? getServiceName(booking.service_type)
+                                                                    : ((deal as any)?.metadata && (deal as any).metadata.service_name) || (deal as any).service_type || '-';
+                                                                const amountDisplay = !isConfirmation && typeof deal.total_amount === 'number' ? `₪${deal.total_amount.toFixed(2)}` : '-';
+                                                                const statusDisplay = deal.status ? deal.status.toUpperCase() : '-';
+                                                                const dateDisplay = isConfirmation
+                                                                    ? booking?.scheduled_date
+                                                                        ? `${new Date(booking.scheduled_date).toLocaleDateString('en-GB')} ${booking.scheduled_time || ''}`
+                                                                        : deal.created_at
+                                                                          ? new Date(deal.created_at).toLocaleDateString('en-GB')
+                                                                          : '-'
+                                                                    : deal.created_at
+                                                                      ? new Date(deal.created_at).toLocaleDateString('en-GB')
+                                                                      : '-';
+
+                                                                return (
+                                                                    <tr key={deal.id}>
+                                                                        <td>
+                                                                            <strong className="text-primary">#{deal.invoice_number}</strong>
+                                                                        </td>
+                                                                        <td>
+                                                                            <span className={`badge ${isConfirmation ? 'badge-outline-success' : 'badge-outline-primary'}`}>
+                                                                                {isConfirmation ? 'Confirmation' : 'Invoice Deal'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td>{customerName}</td>
+                                                                        <td>{serviceName}</td>
+                                                                        <td className="font-medium">{amountDisplay}</td>
+                                                                        <td>
+                                                                            <span className="badge badge-outline-info">{statusDisplay}</span>
+                                                                        </td>
+                                                                        <td className="text-sm">{dateDisplay}</td>
+                                                                        <td className="text-center">
+                                                                            <button
+                                                                                onClick={async () => {
+                                                                                    try {
+                                                                                        const blob = await fetchInvoiceDealPdfBlob(deal);
+                                                                                        const url = window.URL.createObjectURL(blob);
+                                                                                        const link = document.createElement('a');
+                                                                                        link.href = url;
+                                                                                        link.download = `${isConfirmation ? 'confirmation' : 'invoice-deal'}-${deal.invoice_number || deal.id}.pdf`;
+                                                                                        document.body.appendChild(link);
+                                                                                        link.click();
+                                                                                        document.body.removeChild(link);
+                                                                                        window.URL.revokeObjectURL(url);
+                                                                                    } catch (err) {
+                                                                                        console.error('Download PDF failed', err);
+                                                                                        window.alert('Failed to download PDF');
+                                                                                    }
+                                                                                }}
+                                                                                className="inline-flex hover:text-primary"
+                                                                                title={`Download ${isConfirmation ? 'Confirmation' : 'Invoice Deal'} PDF`}
+                                                                            >
+                                                                                <IconPdf className="h-5 w-5" />
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                         </Tab.Panel>
 
-                        {/* Payments Tab */}
+                        {/* Accounting Tab */}
                         <Tab.Panel>
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold">Customer Payments</h3>
+                                    <h3 className="text-lg font-semibold">Customer Accounting</h3>
                                     <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
                                         Record New Payment
                                     </button>

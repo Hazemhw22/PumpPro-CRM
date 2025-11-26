@@ -25,7 +25,6 @@ import TruckSelect from '@/components/truck-select/truck-select';
 import DriverSelect from '@/components/driver-select/driver-select';
 import ContractorSelect from '@/components/contractor-select/contractor-select';
 import AssignmentModeSelectAdd from '@/components/assignment-mode-select/assignment-mode-select-add';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Booking {
     id: string;
@@ -1167,14 +1166,10 @@ const BookingPreview = () => {
 
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
-            case 'request':
-                return 'bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning border border-warning/20';
-            case 'awaiting_execution':
-                return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400 border border-orange-200 dark:border-orange-800';
-            case 'confirmed':
-                return 'bg-success/10 text-success dark:bg-success/20 dark:text-success border border-success/20';
             case 'pending':
                 return 'badge-outline-warning';
+            case 'confirmed':
+                return 'badge-outline-info';
             case 'in_progress':
                 return 'badge-outline-primary';
             case 'completed':
@@ -1184,19 +1179,6 @@ const BookingPreview = () => {
             default:
                 return 'badge-outline-secondary';
         }
-    };
-
-    const getStatusLabel = (status: string) => {
-        const labels: { [key: string]: string } = {
-            request: 'Request',
-            awaiting_execution: 'Awaiting Execution',
-            confirmed: 'Confirmed',
-            pending: 'Pending',
-            in_progress: 'In Progress',
-            completed: 'Completed',
-            cancelled: 'Cancelled',
-        };
-        return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     };
 
     if (loading) {
@@ -1341,27 +1323,19 @@ const BookingPreview = () => {
                     <Tab.Panels className="mt-5">
                         {/* Basic Information Tab */}
                         <Tab.Panel>
-                            <div className="space-y-6">
-                                {/* Booking Header */}
-                                <Card>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Customer Information */}
+                                <div className="space-y-6">
+                                    {/* Basic Info */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Basic Information</h3>
+                                        </div>
+                                        <div className="space-y-4">
                                             <div>
-                                                <CardTitle className="text-2xl font-bold">Booking #{booking.booking_number}</CardTitle>
-                                                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                                                    Created on{' '}
-                                                    {new Date(booking.created_at).toLocaleDateString('en-GB', {
-                                                        year: 'numeric',
-                                                        month: '2-digit',
-                                                        day: '2-digit',
-                                                    })}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${getStatusBadgeClass(booking.status)}`}>
-                                                    {getStatusLabel(booking.status)}
-                                                </div>
-                                                <div className="flex items-center gap-3 mt-3 justify-end">
+                                                <h2 className="text-2xl font-bold text-primary mb-2">{booking.customer_name}</h2>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
                                                     {booking.status === 'awaiting_execution' &&
                                                         ((role === 'driver' && booking.driver_id === currentDriverId) || (role === 'contractor' && booking.contractor_id === currentContractorId)) && (
                                                             <button onClick={confirmBooking} className="btn btn-primary">
@@ -1373,64 +1347,51 @@ const BookingPreview = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
-                                    </CardHeader>
-                                </Card>
-
-                                {/* Customer Information */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <IconUser className="w-5 h-5" />
-                                            Customer Information
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Name</label>
-                                                <p className="text-gray-900 dark:text-gray-100">{booking.customer_name}</p>
-                                            </div>
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label>
-                                                <p className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                    <IconPhone className="w-4 h-4" />
-                                                    <a href={`tel:${booking.customer_phone}`} className="text-primary hover:underline">
-                                                        {booking.customer_phone}
-                                                    </a>
-                                                </p>
-                                            </div>
-                                            {booking.customer_email && (
-                                                <div>
-                                                    <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
-                                                    <p className="text-gray-900 dark:text-gray-100">{booking.customer_email}</p>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center">
+                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Booking Number:</span>
+                                                    <span className="font-medium">#{booking.booking_number}</span>
                                                 </div>
-                                            )}
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Service Address</label>
-                                                <p className="text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                    <IconMapPin className="w-4 h-4" />
-                                                    {booking.service_address}
-                                                </p>
+
+                                                <div className="flex items-center">
+                                                    <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Customer Name:</span>
+                                                    <span className="font-medium">{booking.customer_name}</span>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <IconPhone className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Phone:</span>
+                                                    <span className="font-medium">
+                                                        <a href={`tel:${booking.customer_phone}`} className="text-primary hover:underline">
+                                                            {booking.customer_phone}
+                                                        </a>
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <IconMapPin className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                                    <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">Service Address:</span>
+                                                    <span className="font-medium">{booking.service_address}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </div>
 
-                                {/* Schedule Information */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <IconCalendar className="w-5 h-5" />
-                                            Schedule Information
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex items-center gap-2">
-                                                <IconCalendar className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Date:</span>
-                                                <span className="text-sm text-gray-900 dark:text-gray-100">
+                                    {/* Schedule Information */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Schedule Information</h3>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <IconCalendar className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                    <span className="text-sm text-gray-600">Scheduled Date:</span>
+                                                </div>
+                                                <span className="font-semibold text-gray-700 dark:text-gray-300">
                                                     {new Date(booking.scheduled_date).toLocaleDateString('en-GB', {
                                                         year: 'numeric',
                                                         month: '2-digit',
@@ -1438,42 +1399,130 @@ const BookingPreview = () => {
                                                     })}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <IconClock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Time:</span>
-                                                <span className="text-sm text-gray-900 dark:text-gray-100">{booking.scheduled_time}</span>
+
+                                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <IconClock className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" />
+                                                    <span className="text-sm text-gray-600">Scheduled Time:</span>
+                                                </div>
+                                                <span className="font-semibold text-gray-700 dark:text-gray-300">{booking.scheduled_time}</span>
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </div>
 
-                                {/* Services */}
-                                {bookingServices && bookingServices.length > 0 && (
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <IconClipboardText className="w-5 h-5" />
-                                                Services
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-4">
-                                                {/* Services List */}
-                                                <div className="border-t border-b border-white-light dark:border-[#191e3a]">
-                                                    {bookingServices.map((svc, idx) => (
-                                                        <div key={idx} className="py-4 border-b border-white-light dark:border-[#191e3a] last:border-b-0">
-                                                            <div className="flex items-start justify-between">
-                                                                <div className="flex-1">
-                                                                    <h4 className="font-medium text-gray-900 dark:text-gray-100">{svc.name}</h4>
-                                                                    {(svc as any).description && (
-                                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-wrap">{(svc as any).description}</p>
+                                    {/* Services - one panel per service */}
+                                    {bookingServices && bookingServices.length > 0 && (
+                                        <>
+                                            {bookingServices.map((svc, idx) => (
+                                                <div key={idx} className="panel mb-4">
+                                                    <div className="mb-3">
+                                                        <h3 className="text-lg font-semibold">{svc.name}</h3>
+                                                    </div>
+                                                    {(svc as any).description && <p className="text-sm text-gray-600 mb-3 whitespace-pre-wrap">{(svc as any).description}</p>}
+                                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <div className="text-gray-600">Quantity</div>
+                                                            <div className="font-medium">{svc.quantity || 1}</div>
+                                                        </div>
+                                                        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                            <div className="text-gray-600">Unit Price</div>
+                                                            <div className="font-medium">₪{(svc.unit_price || 0).toFixed(2)}</div>
+                                                        </div>
+                                                        <div className="col-span-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                            <div className="text-gray-600">Line Total</div>
+                                                            <div className="font-semibold">₪{(svc.total || 0).toFixed(2)}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <div className="panel">
+                                                <div className="mb-3">
+                                                    <h3 className="text-lg font-semibold">Services Total</h3>
+                                                </div>
+                                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-right">
+                                                    <div className="text-sm text-gray-600">Total</div>
+                                                    <div className="text-2xl font-bold">₪{getServicesTotal().toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Notes (moved here so notes have their own panel) */}
+                                    {booking?.notes && (
+                                        <div className="panel mt-4">
+                                            <div className="mb-3">
+                                                <h3 className="text-lg font-semibold">Notes</h3>
+                                            </div>
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Additional Information */}
+                                <div className="space-y-6">
+                                    {/* Assignment Information */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Assignment</h3>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {role === 'admin' ? (
+                                                booking && (booking.truck_id || booking.driver_id || booking.contractor_id) ? (
+                                                    <>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Truck:</span>
+                                                            <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Driver:</span>
+                                                            {booking.driver ? (
+                                                                <div className="text-right">
+                                                                    <div className="font-medium">{booking.driver.name}</div>
+                                                                    {(booking.driver as any).driver_number && (
+                                                                        <div className="text-sm text-gray-500">
+                                                                            <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
+                                                                                {(booking.driver as any).driver_number}
+                                                                            </a>
+                                                                        </div>
                                                                     )}
-                                                                    <div className="mt-2 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                                                        <span>Quantity: {svc.quantity || 1}</span>
-                                                                        <span>Unit Price: ₪{(svc.unit_price || 0).toFixed(2)}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <span className="text-sm text-gray-600">Contractor:</span>
+                                                            <span className="font-medium">
+                                                                {booking.contractor?.name || 'Not Assigned'}
+                                                                {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
+                                                            </span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                            {assignMode === 'driver' && (
+                                                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                                    <label className="block text-sm text-gray-600 mb-2 font-medium">Truck</label>
+                                                                    <TruckSelect
+                                                                        selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
+                                                                        onTruckSelect={(t) => setSelectedTruckAssign(t as any)}
+                                                                        onCreateNew={() => router.push('/fleet/add')}
+                                                                        className="w-full"
+                                                                    />
+                                                                    <div className="mt-2 text-sm text-gray-500">
+                                                                        <div>
+                                                                            Current: <span className="font-medium text-black dark:text-white">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            Selected: <span className="font-medium">{selectedTruckAssign?.truck_number || '—'}</span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-<<<<<<< Updated upstream
                                                             )}
 
                                                             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -1599,342 +1648,92 @@ const BookingPreview = () => {
                                                                     >
                                                                         {assigningContractor ? 'Assigning...' : 'Apply Assignment'}
                                                                     </button>
-=======
-                                                                <div className="text-right">
-                                                                    <p className="font-medium text-gray-900 dark:text-gray-100">₪{(svc.total || 0).toFixed(2)}</p>
->>>>>>> Stashed changes
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    ))}
-                                                </div>
-
-                                                {/* Services Total */}
-                                                <div className="space-y-2 pt-4">
-                                                    <div className="border-t border-white-light dark:border-[#191e3a] pt-2">
-                                                        <div className="flex justify-between text-lg font-semibold">
-                                                            <span className="text-gray-900 dark:text-gray-100">Total:</span>
-                                                            <span className="text-gray-900 dark:text-gray-100">₪{getServicesTotal().toFixed(2)}</span>
-                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Assignment Information */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <IconUser className="w-5 h-5" />
-                                            Assignment
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {role === 'admin' ? (
-                                            booking && (booking.truck_id || booking.driver_id || booking.contractor_id) ? (
+                                                )
+                                            ) : (
                                                 <>
-                                                    {booking.truck && (
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                                <IconClipboardText className="w-4 h-4 text-gray-400" />
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Truck</label>
-                                                                <p className="text-gray-900 dark:text-gray-100">{booking.truck?.truck_number || 'Not Assigned'}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {booking.driver && (
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                                <IconUser className="w-4 h-4 text-gray-400" />
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Driver</label>
-                                                                <p className="text-gray-900 dark:text-gray-100">{booking.driver.name}</p>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Truck:</span>
+                                                        <span className="font-medium">{booking.truck?.truck_number || 'Not Assigned'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Driver:</span>
+                                                        {booking.driver ? (
+                                                            <div className="text-right">
+                                                                <div className="font-medium">{booking.driver.name}</div>
                                                                 {(booking.driver as any).driver_number && (
-                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                                    <div className="text-sm text-gray-500">
                                                                         <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
                                                                             {(booking.driver as any).driver_number}
                                                                         </a>
-                                                                    </p>
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                    {booking.contractor && (
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                                <IconUser className="w-4 h-4 text-gray-400" />
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Contractor</label>
-                                                                <p className="text-gray-900 dark:text-gray-100">
-                                                                    {booking.contractor.name}
-                                                                    {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                        ) : (
+                                                            <span className="font-medium">{booking.contractor?.name || 'Not Assigned'}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                        <span className="text-sm text-gray-600">Contractor:</span>
+                                                        <span className="font-medium">
+                                                            {booking.contractor?.name || 'Not Assigned'}
+                                                            {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
+                                                        </span>
+                                                    </div>
                                                 </>
-                                            ) : (
-                                                <div className="space-y-4">
-                                                    {/* Assign Mode Selection */}
-                                                    <div className="panel">
-                                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Assignment Mode</label>
-                                                        <AssignmentModeSelectAdd
-                                                            value={assignMode}
-                                                            onChange={(v) => {
-                                                                setAssignMode(v);
-                                                                if (v === 'driver') {
-                                                                    setSelectedContractorAssign(null);
-                                                                    setContractorPriceAssign('');
-                                                                } else {
-                                                                    setSelectedDriverAssign(null);
-                                                                    setSelectedTruckAssign(null);
-                                                                }
-                                                            }}
-                                                            className="form-select w-full border border-white-light dark:border-[#191e3a]"
-                                                        />
-                                                    </div>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                                    {/* Driver Assignment Section */}
-                                                    {assignMode === 'driver' && (
-                                                        <>
-                                                            <div className="panel">
-                                                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Truck</label>
-                                                                <TruckSelect
-                                                                    selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
-                                                                    onTruckSelect={(t) => setSelectedTruckAssign(t as any)}
-                                                                    onCreateNew={() => router.push('/fleet/add')}
-                                                                    className="form-select w-full border border-white-light dark:border-[#191e3a]"
-                                                                />
-                                                                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                                                    <span>
-                                                                        Current: <span className="font-medium text-gray-700 dark:text-gray-300">{booking.truck?.truck_number || 'Not Assigned'}</span>
-                                                                    </span>
-                                                                    {selectedTruckAssign && (
-                                                                        <span>
-                                                                            Selected: <span className="font-medium text-primary">{selectedTruckAssign?.truck_number}</span>
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
+                                    {/* Additional Information */}
+                                    <div className="space-y-6"></div>
+                                    {/* Additional Details */}
+                                    <div className="panel">
+                                        <div className="mb-5">
+                                            <h3 className="text-lg font-semibold">Additional Information</h3>
+                                        </div>
 
-                                                            <div className="panel">
-                                                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Driver</label>
-                                                                <DriverSelect
-                                                                    selectedDriver={selectedDriverAssign as any}
-                                                                    onDriverSelect={(d) => setSelectedDriverAssign(d as any)}
-                                                                    onCreateNew={() => router.push('/drivers/add')}
-                                                                    className="form-select w-full border border-white-light dark:border-[#191e3a]"
-                                                                />
-                                                                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                                                    <span>
-                                                                        Current: <span className="font-medium text-gray-700 dark:text-gray-300">{booking.driver?.name || 'Not Assigned'}</span>
-                                                                    </span>
-                                                                    {selectedDriverAssign && (
-                                                                        <span>
-                                                                            Selected: <span className="font-medium text-primary">{selectedDriverAssign?.name}</span>
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </>
-                                                    )}
-
-                                                    {/* Contractor Assignment Section */}
-                                                    {assignMode === 'contractor' && (
-                                                        <>
-                                                            <div className="panel">
-                                                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Contractor</label>
-                                                                <ContractorSelect
-                                                                    selectedContractor={selectedContractorAssign as any}
-                                                                    onContractorSelect={(c) => {
-                                                                        setSelectedContractorAssign(c as any);
-                                                                        if (c && booking?.contractor_id === (c as any).id && booking.contractor_price) {
-                                                                            setContractorPriceAssign(String(booking.contractor_price));
-                                                                        } else {
-                                                                            setContractorPriceAssign('');
-                                                                        }
-                                                                    }}
-                                                                    onCreateNew={() => router.push('/contractors/add')}
-                                                                    className="form-select w-full border border-white-light dark:border-[#191e3a]"
-                                                                />
-                                                                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                                                    <span>
-                                                                        Current: <span className="font-medium text-gray-700 dark:text-gray-300">{booking.contractor?.name || 'Not Assigned'}</span>
-                                                                    </span>
-                                                                    {selectedContractorAssign && (
-                                                                        <span>
-                                                                            Selected: <span className="font-medium text-primary">{selectedContractorAssign?.name}</span>
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {selectedContractorAssign && (
-                                                                <div className="panel">
-                                                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                                                                        Contractor Price <span className="text-danger">*</span>
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        step="0.01"
-                                                                        className="form-input w-full"
-                                                                        value={contractorPriceAssign}
-                                                                        onChange={(e) => setContractorPriceAssign(e.target.value)}
-                                                                        placeholder="Enter contractor price"
-                                                                    />
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                                                        This amount will be saved to the booking and deducted from the contractor balance.
-                                                                    </p>
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )}
-
-                                                    {/* Action Buttons */}
-                                                    <div className="panel">
-                                                        <div className="flex items-center justify-end gap-3">
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-outline-danger"
-                                                                onClick={() => {
-                                                                    // reset local selections to current persisted values
-                                                                    setSelectedTruckAssign(booking.truck_id ? { id: booking.truck_id as string, truck_number: booking.truck?.truck_number } : null);
-                                                                    setSelectedDriverAssign(booking.driver_id ? { id: booking.driver_id as string, name: booking.driver?.name } : null);
-                                                                    setSelectedContractorAssign(booking.contractor_id ? { id: booking.contractor_id as string, name: booking.contractor?.name } : null);
-                                                                    setContractorPriceAssign(typeof booking.contractor_price === 'number' ? String(booking.contractor_price) : '');
-                                                                }}
-                                                            >
-                                                                Reset
-                                                            </button>
-
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-primary"
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        if (assignMode === 'driver' && selectedTruckAssign) {
-                                                                            await handleTruckAssign(selectedTruckAssign as any);
-                                                                        }
-                                                                        if (assignMode === 'driver' && selectedDriverAssign) {
-                                                                            await handleDriverAssign(
-                                                                                selectedDriverAssign as any,
-                                                                                (selectedTruckAssign && selectedTruckAssign.id) || booking.truck_id || null,
-                                                                            );
-                                                                        }
-                                                                        if (assignMode === 'contractor' && selectedContractorAssign) {
-                                                                            if (contractorPriceInvalid) {
-                                                                                setAlert({
-                                                                                    visible: true,
-                                                                                    message: 'Enter a positive contractor price before assigning.',
-                                                                                    type: 'danger',
-                                                                                });
-                                                                                return;
-                                                                            }
-                                                                            await handleContractorAssign(selectedContractorAssign as any);
-                                                                        }
-                                                                    } catch (e) {
-                                                                        console.error('Error applying assignment', e);
-                                                                        setAlert({ visible: true, message: 'Could not apply assignment', type: 'danger' });
-                                                                    }
-                                                                }}
-                                                                disabled={
-                                                                    assigningContractor ||
-                                                                    (assignMode === 'driver' ? !selectedDriverAssign && !selectedTruckAssign : !selectedContractorAssign || contractorPriceInvalid)
-                                                                }
-                                                            >
-                                                                {assigningContractor ? 'Assigning...' : 'Apply Assignment'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                                        <div className="space-y-3 text-sm">
+                                            {booking.customer_email && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Email:</span>
+                                                    <span className="font-medium">{booking.customer_email}</span>
                                                 </div>
-                                            )
-                                        ) : (
-                                            <>
-                                                {booking.truck && (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                            <IconClipboardText className="w-4 h-4 text-gray-400" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Truck</label>
-                                                            <p className="text-gray-900 dark:text-gray-100">{booking.truck?.truck_number || 'Not Assigned'}</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {booking.driver && (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                            <IconUser className="w-4 h-4 text-gray-400" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Driver</label>
-                                                            <p className="text-gray-900 dark:text-gray-100">{booking.driver.name}</p>
-                                                            {(booking.driver as any).driver_number && (
-                                                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                                    <a href={`tel:${(booking.driver as any).driver_number}`} className="text-primary hover:underline">
-                                                                        {(booking.driver as any).driver_number}
-                                                                    </a>
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {booking.contractor && (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                            <IconUser className="w-4 h-4 text-gray-400" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Contractor</label>
-                                                            <p className="text-gray-900 dark:text-gray-100">
-                                                                {booking.contractor.name}
-                                                                {typeof booking.contractor_price === 'number' ? ` • ₪${booking.contractor_price.toFixed(2)}` : ''}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                            )}
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Status:</span>
+                                                <span className={`badge ${getStatusBadgeClass(booking.status)}`}>{t(booking.status) || booking.status}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Created At:</span>
+                                                <span className="font-medium">
+                                                    {new Date(booking.created_at).toLocaleDateString('en-GB', {
+                                                        year: 'numeric',
+                                                        month: '2-digit',
+                                                        day: '2-digit',
+                                                    })}
+                                                </span>
+                                            </div>
+                                            {/* Notes moved to its own panel in the left column */}
+                                        </div>
+                                    </div>
 
-                                {/* Notes */}
-                                {booking?.notes && (
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <IconClipboardText className="w-5 h-5" />
-                                                Notes
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <p className="text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">{booking.notes}</p>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Quick Contact */}
-                                <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 text-white">
-                                            <IconPhone className="w-5 h-5" />
-                                            Quick Contact
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <a href={`tel:${booking.customer_phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                            <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
-                                            <span className="font-medium">Call Customer</span>
-                                        </a>
-                                    </CardContent>
-                                </Card>
+                                    {/* Contact Card */}
+                                    <div className="panel bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                                        <div className="mb-3">
+                                            <h3 className="text-lg font-semibold">Quick Contact</h3>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <a href={`tel:${booking.customer_phone}`} className="flex items-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                                <IconPhone className="w-5 h-5 ltr:mr-3 rtl:ml-3" />
+                                                <span className="font-medium">Call Customer</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </Tab.Panel>
 
