@@ -12,7 +12,7 @@ import IconClipboardText from '@/components/icon/icon-clipboard-text';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconCamera from '@/components/icon/icon-camera';
 import IconCheck from '@/components/icon/icon-check';
-import IconX from '@/components/icon/icon-x';
+import IconPdf from '@/components/icon/icon-pdf';
 import { supabase } from '@/lib/supabase/client';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -44,6 +44,7 @@ interface Booking {
     status: string;
     payment_status: string;
     contractor_id?: string;
+    driver_id?: string | null;
 }
 
 interface ContractorPayment {
@@ -61,6 +62,19 @@ interface ContractorPayment {
     } | null;
 }
 
+interface InvoiceDeal {
+    id: string;
+    invoice_number: string;
+    booking_id: string | null;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    status: string;
+    pdf_url?: string | null;
+    metadata?: any;
+    created_at: string;
+}
+
 const getContractorAmount = (booking?: Booking | null) => {
     if (!booking) return 0;
     return Number(booking.contractor_price ?? booking.price ?? 0);
@@ -74,6 +88,7 @@ const ContractorPreview = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [payments, setPayments] = useState<ContractorPayment[]>([]);
     const [services, setServices] = useState<any[]>([]);
+    const [invoiceDeals, setInvoiceDeals] = useState<InvoiceDeal[]>([]);
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
@@ -107,6 +122,20 @@ const ContractorPreview = () => {
                     console.error('Error fetching bookings:', bookingsError);
                 } else {
                     setBookings(bookingsData || []);
+                }
+
+                // Fetch invoice_deals for these bookings (confirmations + invoice deals)
+                try {
+                    const bookingIds = (bookingsData || []).map((b: any) => b.id).filter(Boolean);
+                    if (bookingIds.length > 0) {
+                        // @ts-ignore
+                        const { data: dealsData, error: dealsError } = await supabase.from('invoice_deals').select('*').in('booking_id', bookingIds).order('created_at', { ascending: false });
+                        if (!dealsError && dealsData) {
+                            setInvoiceDeals(dealsData as any);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not load invoice_deals for contractor preview:', e);
                 }
 
                 // Fetch payments for this contractor
@@ -230,6 +259,140 @@ const ContractorPreview = () => {
         return String(serviceType)
             .replace(/_/g, ' ')
             .replace(/\b\w/g, (l) => l.toUpperCase());
+    };
+
+    // Helper to build and request PDF blob for an invoice_deal/confirmation
+    const fetchInvoiceDealPdfBlob = async (deal: InvoiceDeal) => {
+        if (!deal) throw new Error('Missing deal');
+        const booking = bookings.find((b) => b.id === deal.booking_id);
+        if (!booking) throw new Error('Booking not found');
+
+        // load booking_services if available
+        let bookingServices: any[] = [];
+        try {
+            // @ts-ignore
+            const { data: bsData, error: bsError } = await supabase
+                .from('booking_services')
+                .select('id, service_id, service_name, quantity, unit_price, total_price, scheduled_date, scheduled_time')
+                .eq('booking_id', booking.id);
+            if (!bsError && bsData) {
+                bookingServices = (bsData as any[]).map((r: any) => ({
+                    id: r.id,
+                    name: r.service_name || r.service_id || getServiceName(booking.service_type),
+                    service_id: r.service_id,
+                    quantity: r.quantity || 1,
+                    unit_price: Number(r.unit_price || 0),
+                    total: Number(r.total_price || 0),
+                    scheduled_date: r.scheduled_date || null,
+                    scheduled_time: r.scheduled_time || null,
+                }));
+            }
+        } catch (e) {
+            console.warn('Could not load booking_services for PDF:', e);
+        }
+
+        // driver details (if any)
+        let driver: any = null;
+        try {
+            if (booking.driver_id) {
+                // @ts-ignore
+                const { data: d } = await supabase.from('drivers').select('id, name, phone, driver_number').eq('id', booking.driver_id).maybeSingle();
+                driver = d || null;
+            }
+        } catch (e) {
+            console.warn('Could not fetch driver for PDF:', e);
+        }
+
+        // customer details (try to load from bookings.customer_id or fallback to booking fields)
+        let customerObj: any = null;
+        try {
+            const customerId = (booking as any).customer_id || (booking as any).customer || null;
+            if (customerId) {
+                // @ts-ignore
+                const { data: c } = await supabase.from('customers').select('id, name, business_name, phone, address').eq('id', customerId).maybeSingle();
+                const cust = c as any;
+                if (cust) {
+                    customerObj = {
+                        name: cust.name || cust.business_name || null,
+                        phone: cust.phone || null,
+                        address: cust.address || null,
+                        business_name: cust.business_name || cust.name || null,
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn('Could not fetch customer for PDF:', e);
+        }
+
+        // fallback to booking-level fields if customer not found
+        if (!customerObj) {
+            customerObj = {
+                name: (booking as any).customer_name || (booking as any).customer || null,
+                phone: (booking as any).customer_phone || null,
+                address: booking.service_address || null,
+                business_name: (booking as any).customer_name || (booking as any).customer || null,
+            };
+        }
+
+        const isConfirmation = String(deal.invoice_number || '').startsWith('CONF-');
+
+        const data: any = {
+            invoice: deal,
+            booking: booking,
+            booking_services: bookingServices,
+            services: bookingServices,
+            contractor: contractor || null,
+            driver: driver || null,
+            customer: customerObj,
+            service: { name: getServiceName(booking.service_type) },
+            lang: 'en',
+            no_price: isConfirmation,
+            companyInfo: { logo_url: '/favicon.png' },
+        };
+
+        const pdfData: any = {
+            invoice: data.invoice || {},
+            booking: data.booking || {},
+            booking_services: data.booking_services || [],
+            contractor: data.contractor || null,
+            driver: data.driver || null,
+            customer: data.customer || null,
+            service: data.service || null,
+            doc_type: isConfirmation ? 'confirmation' : 'invoice',
+            companyInfo: data.companyInfo || {},
+            lang: data.lang || 'en',
+            no_price: !!data.no_price,
+        };
+
+        const res = await fetch('/api/generate-contract-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pdfData, docType: 'invoice', filename: `${isConfirmation ? 'confirmation' : 'invoice-deal'}-${deal.invoice_number || deal.id}.pdf` }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error || 'Failed to generate PDF');
+        }
+
+        return await res.blob();
+    };
+
+    const handleDownloadDealPdf = async (deal: InvoiceDeal) => {
+        try {
+            const blob = await fetchInvoiceDealPdfBlob(deal);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${deal.invoice_number || deal.id}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Failed to download PDF:', e);
+            alert('Failed to generate or download PDF');
+        }
     };
 
     if (loading) {
@@ -380,6 +543,18 @@ const ContractorPreview = () => {
                                 >
                                     <IconCalendar className="ltr:mr-2 rtl:ml-2" />
                                     Bookings
+                                </button>
+                            )}
+                        </Tab>
+                        <Tab as="div" className="flex-1">
+                            {({ selected }) => (
+                                <button
+                                    className={`${
+                                        selected ? 'text-primary !outline-none before:!w-full' : ''
+                                    } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
+                                >
+                                    <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
+                                    Confirmations
                                 </button>
                             )}
                         </Tab>
@@ -638,6 +813,60 @@ const ContractorPreview = () => {
                                                         </td>
                                                     </tr>
                                                 ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </Tab.Panel>
+
+                        {/* Confirmations Tab */}
+                        <Tab.Panel>
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h3 className="text-lg font-semibold">Confirmations</h3>
+                                </div>
+
+                                {invoiceDeals.filter((d) => String(d.invoice_number || '').startsWith('CONF-')).length === 0 ? (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-500">No confirmations found for this contractor</p>
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Confirmation #</th>
+                                                    <th>Booking #</th>
+                                                    <th>Service</th>
+                                                    <th>Date</th>
+                                                    <th className="text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {invoiceDeals
+                                                    .filter((d) => String(d.invoice_number || '').startsWith('CONF-'))
+                                                    .map((deal) => {
+                                                        const bk = bookings.find((b) => b.id === (deal.booking_id as any)) as Booking | undefined;
+                                                        return (
+                                                            <tr key={deal.id}>
+                                                                <td className="font-semibold text-primary">#{deal.invoice_number}</td>
+                                                                <td className="font-semibold">#{bk?.booking_number || '-'}</td>
+                                                                <td>{getServiceName(bk?.service_type)}</td>
+                                                                <td>{bk?.scheduled_date ? new Date(bk.scheduled_date).toLocaleDateString() : '-'}</td>
+                                                                <td className="text-right">
+                                                                    <button
+                                                                        className="btn btn-sm btn-outline-primary"
+                                                                        onClick={async () => {
+                                                                            await handleDownloadDealPdf(deal);
+                                                                        }}
+                                                                    >
+                                                                        <IconPdf className="h-4 w-4" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                             </tbody>
                                         </table>
                                     </div>
