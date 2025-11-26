@@ -59,11 +59,7 @@ const EditCustomer = () => {
         const fetchCustomer = async () => {
             try {
                 // @ts-ignore
-                const { data, error } = await supabase
-                    .from('customers')
-                    .select('*')
-                    .eq('id', params?.id)
-                    .single();
+                const { data, error } = await supabase.from('customers').select('*').eq('id', params?.id).single();
 
                 if (error) throw error;
 
@@ -144,16 +140,12 @@ const EditCustomer = () => {
                 const fileName = `${params?.id}-${Math.random()}.${fileExt}`;
                 const filePath = `customers/${fileName}`;
 
-                const { error: uploadError } = await supabase.storage
-                    .from('customer-photos')
-                    .upload(filePath, photoFile, { upsert: true });
+                const { error: uploadError } = await supabase.storage.from('customer-photos').upload(filePath, photoFile, { upsert: true });
 
                 if (uploadError) {
                     console.error('Upload error:', uploadError);
                 } else {
-                    const { data: urlData } = supabase.storage
-                        .from('customer-photos')
-                        .getPublicUrl(filePath);
+                    const { data: urlData } = supabase.storage.from('customer-photos').getPublicUrl(filePath);
                     photoUrl = urlData.publicUrl;
                 }
             }
@@ -172,14 +164,14 @@ const EditCustomer = () => {
                 customerData.name = form.name.trim();
                 customerData.business_name = null;
             } else {
-                customerData.business_name = form.business_name.trim();
-                customerData.name = null;
+                const businessName = form.business_name.trim();
+                // Some DB schemas require `name` to be NOT NULL. To avoid constraint
+                // violations, set `name` to the business name for business customers.
+                customerData.business_name = businessName;
+                customerData.name = businessName || '';
             }
 
-            const { error } = await (supabase
-                .from('customers')
-                .update as any)(customerData)
-                .eq('id', params?.id);
+            const { error } = await (supabase.from('customers').update as any)(customerData).eq('id', params?.id);
 
             if (error) throw error;
 
@@ -323,12 +315,7 @@ const EditCustomer = () => {
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                 Customer Type <span className="text-red-500">*</span>
                                             </label>
-                                            <CustomerTypeSelect
-                                                value={form.type}
-                                                onChange={(value) => setForm(prev => ({ ...prev, type: value }))}
-                                                className="form-select"
-                                                required
-                                            />
+                                            <CustomerTypeSelect value={form.type} onChange={(value) => setForm((prev) => ({ ...prev, type: value }))} className="form-select" required />
                                         </div>
 
                                         {/* Name or Business Name */}
@@ -337,15 +324,7 @@ const EditCustomer = () => {
                                                 <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                     Name <span className="text-red-500">*</span>
                                                 </label>
-                                                <input
-                                                    type="text"
-                                                    name="name"
-                                                    value={form.name}
-                                                    onChange={handleInputChange}
-                                                    className="form-input"
-                                                    placeholder="Enter name"
-                                                    required
-                                                />
+                                                <input type="text" name="name" value={form.name} onChange={handleInputChange} className="form-input" placeholder="Enter name" required />
                                             </div>
                                         ) : (
                                             <div>
@@ -367,34 +346,16 @@ const EditCustomer = () => {
                                         {/* Tax ID for business */}
                                         {form.type === 'business' && (
                                             <div>
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                    Tax ID
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="tax_id"
-                                                    value={form.tax_id}
-                                                    onChange={handleInputChange}
-                                                    className="form-input"
-                                                    placeholder="Enter tax ID"
-                                                />
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Tax ID</label>
+                                                <input type="text" name="tax_id" value={form.tax_id} onChange={handleInputChange} className="form-input" placeholder="Enter tax ID" />
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Notes */}
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            Notes
-                                        </label>
-                                        <textarea
-                                            name="notes"
-                                            value={form.notes}
-                                            onChange={handleInputChange}
-                                            className="form-textarea"
-                                            rows={4}
-                                            placeholder="Enter additional notes"
-                                        />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Notes</label>
+                                        <textarea name="notes" value={form.notes} onChange={handleInputChange} className="form-textarea" rows={4} placeholder="Enter additional notes" />
                                     </div>
 
                                     {/* Submit Buttons */}
@@ -420,46 +381,20 @@ const EditCustomer = () => {
                                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                                 Phone <span className="text-red-500">*</span>
                                             </label>
-                                            <input
-                                                type="tel"
-                                                name="phone"
-                                                value={form.phone}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter phone number"
-                                                required
-                                            />
+                                            <input type="tel" name="phone" value={form.phone} onChange={handleInputChange} className="form-input" placeholder="Enter phone number" required />
                                         </div>
 
                                         {/* Email */}
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                Email
-                                            </label>
-                                            <input
-                                                type="email"
-                                                name="email"
-                                                value={form.email}
-                                                onChange={handleInputChange}
-                                                className="form-input"
-                                                placeholder="Enter email address"
-                                            />
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Email</label>
+                                            <input type="email" name="email" value={form.email} onChange={handleInputChange} className="form-input" placeholder="Enter email address" />
                                         </div>
                                     </div>
 
                                     {/* Address */}
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            Address
-                                        </label>
-                                        <textarea
-                                            name="address"
-                                            value={form.address}
-                                            onChange={handleInputChange}
-                                            className="form-textarea"
-                                            rows={3}
-                                            placeholder="Enter address"
-                                        />
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Address</label>
+                                        <textarea name="address" value={form.address} onChange={handleInputChange} className="form-textarea" rows={3} placeholder="Enter address" />
                                     </div>
 
                                     {/* Submit Buttons */}
@@ -482,27 +417,17 @@ const EditCustomer = () => {
                                     <div className="flex flex-col items-center">
                                         <div className="mb-5">
                                             <div className="w-40 h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                                                {photoPreview ? (
-                                                    <img src={photoPreview} alt={displayName} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <IconUser className="w-20 h-20 text-gray-400" />
-                                                )}
+                                                {photoPreview ? <img src={photoPreview} alt={displayName} className="w-full h-full object-cover" /> : <IconUser className="w-20 h-20 text-gray-400" />}
                                             </div>
                                         </div>
-                                        
-                                        <input
-                                            type="file"
-                                            id="photo-upload"
-                                            accept="image/*"
-                                            onChange={handlePhotoChange}
-                                            className="hidden"
-                                        />
-                                        
+
+                                        <input type="file" id="photo-upload" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+
                                         <label htmlFor="photo-upload" className="btn btn-primary gap-2 cursor-pointer">
                                             <IconCamera />
                                             Upload Photo
                                         </label>
-                                        
+
                                         <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF (MAX. 800x400px)</p>
                                     </div>
 

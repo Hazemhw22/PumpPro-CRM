@@ -899,7 +899,7 @@ const ContractorPreview = () => {
                                         <tbody>
                                             {(
                                                 [
-                                                    // bookings as negative rows
+                                                    // bookings represent debt owed TO contractor (positive amount)
                                                     ...(bookings || []).map((b) => ({
                                                         id: `booking-${b.id}`,
                                                         date: b.scheduled_date,
@@ -907,10 +907,10 @@ const ContractorPreview = () => {
                                                         booking_number: b.booking_number,
                                                         service: getServiceName(b.service_type),
                                                         method: null,
-                                                        amount: -getContractorAmount(b),
+                                                        amount: getContractorAmount(b),
                                                         notes: b.status,
                                                     })),
-                                                    // payments as positive rows
+                                                    // payments are reductions of debt (negative amount)
                                                     ...(payments || []).map((p) => ({
                                                         id: `payment-${p.id}`,
                                                         date: p.payment_date,
@@ -918,7 +918,7 @@ const ContractorPreview = () => {
                                                         booking_number: (bookings.find((b) => b.id === p.booking_id) || { booking_number: '-' }).booking_number,
                                                         service: getServiceName((bookings.find((b) => b.id === p.booking_id) || { service_type: '-' }).service_type),
                                                         method: p.payment_method,
-                                                        amount: p.amount,
+                                                        amount: -p.amount,
                                                         notes: p.notes || '-',
                                                     })),
                                                 ] as any
@@ -928,14 +928,15 @@ const ContractorPreview = () => {
                                                     <tr key={row.id}>
                                                         <td>{row.date ? new Date(row.date).toLocaleDateString('en-GB') : '-'}</td>
                                                         <td>
-                                                            <span className={`badge ${row.type === 'Booking' ? 'badge-outline-warning' : 'badge-outline-success'}`}>{row.type}</span>
+                                                            <span className={`badge ${row.type === 'Booking' ? 'badge-outline-success' : 'badge-outline-danger'}`}>{row.type}</span>
                                                         </td>
                                                         <td className="font-semibold text-primary">{row.booking_number || '-'}</td>
                                                         <td>{row.method ? <span className="badge badge-outline-info">{row.method}</span> : '-'}</td>
-                                                        <td className={`text-right font-bold ${row.type === 'Booking' ? 'text-danger' : 'text-success'}`}>
-                                                            {row.type === 'Booking' ? `-₪${Math.abs(row.amount || 0).toFixed(2)}` : `+₪${(row.amount || 0).toLocaleString()}`}
+                                                        <td className={`text-right font-bold ${row.type === 'Booking' ? 'text-success' : 'text-danger'}`}>
+                                                            {row.type === 'Booking' ? `+₪${Math.abs(row.amount || 0).toFixed(2)}` : `-₪${Math.abs(row.amount || 0).toFixed(2)}`}
                                                         </td>
                                                         <td className="text-sm text-gray-600">{row.notes || '-'}</td>
+                                                      
                                                     </tr>
                                                 ))}
                                             {(bookings && bookings.length) || (payments && payments.length) ? null : (
