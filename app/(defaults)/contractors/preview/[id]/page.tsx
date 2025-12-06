@@ -407,10 +407,10 @@ const ContractorPreview = () => {
         return (
             <div className="panel">
                 <div className="text-center py-10">
-                    <h3 className="text-lg font-semibold text-danger">Contractor not found</h3>
+                    <h3 className="text-lg font-semibold text-danger">{t('contractor_not_found')}</h3>
                     <Link href="/contractors" className="btn btn-primary mt-4">
                         <IconArrowLeft className="ltr:mr-2 rtl:ml-2" />
-                        Back to Contractors
+                        {t('back_to_contractors')}
                     </Link>
                 </div>
             </div>
@@ -435,18 +435,18 @@ const ContractorPreview = () => {
                         </li>
                         <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
                             <Link href="/contractors" className="text-primary hover:underline">
-                                Contractors
+                                {t('contractors')}
                             </Link>
                         </li>
                         <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                            <span>Contractor Details</span>
+                            <span>{t('contractor_details')}</span>
                         </li>
                     </ul>
                 </div>
 
                 <div className="mb-6 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold">Contractor Details</h1>
+                        <h1 className="text-2xl font-bold">{t('contractor_details')}</h1>
                         <p className="text-gray-500">{contractor.name}</p>
                     </div>
                     <div className="flex gap-2">
@@ -459,12 +459,12 @@ const ContractorPreview = () => {
                                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                 />
                             </svg>
-                            Refresh
+                            {t('refresh')}
                         </button>
                         {contractor && (
                             <Link href={`/contractors/edit/${contractor.id}`} className="btn btn-primary">
                                 <IconEdit className="ltr:mr-2 rtl:ml-2" />
-                                Edit Contractor
+                                {t('edit_contractor')}
                             </Link>
                         )}
                     </div>
@@ -481,7 +481,7 @@ const ContractorPreview = () => {
                             </div>
                             <div>
                                 <div className="text-2xl font-bold">{bookings.length}</div>
-                                <div className="text-xs text-gray-500">Total Bookings</div>
+                                <div className="text-xs text-gray-500">{t('total_bookings')}</div>
                             </div>
                         </div>
                     </div>
@@ -492,7 +492,7 @@ const ContractorPreview = () => {
                             </div>
                             <div>
                                 <div className="text-2xl font-bold">₪{payments.reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}</div>
-                                <div className="text-xs text-gray-500">Total Payments</div>
+                                <div className="text-xs text-gray-500">{t('total_payments')}</div>
                             </div>
                         </div>
                     </div>
@@ -542,7 +542,7 @@ const ContractorPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconCalendar className="ltr:mr-2 rtl:ml-2" />
-                                    Bookings
+                                    {t('bookings_tab')}
                                 </button>
                             )}
                         </Tab>
@@ -554,7 +554,7 @@ const ContractorPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconClipboardText className="ltr:mr-2 rtl:ml-2" />
-                                    Confirmations
+                                    {t('confirmations_tab')}
                                 </button>
                             )}
                         </Tab>
@@ -566,7 +566,7 @@ const ContractorPreview = () => {
                                     } relative -mb-[1px] flex w-full items-center justify-center border-b border-transparent p-5 py-3 before:absolute before:bottom-0 before:left-0 before:right-0 before:m-auto before:inline-block before:h-[1px] before:w-0 before:bg-primary before:transition-all before:duration-700 hover:text-primary hover:before:w-full`}
                                 >
                                     <IconCreditCard className="ltr:mr-2 rtl:ml-2" />
-                                    Accounting
+                                    {t('accounting_tab')}
                                 </button>
                             )}
                         </Tab>
@@ -748,11 +748,11 @@ const ContractorPreview = () => {
                         <Tab.Panel>
                             <div className="panel">
                                 <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Contractor Bookings</h3>
+                                    <h3 className="text-lg font-semibold">{t('contractor_bookings')}</h3>
                                 </div>
                                 {bookings.length === 0 ? (
                                     <div className="text-center py-10">
-                                        <p className="text-gray-500">No bookings found for this contractor</p>
+                                        <p className="text-gray-500">{t('no_bookings_found')}</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
@@ -824,12 +824,12 @@ const ContractorPreview = () => {
                         <Tab.Panel>
                             <div className="panel">
                                 <div className="mb-5">
-                                    <h3 className="text-lg font-semibold">Confirmations</h3>
+                                    <h3 className="text-lg font-semibold">{t('confirmations_tab')}</h3>
                                 </div>
 
                                 {invoiceDeals.filter((d) => String(d.invoice_number || '').startsWith('CONF-')).length === 0 ? (
                                     <div className="text-center py-10">
-                                        <p className="text-gray-500">No confirmations found for this contractor</p>
+                                        <p className="text-gray-500">{t('no_confirmations_found')}</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
@@ -878,7 +878,7 @@ const ContractorPreview = () => {
                         <Tab.Panel>
                             <div className="panel">
                                 <div className="mb-5 flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold">Payments History</h3>
+                                    <h3 className="text-lg font-semibold">{t('payments_history')}</h3>
                                     <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary gap-2">
                                         <IconCreditCard className="w-4 h-4" />
                                         Record Payment
@@ -936,13 +936,12 @@ const ContractorPreview = () => {
                                                             {row.type === 'Booking' ? `+₪${Math.abs(row.amount || 0).toFixed(2)}` : `-₪${Math.abs(row.amount || 0).toFixed(2)}`}
                                                         </td>
                                                         <td className="text-sm text-gray-600">{row.notes || '-'}</td>
-                                                      
                                                     </tr>
                                                 ))}
                                             {(bookings && bookings.length) || (payments && payments.length) ? null : (
                                                 <tr>
                                                     <td colSpan={6} className="text-center text-gray-500 py-10">
-                                                        No bookings or payments recorded yet
+                                                        {t('no_bookings_or_payments')}
                                                     </td>
                                                 </tr>
                                             )}
