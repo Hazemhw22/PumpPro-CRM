@@ -1257,7 +1257,7 @@ const BookingPreview = () => {
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconUser className="w-5 h-5" />
-                                        <span className="text-sm font-medium">Basic Information</span>
+                                        <span className="text-sm font-medium">{t('basic_information') || 'Basic Information'}</span>
                                     </div>
                                 </button>
                             )}
@@ -1271,7 +1271,7 @@ const BookingPreview = () => {
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconDollarSign className="w-5 h-5" />
-                                        <span className="text-sm font-medium">Accounting</span>
+                                        <span className="text-sm font-medium">{t('accounting') || 'Accounting'}</span>
                                     </div>
                                 </button>
                             )}
@@ -1285,7 +1285,7 @@ const BookingPreview = () => {
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconCreditCard className="w-5 h-5" />
-                                        <span className="text-sm font-medium">Tax & Rec Invoices</span>
+                                        <span className="text-sm font-medium">{t('tax_invoices') || 'Tax & Rec Invoices'}</span>
                                     </div>
                                 </button>
                             )}

@@ -59,16 +59,14 @@ const Sidebar = () => {
     useEffect(() => {
         const loadRole = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
                 if (!user) {
                     setRole(null);
                     return;
                 }
-                const { data: profile }: { data: { role: string | null } | null } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', user.id)
-                    .maybeSingle();
+                const { data: profile }: { data: { role: string | null } | null } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
                 setRole(profile?.role || null);
             } catch (e) {
                 setRole(null);
@@ -130,7 +128,9 @@ const Sidebar = () => {
                                                 <Link href="/" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuDashboard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Dashboard</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('dashboard') || 'Dashboard'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -138,7 +138,9 @@ const Sidebar = () => {
                                                 <Link href="/bookings" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconCalendar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Bookings</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('bookings') || 'Bookings'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -169,7 +171,9 @@ const Sidebar = () => {
                                                 <Link href="/" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconMenuDashboard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Dashboard</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('dashboard') || 'Dashboard'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -177,7 +181,9 @@ const Sidebar = () => {
                                                 <Link href="/bookings" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconCalendar className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Bookings</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('bookings') || 'Bookings'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>
@@ -225,7 +231,9 @@ const Sidebar = () => {
                                                 <Link href="/contractors" className="group">
                                                     <div className="flex items-center py-2">
                                                         <IconUser className="h-5 w-5 shrink-0 group-hover:!text-primary" />
-                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">Contractors</span>
+                                                        <span className="text-sm font-semibold text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">
+                                                            {t('contractors') || 'Contractors'}
+                                                        </span>
                                                     </div>
                                                 </Link>
                                             </li>

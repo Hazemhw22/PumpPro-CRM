@@ -424,7 +424,7 @@ const AddBooking = () => {
                         {/* Customer Type */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Customer Type <span className="text-red-500">*</span>
+                                {t('customer_type') || 'Customer Type'} <span className="text-red-500">*</span>
                             </label>
                             <div className="flex gap-4">
                                 <label className="flex items-center cursor-pointer">
@@ -436,7 +436,7 @@ const AddBooking = () => {
                                         onChange={handleInputChange}
                                         className="form-radio text-primary"
                                     />
-                                    <span className="ltr:ml-2 rtl:mr-2">Private Customer</span>
+                                    <span className="ltr:ml-2 rtl:mr-2">{t('private_customer') || 'Private Customer'}</span>
                                 </label>
                                 <label className="flex items-center cursor-pointer">
                                     <input
@@ -447,7 +447,7 @@ const AddBooking = () => {
                                         onChange={handleInputChange}
                                         className="form-radio text-primary"
                                     />
-                                    <span className="ltr:ml-2 rtl:mr-2">Business Customer</span>
+                                    <span className="ltr:ml-2 rtl:mr-2">{t('business_customer') || 'Business Customer'}</span>
                                 </label>
                             </div>
                         </div>
@@ -505,7 +505,6 @@ const AddBooking = () => {
                                     required
                                 />
                             </div>
-
                             {/* Phone */}
                             <div>
                                 <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -522,7 +521,6 @@ const AddBooking = () => {
                                     required
                                 />
                             </div>
-
                             {/* Email */}
                             <div>
                                 <label htmlFor="customer_email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -538,7 +536,6 @@ const AddBooking = () => {
                                     placeholder="Enter email"
                                 />
                             </div>
-
                             {/* Service Address */}
                             <div>
                                 <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -555,7 +552,6 @@ const AddBooking = () => {
                                     required
                                 />
                             </div>
-
                             {/* Date and Time Combined in Single Input */}
                             <div className="md:col-span-2">
                                 <label htmlFor="scheduled_datetime" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -579,7 +575,6 @@ const AddBooking = () => {
                                     required
                                 />
                             </div>
-
                             {/* Main Service - Primary Service */}
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -606,7 +601,6 @@ const AddBooking = () => {
                                     className="form-select"
                                 />
                             </div>
-
                             {/* Extra Services */}
                             <div className="md:col-span-2 space-y-3">
                                 <div className="flex items-center justify-between">
@@ -656,11 +650,10 @@ const AddBooking = () => {
                                     </div>
                                 )}
                             </div>
-
                             {/* Price - Auto-calculated */}
                             <div>
                                 <label htmlFor="price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Price ($) <span className="text-red-500">*</span>
+                                    {t('price') || 'Price'} ($) <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="number"
@@ -673,22 +666,20 @@ const AddBooking = () => {
                                     required
                                 />
                             </div>
-
                             {/* Profit - Admin Only */}
                             <div>
                                 <label htmlFor="profit" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Profit ($) - Admin Only
+                                    {t('profit_admin_only') || 'Profit ($) - Admin Only'}
                                 </label>
                                 <input type="number" id="profit" name="profit" value={form.profit} onChange={handleInputChange} className="form-input" placeholder="0" />
-                            </div>
-
+                            </div>{' '}
                             {/* Assignment moved to Booking Preview (admin will assign driver/contractor there) */}
                         </div>
 
                         {/* Customer Confirmation Number */}
                         <div>
                             <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Customer Confirmation Number <span className="text-red-500">*</span>
+                                {t('booking_number') || 'Booking Number'} <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -704,7 +695,7 @@ const AddBooking = () => {
                         {/* Notes */}
                         <div>
                             <label htmlFor="notes" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Notes (Optional)
+                                {t('notes') || 'Notes'} ({t('optional') || 'Optional'})
                             </label>
                             <textarea id="notes" name="notes" value={form.notes} onChange={handleInputChange} className="form-textarea" placeholder="Enter any additional notes..." rows={4} />
                         </div>

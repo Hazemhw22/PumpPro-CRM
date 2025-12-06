@@ -311,13 +311,13 @@ const BookingsList = () => {
             {/* Header */}
             <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Bookings</h1>
-                    <p className="text-gray-500 dark:text-gray-400">Manage and track all your bookings</p>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{t('bookings') || 'Bookings'}</h1>
+                    <p className="text-gray-500 dark:text-gray-400">{t('manage_and_track_bookings') || 'Manage and track all your bookings'}</p>
                 </div>
                 {role === 'admin' && (
                     <Link href="/bookings/add" className="btn btn-primary gap-2">
                         <IconPlus className="h-4 w-4" />
-                        Add New Booking
+                        {t('add_new_booking') || 'Add New Booking'}
                     </Link>
                 )}
             </div>
@@ -327,7 +327,7 @@ const BookingsList = () => {
                 <div className="panel bg-gradient-to-br from-blue-500/10 to-blue-600/10">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Bookings</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('total_bookings') || 'Total Bookings'}</p>
                             <p className="text-2xl font-bold text-primary mt-1">{items.length}</p>
                         </div>
                         <div className="text-3xl opacity-20">📋</div>
@@ -336,7 +336,7 @@ const BookingsList = () => {
                 <div className="panel bg-gradient-to-br from-yellow-500/10 to-yellow-600/10">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Request</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('request') || 'Request'}</p>
                             <p className="text-2xl font-bold text-warning mt-1">{items.filter((o) => o.status === 'request').length}</p>
                         </div>
                         <div className="text-3xl opacity-20">📝</div>
@@ -345,7 +345,7 @@ const BookingsList = () => {
                 <div className="panel bg-gradient-to-br from-orange-500/10 to-orange-600/10">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Awaiting Execution</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('awaiting_execution') || 'Awaiting Execution'}</p>
                             <p className="text-2xl font-bold text-orange-500 mt-1">{items.filter((o) => o.status === 'awaiting_execution').length}</p>
                         </div>
                         <div className="text-3xl opacity-20">⏳</div>
@@ -354,7 +354,7 @@ const BookingsList = () => {
                 <div className="panel bg-gradient-to-br from-green-500/10 to-green-600/10">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Confirmed</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('confirmed') || 'Confirmed'}</p>
                             <p className="text-2xl font-bold text-success mt-1">{items.filter((o) => o.status === 'confirmed').length}</p>
                         </div>
                         <div className="text-3xl opacity-20">✅</div>
@@ -373,7 +373,7 @@ const BookingsList = () => {
                 <div className="mb-6">
                     <input
                         type="text"
-                        placeholder="Search by booking number, customer name, or phone..."
+                        placeholder={t('search_bookings_placeholder') || 'Search by booking number, customer name, or phone...'}
                         value={searchTerm}
                         onChange={(e) => {
                             setSearchTerm(e.target.value);
@@ -400,7 +400,7 @@ const BookingsList = () => {
                         ))
                     ) : (
                         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                            <p>No {activeTab.replace(/_/g, ' ')} bookings found</p>
+                            <p>{t('no_bookings_found') || 'No bookings found'}</p>
                             <p className="text-sm mt-2">{searchTerm ? 'Try adjusting your search terms' : 'Bookings will appear here when available'}</p>
                         </div>
                     )}
@@ -410,11 +410,11 @@ const BookingsList = () => {
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between border-t border-white-light dark:border-[#191e3a] pt-6">
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Showing {startIndex + 1} to {Math.min(endIndex, filteredBookings.length)} of {filteredBookings.length} bookings
+                            Showing {startIndex + 1} to {Math.min(endIndex, filteredBookings.length)} of {filteredBookings.length} {t('bookings') || 'bookings'}
                         </div>
                         <div className="flex items-center gap-2">
                             <button type="button" className="btn btn-sm btn-outline-primary disabled:opacity-50" disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)}>
-                                Previous
+                                {t('previous') || 'Previous'}
                             </button>
                             <div className="flex items-center gap-1">
                                 {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -439,7 +439,7 @@ const BookingsList = () => {
                                 disabled={currentPage === totalPages}
                                 onClick={() => handlePageChange(currentPage + 1)}
                             >
-                                Next
+                                {t('next') || 'Next'}
                             </button>
                         </div>
                     </div>

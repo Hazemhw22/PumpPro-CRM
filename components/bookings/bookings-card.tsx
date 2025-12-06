@@ -11,6 +11,7 @@ import IconBox from '@/components/icon/icon-box';
 import IconHorizontalDots from '@/components/icon/icon-horizontal-dots';
 import ProviderPdfButton from '@/components/pdf/provider-pdf-button';
 import { supabase } from '@/lib/supabase/client';
+import { getTranslation } from '@/i18n';
 
 interface BookingsCardProps {
     booking: any;
@@ -23,6 +24,7 @@ interface BookingsCardProps {
 }
 
 export default function BookingsCard({ booking, userRole, currentContractorId, currentDriverId, onDelete, onConfirm, hasInvoice }: BookingsCardProps) {
+    const { t } = getTranslation();
     const [isCollapsed, setIsCollapsed] = useState(true);
     const [localServices, setLocalServices] = useState<any[]>([]);
     const [customerPhoto, setCustomerPhoto] = useState<string | null>(null);
@@ -170,7 +172,15 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
     };
 
     const getStatusLabel = (status: string) => {
-        return status?.replace(/_/g, ' ').toUpperCase() || 'PENDING';
+        const statusMap: { [key: string]: string } = {
+            confirmed: t('confirmed_status') || 'Confirmed',
+            request: t('request_status') || 'Request',
+            awaiting_execution: t('awaiting_execution_status') || 'Awaiting Execution',
+            in_progress: t('in_progress') || 'In Progress',
+            completed: t('completed') || 'Completed',
+            cancelled: t('cancelled') || 'Cancelled',
+        };
+        return statusMap[status] || status?.replace(/_/g, ' ').toUpperCase() || 'PENDING';
     };
 
     return (
@@ -183,18 +193,12 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                 <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                #{booking.booking_number || booking.id.slice(0, 8)}
-                            </h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">#{booking.booking_number || booking.id.slice(0, 8)}</h3>
                             <span className={`inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium text-sm ${getStatusBadgeColor(booking.status)}`}>
                                 {getStatusLabel(booking.status)}
                             </span>
                         </div>
-                        {isCollapsed && (
-                            <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                                ₪{booking.price || 0}
-                            </p>
-                        )}
+                        {isCollapsed && <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">₪{booking.price || 0}</p>}
                     </div>
 
                     {/* Action Buttons Row - Always visible */}
@@ -210,7 +214,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                         >
                             <Link href={`/bookings/preview/${booking.id}`} className="flex items-center gap-1">
                                 <IconEye className="h-4 w-4" />
-                                <span className="hidden sm:inline">Preview</span>
+                                <span className="hidden sm:inline">{t('preview') || 'Preview'}</span>
                             </Link>
                         </button>
 
@@ -226,12 +230,12 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             {isCollapsed ? (
                                 <>
                                     <IconCaretDown className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Expand</span>
+                                    <span className="hidden sm:inline">{t('expand') || 'Expand'}</span>
                                 </>
                             ) : (
                                 <>
                                     <IconCaretUp className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Collapse</span>
+                                    <span className="hidden sm:inline">{t('collapse') || 'Collapse'}</span>
                                 </>
                             )}
                         </button>
@@ -244,11 +248,11 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                 onClick={(e) => {
                                     e.stopPropagation();
                                 }}
-                                title="Edit"
+                                title={t('edit') || 'Edit'}
                             >
                                 <Link href={`/bookings/edit/${booking.id}`} className="flex items-center gap-1">
                                     <IconEdit className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Edit</span>
+                                    <span className="hidden sm:inline">{t('edit') || 'Edit'}</span>
                                 </Link>
                             </button>
                         )}
@@ -261,10 +265,10 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                     e.stopPropagation();
                                     onDelete?.(booking.id);
                                 }}
-                                title="Delete"
+                                title={t('delete') || 'Delete'}
                             >
                                 <IconTrashLines className="h-4 w-4" />
-                                <span className="hidden sm:inline">Delete</span>
+                                <span className="hidden sm:inline">{t('delete') || 'Delete'}</span>
                             </button>
                         )}
 
@@ -295,7 +299,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                             }}
                                         >
                                             <IconEye className="h-4 w-4" />
-                                            Preview
+                                            {t('preview_button') || 'Preview'}
                                         </Link>
                                         {userRole === 'admin' && !hasInvoice && booking.status !== 'confirmed' && (
                                             <Link
@@ -307,7 +311,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                                 }}
                                             >
                                                 <IconEdit className="h-4 w-4" />
-                                                Edit
+                                                {t('edit') || 'Edit'}
                                             </Link>
                                         )}
                                         {userRole === 'admin' && (
@@ -321,7 +325,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                                 }}
                                             >
                                                 <IconTrashLines className="h-4 w-4" />
-                                                Delete
+                                                {t('delete') || 'Delete'}
                                             </button>
                                         )}
                                     </div>
@@ -336,7 +340,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                         {booking.scheduled_date && (
                             <p>
-                                {new Date(booking.scheduled_date).toLocaleDateString('en-GB')} {booking.scheduled_time ? `at ${booking.scheduled_time}` : ''}
+                                {new Date(booking.scheduled_date).toLocaleDateString('en-GB')} {booking.scheduled_time ? `${t('at_time') || 'at'} ${booking.scheduled_time}` : ''}
                             </p>
                         )}
                     </div>
@@ -349,27 +353,17 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             {/* Customer Info */}
                             <div className="space-y-2">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                    Customer Info
-                                </h4>
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">{t('customer_info') || 'Customer Info'}</h4>
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                                             {customerPhoto ? (
-                                                <img
-                                                    src={customerPhoto}
-                                                    alt={booking.customer_name || 'Customer'}
-                                                    className="w-full h-full object-cover"
-                                                />
+                                                <img src={customerPhoto} alt={booking.customer_name || 'Customer'} className="w-full h-full object-cover" />
                                             ) : (
-                                                <span className="text-xs font-medium text-gray-400">
-                                                    {(booking.customer_name || 'C').charAt(0).toUpperCase()}
-                                                </span>
+                                                <span className="text-xs font-medium text-gray-400">{(booking.customer_name || 'C').charAt(0).toUpperCase()}</span>
                                             )}
                                         </div>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                            {booking.customer_name || '-'}
-                                        </span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{booking.customer_name || '-'}</span>
                                     </div>
                                     {booking.customer_phone && (
                                         <div>
@@ -380,9 +374,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                     )}
                                     {booking.service_address && (
                                         <div>
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                {booking.service_address}
-                                            </span>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">{booking.service_address}</span>
                                         </div>
                                     )}
                                 </div>
@@ -390,28 +382,26 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
 
                             {/* Booking Info */}
                             <div className="space-y-2">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                    Booking Info
-                                </h4>
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">{t('booking_info') || 'Booking Info'}</h4>
                                 <div className="space-y-1">
                                     {booking.scheduled_date && (
                                         <div>
                                             <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Date: {new Date(booking.scheduled_date).toLocaleDateString('en-GB')}
+                                                {t('date_label') || 'Date'}: {new Date(booking.scheduled_date).toLocaleDateString('en-GB')}
                                             </span>
                                         </div>
                                     )}
                                     {booking.scheduled_time && (
                                         <div>
                                             <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Time: {booking.scheduled_time}
+                                                {t('time_label') || 'Time'}: {booking.scheduled_time}
                                             </span>
                                         </div>
                                     )}
                                     {booking.created_at && (
                                         <div>
                                             <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Created: {new Date(booking.created_at).toLocaleDateString('en-GB')}
+                                                {t('created_label') || 'Created'}: {new Date(booking.created_at).toLocaleDateString('en-GB')}
                                             </span>
                                         </div>
                                     )}
@@ -421,25 +411,21 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             {/* Provider Info */}
                             <div className="space-y-2">
                                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                    {booking.contractor?.name ? 'Contractor' : booking.driver?.name ? 'Driver' : 'Provider'}
+                                    {booking.contractor?.name ? t('contractor_label') || 'Contractor' : booking.driver?.name ? t('driver_label') || 'Driver' : t('provider_label') || 'Provider'}
                                 </h4>
                                 <div className="space-y-1">
                                     {booking.contractor?.name ? (
                                         <>
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                    <span className="text-xs font-medium text-gray-400">
-                                                        {booking.contractor.name.charAt(0).toUpperCase()}
-                                                    </span>
+                                                    <span className="text-xs font-medium text-gray-400">{booking.contractor.name.charAt(0).toUpperCase()}</span>
                                                 </div>
-                                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                                    {booking.contractor.name}
-                                                </span>
+                                                <span className="text-sm font-medium text-gray-900 dark:text-white">{booking.contractor.name}</span>
                                             </div>
                                             {booking.contractor_price && (
                                                 <div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        Price: ₪{booking.contractor_price}
+                                                        {t('price_label') || 'Price'}: ₪{booking.contractor_price}
                                                     </span>
                                                 </div>
                                             )}
@@ -448,27 +434,21 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                         <>
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                    <span className="text-xs font-medium text-gray-400">
-                                                        {booking.driver.name.charAt(0).toUpperCase()}
-                                                    </span>
+                                                    <span className="text-xs font-medium text-gray-400">{booking.driver.name.charAt(0).toUpperCase()}</span>
                                                 </div>
-                                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                                    {booking.driver.name}
-                                                </span>
+                                                <span className="text-sm font-medium text-gray-900 dark:text-white">{booking.driver.name}</span>
                                             </div>
                                             {booking.truck?.truck_number && (
                                                 <div>
                                                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        Truck: {booking.truck.truck_number}
+                                                        {t('truck_label') || 'Truck'}: {booking.truck.truck_number}
                                                     </span>
                                                 </div>
                                             )}
                                         </>
                                     ) : (
                                         <div>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                Not assigned
-                                            </span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">{t('not_assigned') || 'Not assigned'}</span>
                                         </div>
                                     )}
                                 </div>
@@ -490,7 +470,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                             return allServices.length > 0 ? (
                                 <div className="mb-4">
                                     <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Services ({allServices.length})
+                                        {t('services_label') || 'Services'} ({allServices.length})
                                     </h4>
                                     <div className="space-y-2">
                                         {allServices.slice(0, 3).map((service: any, idx: number) => {
@@ -499,44 +479,31 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                             const total = service.total_price ?? service.totalPrice ?? unit * qty;
                                             const serviceName = service.name || service.service_name || service.service_type || '-';
                                             return (
-                                                <div
-                                                    key={idx}
-                                                    className="flex items-center gap-3 text-sm"
-                                                >
+                                                <div key={idx} className="flex items-center gap-3 text-sm">
                                                     <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
                                                         <IconBox className="h-4 w-4 text-gray-400" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-gray-900 dark:text-white font-medium">
-                                                            {serviceName}
-                                                        </div>
-                                                        <div className="text-gray-500 text-xs">
-                                                            ×{qty}
-                                                        </div>
+                                                        <div className="text-gray-900 dark:text-white font-medium">{serviceName}</div>
+                                                        <div className="text-gray-500 text-xs">×{qty}</div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <span className="font-medium text-gray-900 dark:text-white block">
-                                                            ₪{total}
-                                                        </span>
+                                                        <span className="font-medium text-gray-900 dark:text-white block">₪{total}</span>
                                                     </div>
                                                 </div>
                                             );
                                         })}
                                         {allServices.length > 3 && (
                                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                +{allServices.length - 3} more services
+                                                +{allServices.length - 3} {t('more_services') || 'more services'}
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             ) : (
                                 <div className="mb-4">
-                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Service
-                                    </h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                        {booking.service_name || booking.service_type || '-'}
-                                    </p>
+                                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">{t('services_label') || 'Services'}</h4>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">{booking.service_name || booking.service_type || '-'}</p>
                                 </div>
                             );
                         })()}
@@ -544,21 +511,13 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                         {/* Pricing Summary */}
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4">
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600 dark:text-gray-400">
-                                    Price:
-                                </span>
-                                <span className="font-medium">
-                                    ₪{booking.price || 0}
-                                </span>
+                                <span className="text-gray-600 dark:text-gray-400">{t('price_label') || 'Price'}:</span>
+                                <span className="font-medium">₪{booking.price || 0}</span>
                             </div>
                             {booking.profit !== undefined && booking.profit > 0 && (
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600 dark:text-gray-400">
-                                        Profit:
-                                    </span>
-                                    <span className="font-medium text-primary">
-                                        ₪{booking.profit}
-                                    </span>
+                                    <span className="text-gray-600 dark:text-gray-400">{t('profit_label') || 'Profit'}:</span>
+                                    <span className="font-medium text-primary">₪{booking.profit}</span>
                                 </div>
                             )}
                             {(() => {
@@ -566,9 +525,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                 const isPaid = booking.payment_status === 'paid' || balance <= 0;
                                 return (
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-600 dark:text-gray-400">
-                                            Balance:
-                                        </span>
+                                        <span className="text-gray-600 dark:text-gray-400">{t('balance_label') || 'Balance'}:</span>
                                         <span className={`font-medium ${isPaid ? 'text-success dark:text-success' : 'text-danger dark:text-danger'}`}>
                                             ₪{isPaid ? Math.abs(balance) : `-${Math.abs(balance)}`}
                                         </span>
@@ -576,15 +533,13 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                 );
                             })()}
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600 dark:text-gray-400">
-                                    Payment Status:
-                                </span>
+                                <span className="text-gray-600 dark:text-gray-400">{t('payment_status_label') || 'Payment Status'}:</span>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium text-sm ${getPaymentStatusColor(booking.payment_status)}`}>
-                                    {booking.payment_status?.toUpperCase() || 'PENDING'}
+                                    {booking.payment_status === 'paid' ? t('paid_status') || 'Paid' : t('pending_status') || 'Pending'}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
-                                <span>Total:</span>
+                                <span>{t('total_label') || 'Total'}:</span>
                                 <span>₪{booking.price || 0}</span>
                             </div>
                         </div>
@@ -601,7 +556,7 @@ export default function BookingsCard({ booking, userRole, currentContractorId, c
                                     }}
                                 >
                                     <IconCheck className="h-4 w-4" />
-                                    Confirm Booking
+                                    {t('confirm_booking_button') || 'Confirm Booking'}
                                 </button>
                             )}
 
