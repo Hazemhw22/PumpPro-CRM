@@ -1299,7 +1299,7 @@ const BookingPreview = () => {
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconPdf className="w-5 h-5" />
-                                        <span className="text-sm font-medium">Confirmation</span>
+                                        <span className="text-sm font-medium">{t('confirmation')}</span>
                                     </div>
                                 </button>
                             )}
@@ -1314,7 +1314,7 @@ const BookingPreview = () => {
                                 >
                                     <div className="flex items-center justify-center space-x-2">
                                         <IconCalendar className="w-5 h-5" />
-                                        <span className="text-sm font-medium">History</span>
+                                        <span className="text-sm font-medium">{t('history')}</span>
                                     </div>
                                 </button>
                             )}
@@ -1507,7 +1507,7 @@ const BookingPreview = () => {
                                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                                             {assignMode === 'driver' && (
                                                                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                                    <label className="block text-sm text-gray-600 mb-2 font-medium">Truck</label>
+                                                                    <label className="block text-sm text-gray-600 mb-2 font-medium">{t('')}</label>
                                                                     <TruckSelect
                                                                         selectedTruck={(selectedTruckAssign as any) || (booking.truck as any)}
                                                                         onTruckSelect={(t) => setSelectedTruckAssign(t as any)}

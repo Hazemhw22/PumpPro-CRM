@@ -455,7 +455,7 @@ const AddBooking = () => {
                         {/* Select Existing Customer */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                Select Existing Customer <span className="text-red-500">*</span>
+                                {t('select_existing_customer') || 'Select Existing Customer'} <span className="text-red-500">*</span>
                             </label>
                             <CustomerSelect
                                 selectedCustomer={selectedCustomer}
@@ -492,7 +492,7 @@ const AddBooking = () => {
                             {/* Customer Name */}
                             <div>
                                 <label htmlFor="customer_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Customer Name <span className="text-red-500">*</span>
+                                    {t('customer_name') || 'Customer Name'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -508,7 +508,7 @@ const AddBooking = () => {
                             {/* Phone */}
                             <div>
                                 <label htmlFor="customer_phone" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Phone <span className="text-red-500">*</span>
+                                    {t('phone') || 'Phone'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="tel"
@@ -524,7 +524,7 @@ const AddBooking = () => {
                             {/* Email */}
                             <div>
                                 <label htmlFor="customer_email" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Email <span className="text-red-500">*</span>
+                                    {t('email') || 'Email'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="email"
@@ -539,7 +539,7 @@ const AddBooking = () => {
                             {/* Service Address */}
                             <div>
                                 <label htmlFor="service_address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Customer Address <span className="text-red-500">*</span>
+                                    {t('customer_address') || 'Customer Address'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -555,7 +555,7 @@ const AddBooking = () => {
                             {/* Date and Time Combined in Single Input */}
                             <div className="md:col-span-2">
                                 <label htmlFor="scheduled_datetime" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Schedule (Date & Time) <span className="text-red-500">*</span>
+                                    {t('schedule_date_time') || 'Schedule (Date & Time)'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="datetime-local"
@@ -578,7 +578,7 @@ const AddBooking = () => {
                             {/* Main Service - Primary Service */}
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                    Primary Service <span className="text-red-500">*</span>
+                                    {t('primary_service') || 'Primary Service'} <span className="text-red-500">*</span>
                                 </label>
                                 <ServiceSelect
                                     selectedService={selectedService}
@@ -605,10 +605,10 @@ const AddBooking = () => {
                             <div className="md:col-span-2 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <label className="block text-sm font-bold text-gray-700 dark:text-white mb-0">
-                                        Additional Services {!form.service_type && <span className="text-red-500">*</span>}
+                                        {t('additional_services') || 'Additional Services'} {!form.service_type && <span className="text-red-500">*</span>}
                                     </label>
                                     <button type="button" onClick={addExtraServiceRow} className="btn btn-outline-primary btn-sm">
-                                        + Add Service
+                                        {t('add_service') || '+ Add Service'}
                                     </button>
                                 </div>
 
@@ -618,7 +618,7 @@ const AddBooking = () => {
                                             <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end border border-gray-200 dark:border-gray-700 rounded-md p-3">
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
-                                                        Service <span className="text-red-500">*</span>
+                                                        {t('service') || 'Service'} <span className="text-red-500">*</span>
                                                     </label>
                                                     <ServiceSelect
                                                         selectedService={services.find((svc) => svc.id === row.service_id) || null}
@@ -631,7 +631,7 @@ const AddBooking = () => {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Quantity</label>
+                                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">{t('quantity') || 'Quantity'}</label>
                                                     <input
                                                         type="number"
                                                         min={1}
@@ -642,7 +642,7 @@ const AddBooking = () => {
                                                 </div>
                                                 <div className="flex md:justify-end">
                                                     <button type="button" onClick={() => removeExtraServiceRow(index)} className="btn btn-outline-danger btn-sm mt-4 md:mt-0">
-                                                        Remove
+                                                        {t('remove') || 'Remove'}
                                                     </button>
                                                 </div>
                                             </div>
@@ -703,7 +703,7 @@ const AddBooking = () => {
                         {/* Submit Button */}
                         <div className="flex justify-end gap-4 mt-8">
                             <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
-                                {t('cancel')}
+                                {t('cancel') || 'Cancel'}
                             </button>
                             <button type="submit" className="btn btn-primary" disabled={saving}>
                                 {saving ? t('creating') || 'Creating...' : t('create_booking') || 'Create Booking'}

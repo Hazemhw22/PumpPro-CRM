@@ -578,7 +578,7 @@ const EditBooking = () => {
                                         {/* Booking Number */}
                                         <div>
                                             <label htmlFor="booking_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                {t('booking_number') || 'Booking Number'} (Optional)
+                                                {t('booking_number') || 'Booking Number'} 
                                             </label>
                                             <input
                                                 type="text"
@@ -634,7 +634,7 @@ const EditBooking = () => {
 
                                         {/* Service Type */}
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('service_type') || 'Service Type'} (Optional)</label>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('service_type') || 'Service Type'} </label>
                                             <ServiceSelect
                                                 selectedService={selectedService}
                                                 onServiceSelect={(service) => {
@@ -661,7 +661,7 @@ const EditBooking = () => {
                                                     {t('additional_services') || 'Additional Services'} {!form.service_type && <span className="text-red-500">*</span>}
                                                 </label>
                                                 <button type="button" onClick={addExtraServiceRow} className="btn btn-outline-primary btn-sm">
-                                                    + {t('add_service') || 'Add Service'}
+                                                     {t('add_service') || 'Add Service'}
                                                 </button>
                                             </div>
 
@@ -795,7 +795,7 @@ const EditBooking = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {/* Assignment Mode */}
                                         <div className="md:col-span-2">
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">Assignment Mode</label>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('assignment_mode')}</label>
                                             <AssignmentModeSelectAdd
                                                 value={assignMode}
                                                 onChange={(val) => {

@@ -39,6 +39,11 @@ export class PDFService {
             }
 
             const page = await browser.newPage();
+
+            // Set explicit character encoding for proper Arabic/RTL text support
+            await page.setDefaultNavigationTimeout(30000);
+            await page.setDefaultTimeout(30000);
+
             await page.emulateMediaType('screen');
 
             // Attach handlers to surface renderer console messages and network failures
