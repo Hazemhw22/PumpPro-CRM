@@ -32,13 +32,52 @@ async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
     }
 }
 
-// Create minimal text-only PDF
+// Create minimal text-only PDF with better content extraction
 function createMinimalPdf(text: string): Uint8Array {
-    const sanitizedText = text.slice(0, 2000).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    // Extract more structured content from HTML - split by common delimiters
+    let content = text;
+
+    // Remove common HTML tags to get better readability
+    content = content
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ');
+
+    // Clean up excessive whitespace
+    content = content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .join('\n');
+
+    // Ensure we don't exceed PDF content limits
+    const lines = content.split('\n');
+    const maxLinesPerPage = 35; // Roughly 35 lines per page for 12pt font
+
+    // Take first 3 pages worth of content
+    const contentLines = lines.slice(0, maxLinesPerPage * 3);
+    const finalContent = contentLines.join('\n');
+
+    const sanitizedText = finalContent.slice(0, 3000).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 
     const encoder = new TextEncoder();
     const header = '%PDF-1.4\n';
-    const streamContent = `BT /F1 12 Tf 50 750 Td (${sanitizedText}) Tj ET`;
+
+    // Build multi-line content stream
+    let yPosition = 750;
+    let streamContent = 'BT /F1 11 Tf 40 ' + yPosition + ' Td\n';
+
+    const textLines = sanitizedText.split('\n').slice(0, maxLinesPerPage * 3);
+    for (const line of textLines) {
+        const escaped = line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)').slice(0, 90); // Max chars per line
+
+        streamContent += `(${escaped}) Tj\n`;
+        streamContent += '0 -15 Td\n'; // Move down 15 points for next line
+    }
+
+    streamContent += 'ET';
     const streamBytes = encoder.encode(streamContent);
 
     const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
