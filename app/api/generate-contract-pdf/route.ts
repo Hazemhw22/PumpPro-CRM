@@ -4,6 +4,17 @@ import { InvoiceDealPDFGenerator } from '@/components/pdf/invoice-deal-pdf';
 
 export const runtime = 'nodejs';
 
+/**
+ * إصلاح روابط الصور لكي يتمكن Puppeteer على Vercel من تحميلها
+ */
+function fixImageUrls(html: string) {
+    let base = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || 'http://localhost:3000';
+
+    base = base.replace(/\/$/, ''); // إزالة / الأخير إذا موجود
+
+    return html.replace(/src="\//g, `src="${base}/`);
+}
+
 export async function POST(req: Request) {
     try {
         const body = await req.json();
@@ -24,7 +35,8 @@ export async function POST(req: Request) {
         if (pdfData) {
             const data = { ...pdfData, doc_type: docType || 'receipt' };
             html = await InvoiceDealPDFGenerator.generateHTML(data);
-            console.log('[generate-contract-pdf] generated HTML length=', html ? html.length : 0, 'preview=', html ? html.slice(0, 512) : '');
+
+            console.log('[generate-contract-pdf] generated HTML length=', html ? html.length : 0);
         } else {
             const contractHtml: string | undefined = body?.contractHtml;
             if (!contractHtml || typeof contractHtml !== 'string') {
@@ -33,9 +45,7 @@ export async function POST(req: Request) {
             html = contractHtml;
         }
 
-        const filename: string = body?.filename || `contract-${Date.now()}.pdf`;
-
-        // If caller requested a preview, return the generated HTML so it can be inspected in the browser
+        // إذا طلب المستخدم معاينة HTML
         if (body?.preview === true) {
             return new Response(html || '', {
                 status: 200,
@@ -43,8 +53,15 @@ export async function POST(req: Request) {
             });
         }
 
+       
+        html = fixImageUrls(html);
+        console.log('[generate-contract-pdf] After fixImageUrls');
+
+        const filename: string = body?.filename || `contract-${Date.now()}.pdf`;
+
         try {
             const pdfBytes = await PDFService.getInstance().generateContractPDF({ contractHtml: html });
+
             return new Response(pdfBytes as any, {
                 status: 200,
                 headers: {
