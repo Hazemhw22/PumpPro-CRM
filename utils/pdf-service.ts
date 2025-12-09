@@ -1,6 +1,98 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
-import puppeteerCore, { Browser as BrowserCore } from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+// Simple HTML to PDF converter using Puppeteer
+async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
+    try {
+        const puppeteerMod = await import('puppeteer');
+        const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
+
+        console.log('[PDFService] Launching Puppeteer...');
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        });
+
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 800 });
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for images
+
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '20mm', right: '16mm', bottom: '20mm', left: '16mm' },
+        });
+
+        await page.close();
+        await browser.close();
+
+        console.log('[PDFService] PDF generated successfully');
+        return new Uint8Array(pdfBuffer);
+    } catch (e) {
+        console.error('[PDFService] Puppeteer failed:', String(e));
+        throw e;
+    }
+}
+
+// Create minimal text-only PDF
+function createMinimalPdf(text: string): Uint8Array {
+    const sanitizedText = text.slice(0, 2000).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+    const encoder = new TextEncoder();
+    const header = '%PDF-1.4\n';
+    const streamContent = `BT /F1 12 Tf 50 750 Td (${sanitizedText}) Tj ET`;
+    const streamBytes = encoder.encode(streamContent);
+
+    const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+    const obj2 = '2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n';
+    const obj3 = '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n';
+    const obj4Prefix = `4 0 obj\n<< /Length ${streamBytes.length} >>\nstream\n`;
+    const obj4Suffix = '\nendstream\nendobj\n';
+    const obj5 = '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n';
+
+    const parts: Uint8Array[] = [];
+    parts.push(encoder.encode(header));
+
+    const offsets: number[] = [];
+    let cursor = header.length;
+
+    const addObj = (s: string | Uint8Array) => {
+        const bytes = typeof s === 'string' ? encoder.encode(s) : s;
+        parts.push(bytes);
+        cursor += bytes.length;
+    };
+
+    offsets.push(cursor);
+    addObj(obj1);
+    offsets.push(cursor);
+    addObj(obj2);
+    offsets.push(cursor);
+    addObj(obj3);
+    offsets.push(cursor);
+    addObj(obj4Prefix);
+    addObj(streamBytes);
+    addObj(obj4Suffix);
+    offsets.push(cursor);
+    addObj(obj5);
+
+    const xrefStart = cursor;
+    const xrefHeader = `xref\n0 6\n`;
+    const freeEntry = '0000000000 65535 f \n';
+    const pad = (n: number) => String(n).padStart(10, '0');
+    const xrefEntries = offsets.map((o) => `${pad(o)} 00000 n \n`).join('');
+    const xref = xrefHeader + freeEntry + xrefEntries;
+    const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+
+    addObj(xref);
+    addObj(trailer);
+
+    const totalLength = parts.reduce((sum: number, u: Uint8Array) => sum + u.length, 0);
+    const out = new Uint8Array(totalLength);
+    let pos = 0;
+    for (const u of parts) {
+        out.set(u, pos);
+        pos += u.length;
+    }
+    return out;
+}
 
 interface PDFGenerationOptions {
     filename?: string;
@@ -31,7 +123,6 @@ interface LogsPDFOptions extends PDFGenerationOptions {
 
 export class PDFService {
     private static instance: PDFService;
-    private browser: Browser | BrowserCore | null = null;
 
     private constructor() {}
 
@@ -42,134 +133,56 @@ export class PDFService {
         return PDFService.instance;
     }
 
-    private async getBrowser(): Promise<Browser | BrowserCore> {
-        if (!this.browser) {
-            console.log('Launching browser with the chromium-min solution...');
-
-            const isProduction = process.env.VERCEL === 'true' || process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
-
-            if (isProduction) {
-                console.log('Production environment detected, using chromium-min with external binary...');
-
-                try {
-                    // Use the latest version as recommended in the article (v133.0.0)
-                    const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar');
-                    console.log('Chromium executable path:', executablePath);
-
-                    const chromiumAny = chromium as any;
-
-                    this.browser = await puppeteerCore.launch({
-                        executablePath,
-                        args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-features=VizDisplayCompositor', '--font-render-hinting=none'],
-                        headless: chromiumAny.headless,
-                        defaultViewport: chromiumAny.defaultViewport,
-                    });
-                    console.log('Browser launched successfully with chromium-min');
-                } catch (chromiumErr) {
-                    console.error('Failed to launch with chromium, falling back to default puppeteer:', chromiumErr);
-                    this.browser = await puppeteer.launch({
-                        headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                    });
-                }
-            } else {
-                console.log('Development environment detected, using local puppeteer...');
-
-                this.browser = await puppeteer.launch({
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-features=VizDisplayCompositor', '--font-render-hinting=none'],
-                });
-                console.log('Browser launched successfully with local puppeteer');
-            }
-        }
-
-        return this.browser!;
-    }
     async generateContractPDF(options: ContractPDFOptions): Promise<Uint8Array> {
-        const {
-            contractHtml,
-            format = 'A4',
-            orientation = 'portrait',
-            margins = {
-                top: '1cm',
-                right: '1cm',
-                bottom: '1cm',
-                left: '1cm',
-            },
-            printBackground = true,
-            scale = 1,
-        } = options;
-
-        const browser = await this.getBrowser();
-        const page = await browser.newPage();
+        const { contractHtml } = options;
 
         try {
-            // Set viewport for consistent rendering
-            await page.setViewport({ width: 1200, height: 800 });
+            console.log('[PDFService] Starting PDF generation from HTML...');
+            return await htmlToPdfBuffer(contractHtml);
+        } catch (e) {
+            console.error('[PDFService] PDF generation failed, using fallback:', String(e));
 
-            // Load the HTML content
-            await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
-
-            // Additional delay to ensure all resources are loaded (especially images and fonts)
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-
-            // Generate PDF
-            const pdfBuffer = await page.pdf({
-                format,
-                landscape: orientation === 'landscape',
-                margin: margins,
-                printBackground,
-                scale,
-                preferCSSPageSize: true,
-            });
-
-            return new Uint8Array(pdfBuffer);
-        } finally {
-            await page.close();
+            // Fallback: create minimal text-only PDF
+            try {
+                const noTags = contractHtml
+                    .replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '')
+                    .replace(/<[^>]+>/g, ' ');
+                const collapsed = noTags.replace(/\s+/g, ' ').trim();
+                const text = collapsed.slice(0, 4000) || 'Document';
+                console.log('[PDFService] Creating fallback PDF with text excerpt...');
+                return createMinimalPdf(text);
+            } catch (fallbackErr) {
+                console.error('[PDFService] Fallback also failed:', String(fallbackErr));
+                // Create absolutely minimal PDF
+                return createMinimalPdf('Error generating PDF. Check logs.');
+            }
         }
     }
 
     async generateLogsPDF(options: LogsPDFOptions): Promise<Uint8Array> {
-        const {
-            html,
-            format = 'A4',
-            orientation = 'landscape',
-            margins = {
-                top: '15mm',
-                right: '10mm',
-                bottom: '15mm',
-                left: '10mm',
-            },
-            printBackground = true,
-            scale = 1,
-        } = options;
-
-        const browser = await this.getBrowser();
-        const page = await browser.newPage();
+        const { html } = options;
 
         try {
-            // Set viewport for consistent rendering
-            await page.setViewport({ width: 1200, height: 800 });
+            console.log('[PDFService] Starting PDF generation from HTML...');
+            return await htmlToPdfBuffer(html);
+        } catch (e) {
+            console.error('[PDFService] PDF generation failed, using fallback:', String(e));
 
-            // Load the HTML content and wait for network to be idle (including font loading)
-            await page.setContent(html, { waitUntil: 'networkidle0' });
-
-            // Additional delay to ensure fonts are loaded (especially important for Arabic fonts on production)
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            // Generate PDF
-            const pdfBuffer = await page.pdf({
-                format,
-                landscape: orientation === 'landscape',
-                margin: margins,
-                printBackground,
-                scale,
-                preferCSSPageSize: true,
-            });
-
-            return new Uint8Array(pdfBuffer);
-        } finally {
-            await page.close();
+            // Fallback: create minimal text-only PDF
+            try {
+                const noTags = html
+                    .replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '')
+                    .replace(/<[^>]+>/g, ' ');
+                const collapsed = noTags.replace(/\s+/g, ' ').trim();
+                const text = collapsed.slice(0, 4000) || 'Document';
+                console.log('[PDFService] Creating fallback PDF with text excerpt...');
+                return createMinimalPdf(text);
+            } catch (fallbackErr) {
+                console.error('[PDFService] Fallback also failed:', String(fallbackErr));
+                return createMinimalPdf('Error generating PDF. Check logs.');
+            }
         }
     }
 
@@ -196,9 +209,7 @@ export class PDFService {
     }
 
     async cleanup(): Promise<void> {
-        if (this.browser) {
-            await this.browser.close();
-            this.browser = null;
-        }
+        // Cleanup handled by each call since we create/close browser for each PDF
+        console.log('[PDFService] Cleanup completed');
     }
 }

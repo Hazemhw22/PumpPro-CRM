@@ -573,8 +573,8 @@ export class InvoiceDealPDFGenerator {
                 contractor: data.contractor || null,
                 customer: data.customer || null,
                 service: data.service || null,
-                booking_services: Array.isArray(data.booking_services) ? data.booking_services : undefined,
-                services: Array.isArray(data.services) ? data.services : undefined,
+                booking_services: Array.isArray(data.booking_services) ? data.booking_services : data.booking_services ? [data.booking_services] : [],
+                services: Array.isArray(data.services) ? data.services : data.services ? [data.services] : [],
                 doc_type: docType || data.doc_type || 'invoice',
                 companyInfo: {
                     name: company?.name || null,
@@ -588,6 +588,13 @@ export class InvoiceDealPDFGenerator {
                 payment_type: data?.payment_type || null,
                 no_price: data?.no_price || false,
             };
+
+            console.log(
+                '[InvoiceDealPDFGenerator.generatePDF] pdfData.booking_services length=',
+                Array.isArray(pdfData.booking_services) ? pdfData.booking_services.length : 'N/A',
+                'pdfData.services length=',
+                Array.isArray(pdfData.services) ? pdfData.services.length : 'N/A',
+            );
 
             const res = await fetch('/api/generate-contract-pdf', {
                 method: 'POST',
