@@ -1,10 +1,56 @@
-// Simple HTML to PDF converter using Puppeteer
+// HTML to PDF converter with Chromium support for Vercel
 async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
     try {
+        console.log('[PDFService] Environment:', { isVercel: process.env.VERCEL, nodeEnv: process.env.NODE_ENV });
+
+        const isVercel = process.env.VERCEL === 'true';
+
+        if (isVercel) {
+            // On Vercel: use puppeteer-core with @sparticuz/chromium
+            try {
+                console.log('[PDFService] Vercel environment - using puppeteer-core with Chromium...');
+                const puppeteerCoreMod = await import('puppeteer-core');
+                const puppeteerCore: any = (puppeteerCoreMod as any).default || puppeteerCoreMod;
+
+                const chromiumMod = await import('@sparticuz/chromium');
+                const chromium: any = (chromiumMod as any).default || chromiumMod;
+
+                const executablePath = await chromium.executablePath();
+                console.log('[PDFService] Chromium path:', executablePath ? 'Found' : 'Not found');
+
+                const browser = await puppeteerCore.launch({
+                    args: chromium.args,
+                    executablePath,
+                    headless: chromium.headless,
+                });
+
+                const page = await browser.newPage();
+                await page.setViewport({ width: 1200, height: 800 });
+                await page.setContent(html, { waitUntil: 'networkidle0' });
+                await new Promise((resolve) => setTimeout(resolve, 1500)); // Wait for images and fonts
+
+                const pdfBuffer = await page.pdf({
+                    format: 'A4',
+                    printBackground: true,
+                    margin: { top: '20mm', right: '16mm', bottom: '20mm', left: '16mm' },
+                });
+
+                await page.close();
+                await browser.close();
+
+                console.log('[PDFService] PDF generated successfully with Chromium');
+                return new Uint8Array(pdfBuffer);
+            } catch (chromiumErr) {
+                console.error('[PDFService] Chromium failed, falling back to regular Puppeteer:', String(chromiumErr));
+                // Fall through to regular Puppeteer
+            }
+        }
+
+        // Local dev or fallback: use regular puppeteer
+        console.log('[PDFService] Using regular Puppeteer...');
         const puppeteerMod = await import('puppeteer');
         const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
 
-        console.log('[PDFService] Launching Puppeteer...');
         const browser = await puppeteer.launch({
             headless: 'new',
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -13,7 +59,7 @@ async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
         const page = await browser.newPage();
         await page.setViewport({ width: 1200, height: 800 });
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for images
+        await new Promise((resolve) => setTimeout(resolve, 1500)); // Wait for images and fonts
 
         const pdfBuffer = await page.pdf({
             format: 'A4',
@@ -24,10 +70,10 @@ async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
         await page.close();
         await browser.close();
 
-        console.log('[PDFService] PDF generated successfully');
+        console.log('[PDFService] PDF generated successfully with Puppeteer');
         return new Uint8Array(pdfBuffer);
     } catch (e) {
-        console.error('[PDFService] Puppeteer failed:', String(e));
+        console.error('[PDFService] All PDF generation methods failed:', String(e));
         throw e;
     }
 }
