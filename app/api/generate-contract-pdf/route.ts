@@ -30,6 +30,20 @@ export async function POST(req: Request) {
             pdfData?.no_price,
         );
 
+        // Log all services details for debugging
+        if (Array.isArray(pdfData?.services)) {
+            console.log(
+                '[generate-contract-pdf] services details:',
+                pdfData.services.map((s: any) => ({ name: s.name, qty: s.quantity })),
+            );
+        }
+        if (Array.isArray(pdfData?.booking_services)) {
+            console.log(
+                '[generate-contract-pdf] booking_services details:',
+                pdfData.booking_services.map((s: any) => ({ name: s.name, qty: s.quantity })),
+            );
+        }
+
         let html: string | null = null;
 
         if (pdfData) {
@@ -53,7 +67,6 @@ export async function POST(req: Request) {
             });
         }
 
-       
         html = fixImageUrls(html);
         console.log('[generate-contract-pdf] After fixImageUrls');
 

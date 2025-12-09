@@ -18,17 +18,28 @@ export class PDFService {
             const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
 
             let browser: any;
+            const isProduction = process.env.VERCEL === 'true' || process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
 
-            // On Vercel use @sparticuz/chromium for a compatible headless Chrome binary
-            if (process.env.VERCEL) {
-                const executablePath = await chromium.executablePath();
-                console.log('[PDFService] Vercel detected. Chromium executablePath=', executablePath);
-                browser = await puppeteer.launch({
-                    args: (chromium as any).args,
-                    defaultViewport: (chromium as any).defaultViewport,
-                    executablePath: executablePath || undefined,
-                    headless: (chromium as any).headless,
-                });
+            // On Vercel/production use @sparticuz/chromium for a compatible headless Chrome binary
+            if (isProduction) {
+                console.log('[PDFService] Production environment detected. Using @sparticuz/chromium');
+                try {
+                    const executablePath = await chromium.executablePath();
+                    console.log('[PDFService] Chromium executablePath=', executablePath);
+                    browser = await puppeteer.launch({
+                        args: [...(chromium as any).args, '--no-sandbox', '--disable-setuid-sandbox'],
+                        defaultViewport: (chromium as any).defaultViewport,
+                        executablePath: executablePath || undefined,
+                        headless: (chromium as any).headless,
+                    });
+                } catch (chromiumErr) {
+                    console.error('[PDFService] Failed to launch with chromium:', chromiumErr);
+                    // Fallback to default puppeteer launch
+                    browser = await puppeteer.launch({
+                        headless: 'new',
+                        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                    });
+                }
             } else {
                 // Local / non-serverless environments can use the default Puppeteer Chrome
                 console.log('[PDFService] Local environment. Launching Puppeteer default Chrome.');
@@ -39,11 +50,6 @@ export class PDFService {
             }
 
             const page = await browser.newPage();
-
-            // Set explicit character encoding for proper Arabic/RTL text support
-            await page.setDefaultNavigationTimeout(30000);
-            await page.setDefaultTimeout(30000);
-
             await page.emulateMediaType('screen');
 
             // Attach handlers to surface renderer console messages and network failures
@@ -93,6 +99,7 @@ export class PDFService {
             await browser.close();
             return new Uint8Array(pdfBuffer);
         } catch (e) {
+            console.error('[PDFService] PDF generation failed, using fallback:', String(e));
             // Fallback minimal PDF generation (text only) to ensure the route works
             const text = this.extractText(contractHtml) || 'Document';
             const sanitizedText = this.escapePdfString(text);
@@ -152,13 +159,13 @@ export class PDFService {
             const xrefEntries = offsets.map((o) => `${pad(o)} 00000 n \n`).join('');
             const xref = xrefHeader + freeEntry + xrefEntries;
 
-            const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${cursor}\n%%EOF`;
+            const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
             addObj(xref);
             addObj(trailer);
 
             // Concatenate all parts
-            const totalLength = parts.reduce((sum, u) => sum + u.length, 0);
+            const totalLength = parts.reduce((sum: number, u: Uint8Array) => sum + u.length, 0);
             const out = new Uint8Array(totalLength);
             let pos = 0;
             for (const u of parts) {
