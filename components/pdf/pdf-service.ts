@@ -1,4 +1,98 @@
-import chromium from '@sparticuz/chromium';
+// Simple HTML to PDF converter using Puppeteer
+async function htmlToPdfBuffer(html: string): Promise<Uint8Array> {
+    try {
+        const puppeteerMod = await import('puppeteer');
+        const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
+
+        console.log('[PDFService] Launching Puppeteer...');
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        });
+
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 800 });
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for images
+
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '20mm', right: '16mm', bottom: '20mm', left: '16mm' },
+        });
+
+        await page.close();
+        await browser.close();
+
+        console.log('[PDFService] PDF generated successfully');
+        return new Uint8Array(pdfBuffer);
+    } catch (e) {
+        console.error('[PDFService] Puppeteer failed:', String(e));
+        throw e;
+    }
+}
+
+// Create minimal text-only PDF
+function createMinimalPdf(text: string): Uint8Array {
+    const sanitizedText = text.slice(0, 2000).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+    const encoder = new TextEncoder();
+    const header = '%PDF-1.4\n';
+    const streamContent = `BT /F1 12 Tf 50 750 Td (${sanitizedText}) Tj ET`;
+    const streamBytes = encoder.encode(streamContent);
+
+    const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+    const obj2 = '2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n';
+    const obj3 = '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n';
+    const obj4Prefix = `4 0 obj\n<< /Length ${streamBytes.length} >>\nstream\n`;
+    const obj4Suffix = '\nendstream\nendobj\n';
+    const obj5 = '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n';
+
+    const parts: Uint8Array[] = [];
+    parts.push(encoder.encode(header));
+
+    const offsets: number[] = [];
+    let cursor = header.length;
+
+    const addObj = (s: string | Uint8Array) => {
+        const bytes = typeof s === 'string' ? encoder.encode(s) : s;
+        parts.push(bytes);
+        cursor += bytes.length;
+    };
+
+    offsets.push(cursor);
+    addObj(obj1);
+    offsets.push(cursor);
+    addObj(obj2);
+    offsets.push(cursor);
+    addObj(obj3);
+    offsets.push(cursor);
+    addObj(obj4Prefix);
+    addObj(streamBytes);
+    addObj(obj4Suffix);
+    offsets.push(cursor);
+    addObj(obj5);
+
+    const xrefStart = cursor;
+    const xrefHeader = `xref\n0 6\n`;
+    const freeEntry = '0000000000 65535 f \n';
+    const pad = (n: number) => String(n).padStart(10, '0');
+    const xrefEntries = offsets.map((o) => `${pad(o)} 00000 n \n`).join('');
+    const xref = xrefHeader + freeEntry + xrefEntries;
+    const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+
+    addObj(xref);
+    addObj(trailer);
+
+    const totalLength = parts.reduce((sum: number, u: Uint8Array) => sum + u.length, 0);
+    const out = new Uint8Array(totalLength);
+    let pos = 0;
+    for (const u of parts) {
+        out.set(u, pos);
+        pos += u.length;
+    }
+    return out;
+}
 
 export class PDFService {
     private static instance: PDFService | null = null;
@@ -10,187 +104,28 @@ export class PDFService {
         return PDFService.instance;
     }
 
-    // Primary: render HTML to PDF using Puppeteer; Fallback: minimal text-only PDF
     async generateContractPDF({ contractHtml }: { contractHtml: string }): Promise<Uint8Array> {
-        // Try using Puppeteer for full-fidelity rendering
         try {
-            const puppeteerMod = await import('puppeteer');
-            const puppeteer: any = (puppeteerMod as any).default || puppeteerMod;
-
-            let browser: any;
-            const isProduction = process.env.VERCEL === 'true' || process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
-
-            // On Vercel/production use @sparticuz/chromium for a compatible headless Chrome binary
-            if (isProduction) {
-                console.log('[PDFService] Production environment detected. Using @sparticuz/chromium');
-                try {
-                    const executablePath = await chromium.executablePath();
-                    console.log('[PDFService] Chromium executablePath=', executablePath);
-                    browser = await puppeteer.launch({
-                        args: [...(chromium as any).args, '--no-sandbox', '--disable-setuid-sandbox'],
-                        defaultViewport: (chromium as any).defaultViewport,
-                        executablePath: executablePath || undefined,
-                        headless: (chromium as any).headless,
-                    });
-                } catch (chromiumErr) {
-                    console.error('[PDFService] Failed to launch with chromium:', chromiumErr);
-                    // Fallback to default puppeteer launch
-                    browser = await puppeteer.launch({
-                        headless: 'new',
-                        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                    });
-                }
-            } else {
-                // Local / non-serverless environments can use the default Puppeteer Chrome
-                console.log('[PDFService] Local environment. Launching Puppeteer default Chrome.');
-                browser = await puppeteer.launch({
-                    headless: 'new',
-                    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                });
-            }
-
-            const page = await browser.newPage();
-            await page.emulateMediaType('screen');
-
-            // Attach handlers to surface renderer console messages and network failures
-            try {
-                page.on('console', (msg: any) => {
-                    try {
-                        const args = msg.args();
-                        Promise.all(args.map((a: any) => a.jsonValue?.() || a.toString()))
-                            .then((vals) => {
-                                console.log('[PDFPage Console]', msg.type(), ...vals);
-                            })
-                            .catch(() => console.log('[PDFPage Console]', msg.type(), msg.text()));
-                    } catch (e) {
-                        console.log('[PDFPage Console] (failed to read args)', msg.text());
-                    }
-                });
-
-                page.on('requestfailed', (req: any) => {
-                    console.log('[PDFPage Request Failed]', req.url(), req.failure && req.failure().errorText);
-                });
-
-                page.on('response', (res: any) => {
-                    try {
-                        const status = res.status();
-                        const url = res.url();
-                        if (status >= 400) console.log('[PDFPage Response Error]', status, url);
-                    } catch (e) {
-                        // ignore
-                    }
-                });
-            } catch (e) {
-                console.log('[PDFService] Failed to attach page listeners', String(e));
-            }
-
-            // Set content and wait for network idle, then a short extra wait to allow images to decode
-            await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
-            // Extra safety wait for resources like images/fonts to finish loading/decoding
-            try {
-                await page.waitForTimeout(500);
-            } catch {}
-
-            const pdfBuffer: Buffer = await page.pdf({
-                format: 'A4',
-                printBackground: true,
-                margin: { top: '20mm', right: '16mm', bottom: '20mm', left: '16mm' },
-            });
-            await browser.close();
-            return new Uint8Array(pdfBuffer);
+            console.log('[PDFService] Starting PDF generation from HTML...');
+            return await htmlToPdfBuffer(contractHtml);
         } catch (e) {
             console.error('[PDFService] PDF generation failed, using fallback:', String(e));
-            // Fallback minimal PDF generation (text only) to ensure the route works
-            const text = this.extractText(contractHtml) || 'Document';
-            const sanitizedText = this.escapePdfString(text);
 
-            const encoder = new TextEncoder();
-            const header = '%PDF-1.4\n';
-
-            // Content stream (text drawing)
-            const streamContent = `BT /F1 14 Tf 72 800 Td (${sanitizedText}) Tj ET`;
-            const streamBytes = encoder.encode(streamContent);
-
-            // Objects with placeholders; we will compute offsets dynamically
-            const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
-            const obj2 = '2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n';
-            const obj3 = '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n';
-            const obj4Prefix = `4 0 obj\n<< /Length ${streamBytes.length} >>\nstream\n`;
-            const obj4Suffix = '\nendstream\nendobj\n';
-            const obj5 = '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n';
-
-            // Build full PDF and compute xref offsets
-            const parts: Uint8Array[] = [];
-            parts.push(encoder.encode(header));
-
-            const offsets: number[] = []; // object start byte offsets
-            let cursor = header.length;
-
-            const addObj = (s: string | Uint8Array) => {
-                const bytes = typeof s === 'string' ? encoder.encode(s) : s;
-                parts.push(bytes);
-                cursor += bytes.length;
-            };
-
-            // obj1
-            offsets.push(cursor);
-            addObj(obj1);
-            // obj2
-            offsets.push(cursor);
-            addObj(obj2);
-            // obj3
-            offsets.push(cursor);
-            addObj(obj3);
-            // obj4 (prefix + stream + suffix)
-            offsets.push(cursor);
-            addObj(obj4Prefix);
-            addObj(streamBytes);
-            addObj(obj4Suffix);
-            // obj5
-            offsets.push(cursor);
-            addObj(obj5);
-
-            const xrefStart = cursor;
-
-            // xref table for 6 entries (0..5)
-            const xrefHeader = `xref\n0 6\n`;
-            const freeEntry = '0000000000 65535 f \n';
-            const pad = (n: number) => String(n).padStart(10, '0');
-            const xrefEntries = offsets.map((o) => `${pad(o)} 00000 n \n`).join('');
-            const xref = xrefHeader + freeEntry + xrefEntries;
-
-            const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-
-            addObj(xref);
-            addObj(trailer);
-
-            // Concatenate all parts
-            const totalLength = parts.reduce((sum: number, u: Uint8Array) => sum + u.length, 0);
-            const out = new Uint8Array(totalLength);
-            let pos = 0;
-            for (const u of parts) {
-                out.set(u, pos);
-                pos += u.length;
+            // Fallback: create minimal text-only PDF
+            try {
+                const noTags = contractHtml
+                    .replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '')
+                    .replace(/<[^>]+>/g, ' ');
+                const collapsed = noTags.replace(/\s+/g, ' ').trim();
+                const text = collapsed.slice(0, 4000) || 'Document';
+                console.log('[PDFService] Creating fallback PDF with text excerpt...');
+                return createMinimalPdf(text);
+            } catch (fallbackErr) {
+                console.error('[PDFService] Fallback also failed:', String(fallbackErr));
+                // Create absolutely minimal PDF
+                return createMinimalPdf('Error generating PDF. Check logs.');
             }
-            return out;
         }
-    }
-
-    private extractText(html: string): string {
-        try {
-            // Strip tags and collapse whitespace
-            const noTags = html
-                .replace(/<script[\s\S]*?<\/script>/gi, '')
-                .replace(/<style[\s\S]*?<\/style>/gi, '')
-                .replace(/<[^>]+>/g, ' ');
-            const collapsed = noTags.replace(/\s+/g, ' ').trim();
-            return collapsed.slice(0, 4000); // limit length
-        } catch {
-            return 'Document';
-        }
-    }
-
-    private escapePdfString(s: string): string {
-        return s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
     }
 }
