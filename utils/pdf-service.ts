@@ -46,24 +46,32 @@ export class PDFService {
         if (!this.browser) {
             console.log('Launching browser with the chromium-min solution...');
 
-            const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+            const isProduction = process.env.VERCEL === 'true' || process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
 
             if (isProduction) {
                 console.log('Production environment detected, using chromium-min with external binary...');
 
-                // Use the latest version as recommended in the article (v133.0.0)
-                const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar');
-                console.log('Chromium executable path:', executablePath);
+                try {
+                    // Use the latest version as recommended in the article (v133.0.0)
+                    const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar');
+                    console.log('Chromium executable path:', executablePath);
 
-                const chromiumAny = chromium as any;
+                    const chromiumAny = chromium as any;
 
-                this.browser = await puppeteerCore.launch({
-                    executablePath,
-                    args: [...chromium.args, '--disable-web-security', '--disable-features=VizDisplayCompositor', '--font-render-hinting=none'],
-                    headless: chromiumAny.headless,
-                    defaultViewport: chromiumAny.defaultViewport,
-                });
-                console.log('Browser launched successfully with chromium-min');
+                    this.browser = await puppeteerCore.launch({
+                        executablePath,
+                        args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-features=VizDisplayCompositor', '--font-render-hinting=none'],
+                        headless: chromiumAny.headless,
+                        defaultViewport: chromiumAny.defaultViewport,
+                    });
+                    console.log('Browser launched successfully with chromium-min');
+                } catch (chromiumErr) {
+                    console.error('Failed to launch with chromium, falling back to default puppeteer:', chromiumErr);
+                    this.browser = await puppeteer.launch({
+                        headless: true,
+                        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                    });
+                }
             } else {
                 console.log('Development environment detected, using local puppeteer...');
 
@@ -101,6 +109,9 @@ export class PDFService {
 
             // Load the HTML content
             await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
+
+            // Additional delay to ensure all resources are loaded (especially images and fonts)
+            await new Promise((resolve) => setTimeout(resolve, 1000));
 
             // Generate PDF
             const pdfBuffer = await page.pdf({

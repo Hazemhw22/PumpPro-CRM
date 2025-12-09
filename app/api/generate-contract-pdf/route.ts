@@ -75,11 +75,18 @@ export async function POST(req: Request) {
         try {
             const pdfBytes = await PDFService.getInstance().generateContractPDF({ contractHtml: html });
 
+            // تحديد ما إذا كان يجب عرض الملف أم تحميله
+            // علىVercel يجب العرض بـ inline، والمستخدم يمكنه الطباعة من المتصفح
+            const disposition = process.env.VERCEL === 'true' ? 'inline' : 'attachment';
+
             return new Response(pdfBytes as any, {
                 status: 200,
                 headers: {
                     'Content-Type': 'application/pdf',
-                    'Content-Disposition': `attachment; filename="${filename}"`,
+                    'Content-Disposition': `${disposition}; filename="${filename}"`,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    Pragma: 'no-cache',
+                    Expires: '0',
                 },
             });
         } catch (renderErr) {
